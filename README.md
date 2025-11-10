@@ -9,6 +9,7 @@ Welcome to the comprehensive documentation suite for migrating FortuneT to a Clo
 - **[📄 Complete Migration Plan](./MIGRATION_PLAN.md)** - 8-week comprehensive migration strategy with timeline, costs, and success criteria
 - **[🏗️ Technical Architecture](./CLOUDFLARE_ARCHITECTURE.md)** - Detailed Cloudflare-native design specifications
 - **[🔧 Implementation Guide](./IMPLEMENTATION_GUIDE.md)** - Step-by-step technical instructions
+- **[🤖 Repository Guidelines](./AGENTS.md)** - Contributor playbook for agents working in this repo
 
 ### 📊 Executive Summary
 

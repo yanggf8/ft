@@ -573,19 +573,32 @@ const REVISED_COST_ANALYSIS = {
   },
 
   new_cloudflare_costs: {
-    projected_usage_costs: {
-      // Based on 1000 DAU estimates with realistic usage patterns
-      workers_beyond_free: '$15-35/month', // More realistic CPU usage
-      d1_beyond_free: '$25-45/month', // Storage and queries
-      durable_objects_beyond_free: '$25-50/month', // Stateful operations
-      r2_beyond_free: '$15-30/month', // Storage and data transfer
-      pages_pro: '$20/month', // For advanced features
-      monitoring_services: '$50-100/month', // Sentry, analytics
-      reserve_capacity: '$20-40/month', // Buffer for growth
-      total_estimated: '$170-320/month'
+    phased_projection: {
+      'Initial Phase (0-100 DAU)': {
+        details: 'At this level, most usage will fall within Cloudflare\'s generous free tiers. Costs are primarily fixed operational expenses.',
+        cost_breakdown: {
+          pages_pro: '$20/month',
+          monitoring_services: '$0-30/month (optional basic plan)',
+          usage_costs: '~$0 (within free tier limits)'
+        },
+        total_estimated: '$20-50/month'
+      },
+      'Growth Phase (at 1,000 DAU)': {
+        details: 'As the user base grows, costs will scale with usage, primarily from services exceeding their free tier allowances.',
+        cost_breakdown: {
+          workers_beyond_free: '$15-35/month',
+          d1_beyond_free: '$25-45/month',
+          durable_objects_beyond_free: '$25-50/month',
+          r2_beyond_free: '$15-30/month',
+          pages_pro: '$20/month',
+          monitoring_services: '$50-100/month',
+          reserve_capacity: '$20-40/month'
+        },
+        total_estimated: '$170-320/month'
+      }
     },
 
-    annual_new_system: '$2,040-3,840/year'
+    annual_new_system: '$2,040-3,840/year (based on 1,000 DAU projection)'
   },
 
   roi_calculation: {
@@ -602,7 +615,7 @@ const REVISED_COST_ANALYSIS = {
 ```typescript
 const RESOURCE_REQUIREMENTS = {
   primary_developer: {
-    time_commitment: '40 hours/week for 8 weeks',
+    time_commitment: '40 hours/week for 16 weeks',
     required_skills: [
       'TypeScript/JavaScript',
       'React.js development',
@@ -736,9 +749,9 @@ const TECHNICAL_KPIS = {
 
   infrastructure_metrics: {
     cost_efficiency: {
-      target: '70% cost reduction',
-      current_cost: '$330-905/month',
-      target_cost: '$99-270/month',
+      target: '50-70% cost reduction',
+      current_cost: '$360-960/month',
+      target_cost: '$170-320/month',
       measurement_frequency: 'Monthly financial review'
     }
   }
@@ -762,10 +775,10 @@ const BUSINESS_KPIS = {
 
   financial_metrics: {
     roi_calculation: {
-      investment: '$450-1,300 one-time migration cost',
-      monthly_savings: '$235-810/month',
-      payback_period: '1-3 months',
-      year_1_return: '215-750% ROI'
+      investment: '$2,150-5,040 one-time migration cost',
+      monthly_savings: '$240-640/month',
+      payback_period: '3.5-9 months',
+      year_1_return: '45-220% ROI'
     }
   }
 };
@@ -775,7 +788,7 @@ const BUSINESS_KPIS = {
 
 ```typescript
 const MIGRATION_MILESTONES = {
-  week_1_success: [
+  week_5_success: [
     '✅ Repository structure created',
     '✅ Cloudflare infrastructure provisioned',
     '✅ D1 database with schema deployed',
@@ -783,31 +796,31 @@ const MIGRATION_MILESTONES = {
     '✅ CI/CD pipeline operational'
   ],
 
-  week_3_success: [
+  week_9_success: [
     '✅ Chart calculation engines ported and optimized',
     '✅ AI integration functional with caching',
     '✅ All core API endpoints implemented',
     '✅ Basic frontend application running'
   ],
 
-  week_8_success: [
+  week_16_success: [
     '✅ 100% traffic successfully migrated',
     '✅ Old infrastructure decommissioned',
     '✅ All KPI targets achieved',
     '✅ User satisfaction > 4.5/5.0',
-    '✅ Cost savings > 70% realized'
+    '✅ Cost savings > 50-70% realized'
   ]
 };
 ```
 
 ## 🚀 Post-Migration Optimization Plans
 
-### Phase 1: Performance Optimization (Week 9-10)
+### Phase 1: Performance Optimization (Week 17-18)
 
 ```typescript
 const POST_MIGRATION_OPTIMIZATION = {
   performance_tuning: {
-    week_9_focus: [
+    week_17_focus: [
       'Database query optimization based on real usage patterns',
       'Durable Objects memory and CPU tuning',
       'Edge caching strategies for static content',
@@ -815,7 +828,7 @@ const POST_MIGRATION_OPTIMIZATION = {
       'Global CDN performance tuning'
     ],
 
-    week_10_focus: [
+    week_18_focus: [
       'Mobile performance optimization',
       'Image compression and lazy loading',
       'JavaScript bundle optimization',
@@ -862,51 +875,48 @@ const ONGOING_MAINTENANCE = {
 This comprehensive migration plan transforms FortuneT from a fragmented, expensive multi-provider stack into a unified, high-performance Cloudflare-native platform. The project delivers exceptional ROI while maintaining 100% feature parity and achieving zero business disruption.
 
 **Key Highlights:**
-- **8-week migration timeline** with zero downtime
-- **70-90% cost reduction** ($300-700/month savings)
-- **10x performance improvement** (global edge network)
-- **215-750% first-year ROI** with 1-3 month payback
+- **16-week migration timeline** with zero downtime
+- **50-70% cost reduction** ($240-640/month savings)
+- **3-5x performance improvement** (global edge network)
+- **45-220% first-year ROI** with 3.5-9 month payback
 - **Enterprise-grade security** with Cloudflare Access
 
 ### 🚀 Immediate Next Steps
 
-**This Week - Start Foundation:**
+**This Week - Start Risk Assessment (Phase 0):**
 ```bash
-# 1. Create new repository
-git clone <new-repo> fortune-teller-v2
-cd fortune-teller-v2
+# 1. Create Proof-of-Concept (POC) branches
+git checkout -b feat/poc-d1-compatibility
+git checkout -b feat/poc-oauth-migration
 
-# 2. Setup project structure
-mkdir -p frontend/src/{components,pages,services,hooks}
-mkdir -p backend/src/{routes,services,durable-objects,middleware}
+# 2. Begin technical validation for D1
+# - Write scripts to test PostgreSQL to SQLite query translation
+# - Load sample data and validate performance
 
-# 3. Initialize Cloudflare Workers
-npm create cloudflare@latest backend
-cd backend && npm install hono @cloudflare/workers-types
+# 3. Start OAuth migration prototype
+# - Build a minimal prototype for the new auth flow
+# - Test against Cloudflare Access
 
-# 4. Setup frontend
-npm create vite@latest frontend -- --template react-ts
-
-# 5. Configure CI/CD
-# Setup GitHub Actions for automatic deployment
+# 4. Document initial findings
+# - Keep detailed notes on any challenges or blockers
 ```
 
 **Week 1 Priorities:**
-- [ ] Cloudflare account and D1 database setup
-- [ ] Authentication system implementation
-- [ ] Basic API infrastructure
-- [ ] Frontend routing and state management
+- [ ] Create D1 compatibility proof-of-concept
+- [ ] Build and test OAuth migration prototype
+- [ ] Begin performance validation for Durable Objects & Workers
+- [ ] Document findings for go/no-go decision at end of Phase 0
 
 ### 📊 Success Metrics Dashboard
 
 | Metric | Current | Target | Measurement Frequency |
 |---------|---------|--------|----------------------|
 | **Response Time (p95)** | 500-2000ms | <200ms | Real-time |
-| **Monthly Cost** | $330-905 | <$270 | Monthly |
+| **Monthly Cost** | $360-960 | $170-320 | Monthly |
 | **Uptime** | 99.5% | 99.9% | Real-time |
 | **User Satisfaction** | 3.8/5.0 | >4.5/5.0 | Quarterly |
 | **Development Velocity** | Baseline | 2x faster | Sprint-based |
-| **ROI** | N/A | 215-750% Year 1 | Annual |
+| **ROI** | N/A | 45-220% Year 1 | Annual |
 
 ### ⚠️ Critical Success Factors
 
@@ -930,15 +940,15 @@ npm create vite@latest frontend -- --template react-ts
 
 ### 🎉 Expected Outcomes
 
-**Immediate Benefits (Week 1-8):**
+**Immediate Benefits (Week 1-16):**
 - Modern, scalable infrastructure
 - Improved development experience
 - Enhanced system reliability
 - Better security posture
 
 **Short-term Benefits (Month 1-3):**
-- Significant cost reduction (70-90%)
-- Performance improvements (10x faster)
+- Significant cost reduction (50-70%)
+- Performance improvements (3-5x faster)
 - Enhanced user experience
 - Faster feature development
 
@@ -964,9 +974,9 @@ npm create vite@latest frontend -- --template react-ts
 - [ ] Workers deployment and debugging
 
 **Budget Allocation:**
-- [ ] Migration costs: $450-1,300 (one-time)
-- [ ] Parallel infrastructure: $400-1,100 (8 weeks)
-- [ ] New system monthly: $35-95 (vs $330-905 current)
+- [ ] Migration costs: $2,150-5,040 (one-time)
+- [ ] Parallel infrastructure: $800-2,240 (16 weeks)
+- [ ] New system monthly: $170-320 (vs $360-960 current)
 
 ### 📞 Support & Escalation
 
