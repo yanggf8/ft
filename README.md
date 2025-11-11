@@ -13,12 +13,12 @@ Welcome to the comprehensive documentation suite for migrating FortuneT to a Clo
 
 ### 📊 Executive Summary
 
-Transform FortuneT from a fragmented multi-provider stack (Render + Vercel + Supabase) into a unified Cloudflare-native platform:
+Transform FortuneT from a fragmented multi-provider stack (Render + Vercel) into a unified Cloudflare-native platform:
 
-- **70-90% cost reduction** ($300-700/month savings)
+- **Cost reduction** based on actual 50 DAU usage
 - **10x performance improvement** (global edge network)
 - **8-week migration** with zero downtime
-- **215-750% first-year ROI** with 1-3 month payback
+- **Significant ROI** based on actual usage patterns
 - **Enterprise-grade security** with Cloudflare Access
 
 ## 📚 Documentation Structure
@@ -73,16 +73,16 @@ npm create vite@latest frontend -- --template react-ts
 - [ ] Basic API infrastructure
 - [ ] Frontend routing and state management
 
-## 📊 Key Metrics
+## 📊 Key Metrics (Based on 50 DAU)
 
 | Metric | Current | Target | Timeline |
 |---------|---------|--------|----------|
 | **Response Time (p95)** | 500-2000ms | <200ms | Week 8 |
-| **Monthly Cost** | $330-905 | <$270 | Week 8 |
+| **Monthly Cost** | $310-810 | $20-50 | Week 8 |
 | **Uptime** | 99.5% | 99.9% | Week 8 |
 | **User Satisfaction** | 3.8/5.0 | >4.5/5.0 | Week 8 |
 | **Development Velocity** | Baseline | 2x faster | Week 8 |
-| **ROI** | N/A | 215-750% Year 1 | Year 1 |
+| **Annual Savings** | N/A | $3,120-9,120 | Year 1 |
 
 ## ⚠️ Critical Success Factors
 
@@ -90,7 +90,7 @@ npm create vite@latest frontend -- --template react-ts
 - ✅ **100% Feature Parity** - All current functionality maintained
 - ✅ **Data Integrity** - Comprehensive migration testing
 - ✅ **Performance Improvement** - 10x faster response times
-- ✅ **Cost Reduction** - 70-90% monthly savings
+- ✅ **Cost Reduction** - Based on actual 50 DAU usage ($260-790 monthly savings)
 
 ## 🛠️ Required Resources
 
@@ -109,11 +109,12 @@ npm create vite@latest frontend -- --template react-ts
 - Development environment
 - Testing frameworks
 
-### Investment
-- **Migration Cost**: $450-1,300 (one-time)
-- **Parallel Infrastructure**: $400-1,100 (8 weeks)
-- **New System Monthly**: $35-95 (vs $330-905 current)
-- **Payback Period**: 1-3 months
+### Investment (Based on 50 DAU)
+- **Migration Cost**: $2,150-5,040 (one-time)
+- **Parallel Infrastructure**: $800-2,240 (16 weeks)
+- **New System Monthly**: $20-50 (vs $310-810 current)
+- **Annual Savings**: $3,120-9,120
+- **Payback Period**: 3-9 months
 
 ## 📞 Support & Escalation
 

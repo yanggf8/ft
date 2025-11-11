@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FortuneT V2 is a comprehensive Cloudflare-native astrology platform migration project. This repository contains **revised and realistic** documentation for migrating an existing multi-provider stack (Render + Vercel + Supabase) to a unified Cloudflare platform using Workers, D1 Database, Durable Objects, and Pages.
+FortuneT V2 is a comprehensive Cloudflare-native astrology platform migration project. This repository contains **revised and realistic** documentation for migrating an existing multi-provider stack (Render + Vercel) to a unified Cloudflare platform using Workers, D1 Database, Durable Objects, and Pages.
 
 **Current Status**: Enhanced documentation phase with comprehensive risk assessment and realistic planning. No actual code implementation yet.
 

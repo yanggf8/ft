@@ -1034,7 +1034,7 @@ jobs:
       - name: Run E2E tests
         run: npm run test:e2e
 
-      - name: Upload test results
+      - name: Upperformance test results
         uses: actions/upload-artifact@v3
         if: always()
         with:

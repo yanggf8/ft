@@ -861,7 +861,7 @@ cd backend
 
 # Create database migration script
 cat > scripts/init-db.sql << 'EOF'
--- Users table (replaces Supabase auth.users)
+-- Users table (replaces Current Database auth.users)
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     cloudflare_id TEXT UNIQUE,
@@ -1019,7 +1019,7 @@ CLOUDFLARE_ACCESS_APP_ID=your-app-id
 GOOGLE_OAUTH_CLIENT_ID=your-google-client-id
 GOOGLE_OAUTH_CLIENT_SECRET=your-google-client-secret
 
-# Supabase (for migration)
+# Current Database (for migration)
 SUPABASE_URL=your-supabase-url
 SUPABASE_SERVICE_KEY=your-supabase-service-key
 

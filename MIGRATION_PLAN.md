@@ -2,11 +2,13 @@
 
 ## 🎯 Executive Summary
 
-Transform FortuneT from a fragmented multi-provider stack (Render + Vercel + Supabase) into a unified Cloudflare-native platform using Durable Objects, D1 Database, and Workers. This migration will achieve **50-70% cost reduction** (revised from 70-90%), **3-5x performance improvement** (revised from 10x), and eliminate infrastructure complexity while maintaining 100% feature parity.
+Transform FortuneT from a fragmented multi-provider stack (Render + Vercel) into a unified Cloudflare-native platform using Durable Objects, D1 Database, and Workers. **This migration targets cost reduction**, **3-5x performance improvement**, and eliminate infrastructure complexity while maintaining 100% feature parity.
 
 **Approach**: New repository with parallel deployment and zero downtime migration.
 **Timeline**: **16 weeks** (revised from 8 weeks) with comprehensive risk mitigation.
 **Success Probability**: **80%** with revised plan (vs 30% with original assumptions).
+
+> **⚠️ IMPORTANT - PROJECTIONS ONLY**: All cost savings, ROI calculations, and performance targets are **ESTIMATES** based on similar projects and current pricing. These will be **validated and revised** during Phase 0 with actual data from your current system. Actual results may vary.
 
 ## 📊 Current State Analysis
 
@@ -17,9 +19,14 @@ const CURRENT_ARCHITECTURE_ISSUES = {
   fragmentation: {
     backend: 'Render.com - Python Flask ($200-500/month)',
     frontend: 'Vercel - React/Vite ($20-100/month)',
-    database: 'Supabase - PostgreSQL ($50-150/month)',
-    total_monthly_cost: '$270-750/month',
-    complexity: '4 different vendors to manage'
+    database: 'Internal PostgreSQL database',
+    redis_cache: '$25-75/month',
+    monitoring_tools: '$20-50/month',
+    ssl_domains: '$15-30/month',
+    third_party_apis: '$30-60/month',
+    development_tools: '$20-40/month',
+    total_monthly_cost: '$310-810/month', // Without external database costs
+    complexity: 'Multiple vendors to manage'
   },
 
   performance: {
@@ -46,7 +53,7 @@ const EXISTING_FEATURES = {
     'Zi Wei Dou Shu calculations',
     'Western Zodiac calculations',
     'AI-powered interpretations (Groq + OpenRouter)',
-    'User authentication (Supabase Auth)',
+    'User authentication',
     'Chart storage and management',
     'User favorites system'
   ],
@@ -153,12 +160,93 @@ const CURRENT_PERFORMANCE = {
 |-------------------|----------------------|-------------------|
 | **Flask Backend** | Workers + Hono Framework | 10x faster, auto-scaling, 90% cheaper |
 | **React Frontend** | Cloudflare Pages | Global CDN, zero config deployment |
-| **Supabase Auth** | Cloudflare Access + Custom JWT | Enterprise security, no vendor lock-in |
-| **PostgreSQL** | D1 (SQLite) + Durable Objects | 95% cost reduction, edge replication |
+| **Current Auth** | Cloudflare Access + Custom JWT | Enterprise security, no vendor lock-in |
+| **PostgreSQL** | D1 (SQLite) + Durable Objects | Requires compatibility validation, no edge replication |
 | **Redis Cache** | Durable Objects | Stateful caching, real-time features |
 | **File Storage** | R2 Object Storage | 80% cheaper S3-compatible storage |
 | **Cron Jobs** | Cron Triggers | Native scheduled execution |
 | **Webhooks** | Workers | Built-in webhook processing |
+
+## ⚠️ Critical Database Considerations (D1 Limitations)
+
+### D1 (SQLite) Hard Limits & Mitigation Strategies
+
+```typescript
+const D1_LIMITATIONS = {
+  storage_limits: {
+    max_storage: '1GB per database (hard limit, no upgrade path)',
+    implications: 'Cannot exceed 1GB total including indexes and overhead',
+    mitigation: 'R2 offloading for large data, archival strategy for old charts'
+  },
+
+  performance_limits: {
+    write_throttle: '1000 writes/second per database (per-request limit)',
+    request_size: '10MB per request limit',
+    replication: 'Single region (NO edge replication)',
+    implications: 'All writes routed to one region, potential bottlenecks'
+  },
+
+  feature_gaps_vs_postgresql: {
+    row_level_security: 'NOT SUPPORTED',
+    stored_procedures: 'NOT SUPPORTED',
+    triggers: 'NOT SUPPORTED',
+    views: 'NOT SUPPORTED',
+    advanced_indexing: 'Limited (no partial indexes, expression indexes)',
+    full_text_search: 'NOT SUPPORTED (basic LIKE only)',
+    window_functions: 'NOT SUPPORTED',
+   CTE_limitations: 'Limited support for complex CTEs'
+  },
+
+  required_mitigations: {
+    security: 'Implement application-level authorization (not RLS)',
+    business_logic: 'Move complex logic to Workers/Do code',
+    reporting: 'External analytics warehouse (ClickHouse, BigQuery)',
+    search: 'Implement in-app search with Workers + external service',
+    data_growth: 'Plan for multi-database sharding if >500GB',
+    analytics: 'Separate analytics database (not D1)'
+  },
+
+  current_data_volume: {
+    status: 'UNKNOWN - Phase 0 must measure this',
+    required_info: [
+      'Total row count in all tables',
+      'Data size in GB (compressed and uncompressed)',
+      'Daily write volume',
+      'Growth rate projection',
+      'Largest table sizes'
+    ],
+    action_item: 'Query current database to get exact metrics before Phase 0'
+  }
+};
+```
+
+### Hybrid Architecture Recommendation
+
+For FortuneT with 50-100 DAU, consider **hybrid approach**:
+
+```typescript
+const MIGRATION_STRATEGY = {
+  migrate_to_cloudflare: [
+    'User authentication and session data',
+    'Chart calculations and metadata',
+    'User preferences and settings',
+    'Complex reporting and analytics queries',
+    'Real-time features (Durable Objects)',
+    'API endpoints (Workers)',
+    'Frontend hosting (Pages)'
+  ],
+
+  benefits: [
+    'Unified infrastructure on Cloudflare',
+    'Full migration to modern stack',
+    'Achieves cost optimization (specific % TBD)',
+    'Complete migration with comprehensive testing',
+    'Single vendor for simplified management'
+  ]
+};
+```
+
+**Recommendation**: **Complete migration to Cloudflare stack**. Phase 0 must validate actual data volume.
 
 ## 📅 Detailed Migration Timeline (Revised - 16 Weeks)
 
@@ -193,11 +281,11 @@ const PHASE0_WEEK1 = {
 **Week 2: Risk Mitigation**
 ```typescript
 const PHASE0_WEEK2 = {
-  load_testing: [
-    'Simulate current user traffic on new architecture',
-    'Test concurrent user handling limits',
-    'Validate performance targets under load',
-    'Identify bottlenecks and scaling limits'
+  performance_validation: [
+    'Validate performance targets with user testing',
+    'Test concurrent user handling capacity',
+    'Identify and address performance bottlenecks',
+    'Optimize query performance and caching'
   ],
 
   rollback_procedures: [
@@ -301,7 +389,7 @@ const WEEK6_7_CHART_ENGINES = {
     'Unit tests for calculation engines',
     'Performance benchmarking',
     'Accuracy validation against existing system',
-    'Load testing with concurrent calculations'
+    'Concurrent calculation testing'
   ]
 };
 ```
@@ -368,8 +456,8 @@ const WEEK11_FEATURES = {
     'Chart creation and editing interface',
     'Real-time chart calculation display',
     'Chart visualization components',
-    'Export functionality (PDF, image, data)',
-    'Chart sharing and collaboration features'
+    'Export functionality (PDF, image, data)'
+    // NOTE: Chart sharing - see POST-MIGRATION STRETCH GOALS
   ],
 
   user_features: [
@@ -382,24 +470,33 @@ const WEEK11_FEATURES = {
 };
 ```
 
-**Week 12: Real-time Features & Optimization**
+**Week 12: Performance Optimization & Polish**
 ```typescript
-const WEEK12_REALTIME = {
-  realtime_collaboration: [
+const WEEK12_OPTIMIZATION = {
+  core_optimization: [
+    'Image optimization and lazy loading',
+    'JavaScript bundle optimization',
+    'API response caching',
+    'Service worker implementation',
+    'Mobile performance optimization',
+    'Final UI/UX polish and accessibility'
+  ]
+};
+```
+
+### Week 12 (OPTIONAL): Real-time Collaboration - POST-MIGRATION
+```typescript
+const STRETCH_GOALS = {
+  realtime_features: [
     'WebSocket integration with Durable Objects',
     'Real-time chart collaboration',
     'Live cursor and selection sharing',
     'Multi-user editing capabilities',
     'Conflict resolution for concurrent edits'
   ],
-
-  performance_optimization: [
-    'Image optimization and lazy loading',
-    'JavaScript bundle optimization',
-    'API response caching',
-    'Service worker implementation',
-    'Mobile performance optimization'
-  ]
+  effort_estimate: '4-6 weeks additional development',
+  priority: 'Post-migration (Month 3-4)',
+  depends_on: 'Core migration completion + user feedback'
 };
 ```
 
@@ -425,7 +522,7 @@ const WEEK13_TESTING = {
   ],
 
   performance_testing: [
-    'Load testing with 1000+ concurrent users',
+    'Performance testing with target user load',
     'Performance benchmarking against targets',
     'Stress testing for peak traffic scenarios',
     'Database performance optimization'
@@ -465,7 +562,7 @@ const WEEK14_PRODUCTION = {
 ```typescript
 const WEEK15_PRE_MIGRATION = {
   data_migration: [
-    'Complete user data export from Supabase',
+    'Complete user data export from current database',
     'Data transformation and validation scripts',
     'D1 database import with integrity checks',
     'Data consistency verification',
@@ -547,15 +644,14 @@ const REVISED_COST_ANALYSIS = {
     monthly_breakdown: {
       render_backend: '$200-500/month',
       vercel_frontend: '$20-100/month',
-      supabase_database: '$50-150/month',
       redis_cache: '$25-75/month',
       monitoring_tools: '$20-50/month',
       ssl_domains: '$15-30/month',
       third_party_apis: '$30-60/month', // AI services, email, etc.
       development_tools: '$20-40/month', // GitHub, CI/CD, etc.
-      total_current: '$360-960/month'
+      total_current: '$310-810/month'
     },
-    annual_current: '$4,320-11,520/year'
+    annual_current: '$3,720-9,720/year'
   },
 
   migration_costs: {
@@ -573,66 +669,119 @@ const REVISED_COST_ANALYSIS = {
   },
 
   new_cloudflare_costs: {
-    phased_projection: {
-      'Initial Phase (0-100 DAU)': {
-        details: 'At this level, most usage will fall within Cloudflare\'s generous free tiers. Costs are primarily fixed operational expenses.',
+    target_projection: {
+      'Current Scale (50 DAU)': {
+        details: 'Actual current usage. All usage falls within Cloudflare\'s free tiers. Only fixed costs for premium features.',
         cost_breakdown: {
-          pages_pro: '$20/month',
-          monitoring_services: '$0-30/month (optional basic plan)',
-          usage_costs: '~$0 (within free tier limits)'
+          pages_pro: '$20/month (optional, free tier available)',
+          monitoring_services: '$0/month (use free tier monitoring)',
+          usage_costs: '$0/month (within free limits)',
+          ai_services: '$10-30/month (based on actual AI usage)',
+          reserve_capacity: '$0/month (not needed at 50 DAU)'
         },
         total_estimated: '$20-50/month'
-      },
-      'Growth Phase (at 1,000 DAU)': {
-        details: 'As the user base grows, costs will scale with usage, primarily from services exceeding their free tier allowances.',
-        cost_breakdown: {
-          workers_beyond_free: '$15-35/month',
-          d1_beyond_free: '$25-45/month',
-          durable_objects_beyond_free: '$25-50/month',
-          r2_beyond_free: '$15-30/month',
-          pages_pro: '$20/month',
-          monitoring_services: '$50-100/month',
-          reserve_capacity: '$20-40/month'
-        },
-        total_estimated: '$170-320/month'
       }
     },
 
-    annual_new_system: '$2,040-3,840/year (based on 1,000 DAU projection)'
-  },
-
-  roi_calculation: {
-    monthly_savings: '$240-640/month', // More conservative savings
-    annual_savings: '$2,880-7,680/year',
-    migration_payback: '3.5-9 months', // Longer but more realistic
-    year_1_roi: '45-220%' // Still excellent but more conservative
+    annual_new_system: '$240-600/year (based on 50 DAU actual usage)'
   }
+  // Note: Detailed ROI analysis - parked for future when data is available
 };
 ```
 
-### Human Resource Requirements
+### Human Resource Requirements (50-100 DAU Scale - Realistic)
 
 ```typescript
 const RESOURCE_REQUIREMENTS = {
-  primary_developer: {
-    time_commitment: '40 hours/week for 16 weeks',
-    required_skills: [
-      'TypeScript/JavaScript',
-      'React.js development',
-      'Node.js/Cloudflare Workers',
-      'Database design (SQL)',
-      'RESTful API design',
-      'Authentication systems',
-      'Cloud infrastructure'
-    ],
-    learning_curve: '1 week for Cloudflare ecosystem'
+  core_team: {
+    primary_developer: {
+      time_commitment: '40 hours/week for 16 weeks (640 hours total)',
+      required_skills: [
+        'TypeScript/JavaScript',
+        'React.js development',
+        'Node.js/Cloudflare Workers',
+        'Database design (SQL)',
+        'RESTful API design',
+        'Authentication systems',
+        'Cloud infrastructure'
+      ],
+      learning_curve: '1-2 weeks for Cloudflare ecosystem',
+      responsibilities: [
+        'Architecture implementation',
+        'Core feature development',
+        'API endpoints',
+        'Frontend development',
+        'Database schema design',
+        'Integration with third-party services',
+        'Basic testing (unit + integration)',
+        'Manual testing with 50 DAU scale',
+        'DIY security checklist validation'
+      ]
+    }
+  },
+
+  minimal_contractor_support: {
+    security_review: {
+      diy_approach: {
+        cost: '$0-300',
+        approach: 'OWASP Top 10 checklist + automated scanners',
+        tools: ['OWASP ZAP (free)', 'Snyk (free tier)', 'SSL Labs test'],
+        effort: '10-20 hours of your time',
+        when: 'Week 12-13',
+        sufficient_for: '50-100 DAU small project'
+      },
+
+      alternative: {
+        cost: '$500-1,500',
+        approach: 'Freelance security review (5-10 hours)',
+        when: 'Week 12-13',
+        better_for: 'If you want peace of mind'
+      }
+    },
+
+    
+    qa_testing: {
+      recommendation: 'SKIP dedicated QA contractor',
+      reason: 'At 50-100 DAU, you can test yourself',
+      approach: [
+        'Write unit tests as you code (Vitest)',
+        'Manual testing for critical flows',
+        'Friends/family for UAT testing',
+        'Focus on core features'
+      ],
+      time: '10-15 hours/week for testing'
+    }
   },
 
   optional_support: {
-    cloudflare_specialist: '5-10 hours consultation (optional)',
-    ui_ux_designer: '10-20 hours (if visual updates desired)',
-    qa_tester: '20-40 hours (if available)',
-    project_manager: '5-10 hours (if team coordination needed)'
+    cloudflare_consultation: {
+      hours: '3-8 hours (on-demand)',
+      cost: '$200-600',
+      when: 'Only if stuck on specific issues',
+      alternatives: 'Documentation, community forums',
+      note: 'You can learn this yourself'
+    },
+
+    ui_ux: {
+      cost: '$0',
+      approach: 'Keep existing design, rebuild functionality',
+      note: 'Focus on working, not pretty'
+    }
+  },
+
+  total_budget_recommended: {
+    minimum: '$0-500 (DIY everything)',
+    moderate: '$500-1,500 (selective help)',
+    maximum: '$2,000-3,000 (if you want full coverage)',
+    reality: 'This is a learning project - keep costs minimal'
+  },
+
+  why_minimal_costs: {
+    scale: '50-100 DAU is small scale',
+    risk: 'Low user count = lower risk',
+    learning: 'You\'ll learn more by doing',
+    alternatives: 'Free tools + documentation are sufficient',
+    budget: 'Your time is the main investment'
   }
 };
 ```
@@ -670,6 +819,117 @@ const RISK_ASSESSMENT = {
 };
 ```
 
+### Security Audit Requirements & Sign-Off Process
+
+```typescript
+const SECURITY_AUDIT_PROCESS = {
+  authority: {
+    final_approver: 'Project Owner or Designated Security Officer',
+    technical_reviewer: 'Lead Developer + Security Auditor',
+    business_stakeholder: 'Operations Manager (if applicable)',
+    escalation: 'External CISO consultant if internal expertise unavailable'
+  },
+
+  audit_scope: [
+    'Authentication and authorization mechanisms',
+    'Data encryption in transit (TLS 1.3) and at rest',
+    'Input validation and injection prevention',
+    'Access control and privilege escalation',
+    'Session management and JWT handling',
+    'API security and rate limiting',
+    'Cloudflare Workers security configuration',
+    'Durable Objects state management security',
+    'D1 database access controls',
+    'Third-party integration security (Stripe, OAuth, AI services)',
+    'Compliance validation (GDPR, CCPA)',
+    'Security headers and CORS configuration'
+  ],
+
+  required_deliverables: {
+    penetration_test_report: {
+      format: 'Professional security assessment document',
+      sections: [
+        'Executive Summary',
+        'Methodology and scope',
+        'Vulnerabilities found (with severity ratings)',
+        'Risk assessment and business impact',
+        'Remediation recommendations',
+        'Retest results'
+      ],
+      standards: 'OWASP Top 10, NIST Cybersecurity Framework'
+    },
+
+    code_review: {
+      scope: 'Security-focused code review',
+      areas: [
+        'Authentication implementation',
+        'Authorization checks',
+        'Input sanitization',
+        'Error handling (no information leakage)',
+        'Cryptographic implementations',
+        'Secrets management'
+      ]
+    },
+
+    infrastructure_review: {
+      cloudflare_configuration: 'DNS, SSL/TLS, security headers',
+      access_controls: 'API keys, environment variables, secrets',
+      monitoring: 'Security logging and alerting setup',
+      backup_strategy: 'Data backup and recovery security'
+    }
+  },
+
+  acceptance_criteria: {
+    critical_vulnerabilities: 'ZERO - Must be fixed before go-live',
+    high_vulnerabilities: 'ZERO - Must be fixed before go-live',
+    medium_vulnerabilities: 'MAX 3 - All must have mitigation plan',
+    low_vulnerabilities: 'Documented with prioritization',
+    compliance: '100% GDPR/CCPA compliance validation',
+    documentation: 'Security procedures documented and tested'
+  },
+
+  remediation_process: {
+    timeline: {
+      critical: 'Fix within 24-48 hours',
+      high: 'Fix within 1 week',
+      medium: 'Fix within 2 weeks or document acceptable risk',
+      low: 'Schedule for post-migration (90 days)'
+    },
+    retesting: 'Full or partial retest after critical/high fixes',
+    signoff_required: 'Security auditor must re-approve fixes'
+  },
+
+  budget_allocation: {
+    diy_approach: {
+      tools: '$0-300 (OWASP ZAP, Snyk free tier)',
+      effort: '10-20 hours of your time',
+      total: '$0-300'
+    },
+
+    freelance_approach: {
+      audit_cost: '$500-1,500 (5-10 hours basic review)',
+      remediation_cost: '$200-800 (your time for fixes)',
+      total: '$700-2,300'
+    },
+
+    professional_approach: {
+      audit_cost: '$1,500-3,000 (10-20 hours)',
+      remediation_cost: '$500-1,500',
+      total: '$2,000-4,500'
+    },
+
+    recommended_for_50_100_dau: 'DIY or freelance approach ($0-1,500)'
+  },
+
+  timeline_integration: {
+    start: 'Week 12 (after core features complete)',
+    duration: '1-2 weeks',
+    critical_path: 'Yes - but simplified for small project',
+    parallel_work: 'Can do alongside performance testing'
+  }
+};
+```
+
 ### Comprehensive Testing Strategy
 
 ```typescript
@@ -677,15 +937,16 @@ const TESTING_STRATEGY = {
   unit_testing: {
     scope: 'Individual functions and components',
     tools: ['Vitest', 'Jest', 'Cloudflare Workers testing'],
-    coverage_target: '90%+ code coverage',
-    test_categories: [
-      'Chart calculation algorithms',
-      'API endpoint handlers',
-      'Durable Object methods',
-      'Database operations',
-      'Utility functions',
-      'React components'
-    ]
+    coverage_target: '70-80% code coverage (realistic for small project)',
+    focus_areas: [
+      'Chart calculation algorithms (critical)',
+      'API endpoint handlers (critical)',
+      'Database operations (critical)',
+      'Authentication logic (critical)',
+      'Utility functions (as needed)',
+      'React components (basic smoke tests)'
+    ],
+    note: 'Focus on critical paths, skip trivial getters/setters'
   },
 
   integration_testing: {
@@ -749,11 +1010,75 @@ const TECHNICAL_KPIS = {
 
   infrastructure_metrics: {
     cost_efficiency: {
-      target: '50-70% cost reduction',
+      target: 'TBD - cost reduction analysis parked for future',
       current_cost: '$360-960/month',
-      target_cost: '$170-320/month',
-      measurement_frequency: 'Monthly financial review'
+      target_cost: 'TBD - to be determined in Phase 0',
+      measurement_frequency: 'TBD - future financial review',
+      note: 'Financial analysis not in Phase 0 scope'
     }
+  }
+};
+```
+
+### Performance Validation Plan
+
+```typescript
+const PERFORMANCE_VALIDATION = {
+  data_volume_analysis: {
+    current_database_metrics: {
+      status: 'REQUIRED - Must be measured in Phase 0 Week 1',
+      required_queries: [
+        'Measure total database size (expect < 100MB for 50 DAU)',
+        'Count current users and charts',
+        'Analyze daily write volume (expect < 100/day for 50 DAU)',
+        'Project storage growth for 50 DAU'
+      ],
+      critical_thresholds: {
+        total_size: '< 100MB expected for 50 DAU scale',
+        user_count: '50 users with growth headroom',
+        daily_writes: '< 100/day expected for 50 DAU'
+      }
+    }
+  },
+
+  performance_targets: {
+    response_times: {
+      api_calls: '< 200ms (95th percentile)',
+      chart_calculations: '< 500ms',
+      ai_analysis: '< 3 seconds',
+      authentication: '< 400ms'
+    },
+    concurrent_users: {
+      target: '50 concurrent users (current DAU)',
+      headroom: 'Handle 75 users gracefully (50% growth buffer)'
+    },
+    reliability: {
+      error_rate: '< 0.5%',
+      uptime: '99.9%',
+      data_integrity: 'Zero data loss'
+    }
+  },
+
+  validation_approach: {
+    manual_testing: [
+      'Test with actual 50 user workflows',
+      'Chart calculation performance testing',
+      'Database query validation with real data',
+      'Team testing for concurrent usage scenarios'
+    ],
+    automated_monitoring: [
+      'Cloudflare Analytics (free tier)',
+      'Basic error tracking',
+      'Response time monitoring',
+      'User feedback collection'
+    ]
+  },
+
+  success_criteria: {
+    baseline_performance: 'All targets met with 50 DAU load',
+    scalability: 'Handle 75 users without degradation',
+    user_experience: 'Smooth experience for current users',
+    reliability: 'Consistent performance for 50 DAU'
   }
 };
 ```
@@ -771,16 +1096,8 @@ const BUSINESS_KPIS = {
       'Support ticket analysis',
       'User retention rates'
     ]
-  },
-
-  financial_metrics: {
-    roi_calculation: {
-      investment: '$2,150-5,040 one-time migration cost',
-      monthly_savings: '$240-640/month',
-      payback_period: '3.5-9 months',
-      year_1_return: '45-220% ROI'
-    }
   }
+  // Note: Financial ROI metrics - parked for future validation
 };
 ```
 
@@ -808,7 +1125,7 @@ const MIGRATION_MILESTONES = {
     '✅ Old infrastructure decommissioned',
     '✅ All KPI targets achieved',
     '✅ User satisfaction > 4.5/5.0',
-    '✅ Cost savings > 50-70% realized'
+    '⚠️ Cost analysis - parked for future validation'
   ]
 };
 ```
@@ -872,13 +1189,13 @@ const ONGOING_MAINTENANCE = {
 
 ### 🎯 Executive Summary
 
-This comprehensive migration plan transforms FortuneT from a fragmented, expensive multi-provider stack into a unified, high-performance Cloudflare-native platform. The project delivers exceptional ROI while maintaining 100% feature parity and achieving zero business disruption.
+This comprehensive migration plan transforms FortuneT from a fragmented, expensive multi-provider stack into a unified, high-performance Cloudflare-native platform. The project aims to improve cost efficiency, performance, and maintain 100% feature parity with zero business disruption.
 
 **Key Highlights:**
 - **16-week migration timeline** with zero downtime
-- **50-70% cost reduction** ($240-640/month savings)
+- **Target cost optimization** (specific savings TBD)
 - **3-5x performance improvement** (global edge network)
-- **45-220% first-year ROI** with 3.5-9 month payback
+- **Simplified infrastructure** (fewer vendors to manage)
 - **Enterprise-grade security** with Cloudflare Access
 
 ### 🚀 Immediate Next Steps
@@ -947,7 +1264,7 @@ git checkout -b feat/poc-oauth-migration
 - Better security posture
 
 **Short-term Benefits (Month 1-3):**
-- Significant cost reduction (50-70%)
+- Cost optimization (specific reduction TBD)
 - Performance improvements (3-5x faster)
 - Enhanced user experience
 - Faster feature development
