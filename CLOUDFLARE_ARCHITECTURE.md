@@ -177,7 +177,7 @@ export class ChartCacheDurableObject {
 
 #### Core Schema
 ```sql
--- Users table (replaces Supabase auth.users)
+-- Users table (replaces Current Database auth.users)
 CREATE TABLE users (
     id TEXT PRIMARY KEY,
     cloudflare_id TEXT UNIQUE,           -- Cloudflare Access sub

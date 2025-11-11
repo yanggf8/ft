@@ -2,7 +2,7 @@
 
 ## 📋 Overview
 
-Complete database schema design for FortuneT's migration from PostgreSQL (Supabase) to Cloudflare D1. This schema is optimized for D1's SQLite architecture while maintaining full feature parity with the current system.
+Complete database schema design for FortuneT's migration from PostgreSQL (Current Database) to Cloudflare D1. This schema is optimized for D1's SQLite architecture while maintaining full feature parity with the current system.
 
 ## 🎯 Design Principles
 
@@ -17,7 +17,7 @@ Complete database schema design for FortuneT's migration from PostgreSQL (Supaba
 ### Users & Authentication
 
 ```sql
--- Users table (replaces Supabase auth.users)
+-- Users table (replaces Current Database auth.users)
 CREATE TABLE users (
     id TEXT PRIMARY KEY,                    -- UUID v4
     cloudflare_id TEXT UNIQUE,              -- Cloudflare Access sub
@@ -476,14 +476,14 @@ INSERT INTO charts (id, user_id, chart_type, birth_info) VALUES (
 
 ## 🔄 Migration Scripts
 
-### Data Migration from Supabase
+### Data Migration from Current Database
 
 ```typescript
 // Migration script structure
-export class SupabaseToD1Migration {
+export class Current DatabaseToD1Migration {
   async migrateUsers() {
-    // Export from Supabase
-    const supabaseUsers = await this.exportSupabaseUsers();
+    // Export from Current Database
+    const supabaseUsers = await this.exportCurrent DatabaseUsers();
 
     // Transform for D1 schema
     const transformedUsers = supabaseUsers.map(user => ({
@@ -504,7 +504,7 @@ export class SupabaseToD1Migration {
 
   async migrateCharts() {
     // Migrate fortune_charts -> charts
-    const supabaseCharts = await this.exportSupabaseCharts();
+    const supabaseCharts = await this.exportCurrent DatabaseCharts();
 
     for (const chart of supabaseCharts) {
       await this.env.DB.prepare(`
@@ -528,7 +528,7 @@ export class SupabaseToD1Migration {
 
   async migrateSubscriptions() {
     // Migrate subscription data
-    const subscriptions = await this.exportSupabaseSubscriptions();
+    const subscriptions = await this.exportCurrent DatabaseSubscriptions();
 
     for (const sub of subscriptions) {
       await this.env.DB.prepare(`

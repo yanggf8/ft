@@ -12,7 +12,7 @@ This document provides a comprehensive, line-by-line breakdown of monthly costs 
 |---------|----------|------|--------------|-------|
 | **Backend Hosting** | Render.com | Pro Plan | $200-500 | Python Flask, auto-scaling |
 | **Frontend Hosting** | Vercel | Pro Plan | $20-100 | React application, bandwidth |
-| **Database** | Supabase | Pro Plan | $50-150 | PostgreSQL, compute, storage |
+| **Database** | Current Database | Pro Plan | $50-150 | PostgreSQL, compute, storage |
 | **Cache** | Redis Labs | Standard | $25-75 | In-memory caching |
 | **CDN/SSL** | Cloudflare | Pro Plan | $15-30 | CDN and SSL certificates |
 | **Domain Registration** | Multiple | - | $15-30 | Domain renewal and privacy |
@@ -55,7 +55,7 @@ This document provides a comprehensive, line-by-line breakdown of monthly costs 
 |------|-----------|--------|-------|
 | 1 | Cloudflare Free Tier Setup | $0 | D1, Workers, R2 free tiers |
 | 1 | Development Tools (Sentry trial) | $0 | Extended monitoring setup |
-| 1 | Load Testing Services | $50-100 | Third-party load testing tools |
+| 1 | Load Testing Services | $50-100 | Third-party performance testing tools |
 | 2 | Security Audit Deposit | $250-500 | 50% deposit for penetration testing |
 | 2 | Database Migration Tools | $30-50 | Data export/import utilities |
 
