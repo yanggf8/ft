@@ -1,0 +1,28 @@
+name = "fortunet-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "fortunet-db"
+database_id = "88d074eb-7331-402b-bc76-1ac3cb0588da"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "fortunet-storage"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Migrations - use new_sqlite_classes for free tier
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]

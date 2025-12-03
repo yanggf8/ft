@@ -669,23 +669,44 @@ const REVISED_COST_ANALYSIS = {
   },
 
   new_cloudflare_costs: {
-    target_projection: {
-      'Current Scale (50 DAU)': {
-        details: 'Actual current usage. All usage falls within Cloudflare\'s free tiers. Only fixed costs for premium features.',
+    zero_cost_testing: {
+      'Month 1-2 (5-10 DAU)': {
+        details: 'ZERO COST target before marketing investment. All usage within free tiers.',
         cost_breakdown: {
-          pages_pro: '$20/month (optional, free tier available)',
-          monitoring_services: '$0/month (use free tier monitoring)',
-          usage_costs: '$0/month (within free limits)',
-          ai_services: '$10-30/month (based on actual AI usage)',
-          reserve_capacity: '$0/month (not needed at 50 DAU)'
+          cloudflare_workers: '$0/month (100K requests/day free, using ~1K/day)',
+          d1_database: '$0/month (5GB free, using <100MB)',
+          durable_objects: '$0/month (400K requests/day free)',
+          r2_storage: '$0/month (10GB free, using <500MB)',
+          pages: '$0/month (unlimited bandwidth)',
+          ai_services: '$0/month (Groq free tier: 14K requests/day)',
+          monitoring: '$0/month (Cloudflare Analytics + Sentry free)',
+          email: '$0/month (Resend free tier: 3K/month)'
         },
-        total_estimated: '$20-50/month'
+        total_estimated: '$0/month' // ✅ ZERO COST ACHIEVED
       }
     },
 
-    annual_new_system: '$240-600/year (based on 50 DAU actual usage)'
+    early_growth: {
+      'Month 3-4 (20-50 DAU)': {
+        details: 'Minimal costs as usage approaches free tier limits',
+        estimated: '$30-80/month'
+      }
+    },
+
+    scale_phase: {
+      'Month 5+ (50+ DAU)': {
+        details: 'Paid tier with premium features and revenue generation',
+        estimated: '$100-303/month',
+        revenue_offset: '$100-500/month (premium tier)',
+        net: 'Break-even to positive'
+      }
+    },
+
+    annual_projections: {
+      year_1: '$360-1,200/year (avg $30-100/month with gradual scale)',
+      note: 'Includes 2 months at $0, then gradual ramp-up'
+    }
   }
-  // Note: Detailed ROI analysis - parked for future when data is available
 };
 ```
 
@@ -1130,14 +1151,86 @@ const MIGRATION_MILESTONES = {
 };
 ```
 
-## 🚀 Post-Migration Optimization Plans
+## 🚀 Post-Migration Enhancement Plans
 
-### Phase 1: Performance Optimization (Week 17-18)
+### Phase 7: Storytelling Layer Implementation (Week 17-24) 🌌
+
+**NEW**: The Cosmic Weave storytelling system - FortuneT's key product differentiator.
 
 ```typescript
-const POST_MIGRATION_OPTIMIZATION = {
+const STORYTELLING_ENHANCEMENT = {
+  phase_1_mvp: {
+    timeline: 'Week 17-18',
+    features: [
+      'Text-based narrative generation (4 chapters)',
+      'Celestial Sage AI synthesis',
+      'StoryDO caching layer',
+      'User feedback collection system'
+    ],
+    validation_gate: {
+      story_completion: '>70%',
+      accuracy_rating: '>4.0/5',
+      ai_cost_per_user: '<$2/month',
+      cache_hit_rate: '>75%'
+    }
+  },
+
+  phase_2_enhanced: {
+    timeline: 'Week 19-22',
+    features: [
+      'Conversational Celestial Sage (Q&A)',
+      'Cosmic Loom timeline (mobile-first)',
+      'Enhanced AI prompts with A/B testing',
+      'Performance optimization'
+    ],
+    validation_gate: {
+      engagement_time: '>5 minutes',
+      accuracy_rating: '>4.2/5',
+      ai_cost_per_user: '<$1.50/month',
+      mobile_experience: '>4.0/5'
+    }
+  },
+
+  phase_3_premium: {
+    timeline: 'Week 23-24',
+    features: [
+      'Generative Soul Symbols (AI images)',
+      'Audio narration (Text-to-Speech)',
+      'Social sharing integration',
+      'Premium tier gating'
+    ],
+    validation_gate: {
+      user_satisfaction: '>4.5/5',
+      share_rate: '>15%',
+      total_ai_cost: '<$1/user/month',
+      image_generation_success: '>95%'
+    }
+  },
+
+  investment_required: {
+    development_time: '320 hours (8 weeks)',
+    expert_consultation: '$1,500-3,000',
+    ai_services_ongoing: '$40-143/month',
+    total_investment: '$1,850-3,700 + experts'
+  },
+
+  revenue_opportunity: {
+    premium_tier_price: '$9.99/month',
+    target_conversion: '20% of active users',
+    break_even_point: '100-150 DAU at 20% conversion',
+    roi_timeline: '7-12 months to profitability'
+  }
+};
+```
+
+> **Complete details**: See [STORYTELLING_ROADMAP.md](./STORYTELLING_ROADMAP.md) and [storytelling_proposal.md](./storytelling_proposal.md)
+
+### Phase 8: Performance Optimization (Week 25-26)
+
+```typescript
+const PERFORMANCE_OPTIMIZATION = {
   performance_tuning: {
-    week_17_focus: [
+    week_25_focus: [
       'Database query optimization based on real usage patterns',
       'Durable Objects memory and CPU tuning',
       'Edge caching strategies for static content',
@@ -1145,7 +1238,7 @@ const POST_MIGRATION_OPTIMIZATION = {
       'Global CDN performance tuning'
     ],
 
-    week_18_focus: [
+    week_26_focus: [
       'Mobile performance optimization',
       'Image compression and lazy loading',
       'JavaScript bundle optimization',
@@ -1339,3 +1432,5 @@ This comprehensive plan provides everything needed to successfully migrate Fortu
 - [Success Criteria](./SUCCESS_CRITERIA.md)
 - [Rollback Procedures](./ROLLBACK_PROCEDURES.md)
 - [Post-Migration Optimization](./POST_MIGRATION_OPTIMIZATION.md)
+- [Storytelling Roadmap](./STORYTELLING_ROADMAP.md)
+- [Storytelling Proposal](./storytelling_proposal.md)

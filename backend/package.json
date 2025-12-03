@@ -1,0 +1,23 @@
+{
+  "name": "fortunet-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute fortunet-db --remote --file=scripts/schema.sql",
+    "db:init:local": "wrangler d1 execute fortunet-db --local --file=scripts/schema.sql",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.93.0"
+  }
+}
