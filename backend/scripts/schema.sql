@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name TEXT,
     avatar_url TEXT,
     subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'premium', 'professional')),
+    trial_ends_at TEXT,  -- 試用期結束時間，NULL = 無試用
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -18,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS chart_records (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    chart_type TEXT NOT NULL CHECK (chart_type IN ('ziwei', 'western_natal', 'western_transit')),
+    chart_type TEXT NOT NULL CHECK (chart_type IN ('ziwei', 'western')),
     chart_name TEXT NOT NULL,
     birth_data TEXT NOT NULL,
     chart_data TEXT NOT NULL,
@@ -60,3 +61,16 @@ CREATE TABLE IF NOT EXISTS usage_tracking (
 
 CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_tracking(user_id);
 CREATE INDEX IF NOT EXISTS idx_usage_date ON usage_tracking(usage_date);
+
+-- AI provider quota tracking
+CREATE TABLE IF NOT EXISTS ai_quota (
+    id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    date TEXT NOT NULL DEFAULT (date('now')),
+    tokens_used INTEGER DEFAULT 0,
+    requests_count INTEGER DEFAULT 0,
+    last_request_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(provider, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_quota_provider_date ON ai_quota(provider, date);

@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { SessionDO } from './durable-objects/session-do';
+import { AIMutexDO } from './durable-objects/ai-mutex-do';
 import auth from './routes/auth';
 import users from './routes/users';
 import charts from './routes/charts';
@@ -14,9 +15,12 @@ import charts from './routes/charts';
 export interface Env {
   DB: D1Database;
   SESSION_DO: DurableObjectNamespace;
+  AI_MUTEX: DurableObjectNamespace;
   STORAGE: R2Bucket;
   ENVIRONMENT: string;
+  IFLOW_API_KEY?: string;
   GROQ_API_KEY?: string;
+  CEREBRAS_API_KEY?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -69,4 +73,4 @@ app.onError((err, c) => {
 });
 
 export default app;
-export { SessionDO };
+export { SessionDO, AIMutexDO };

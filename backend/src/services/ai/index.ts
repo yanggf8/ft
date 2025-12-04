@@ -1,2 +1,5 @@
-export { GroqClient } from './groq';
-export type { GroqConfig, InterpretationRequest, InterpretationResponse } from './groq';
+// AI Provider Adapters
+export type { AIProvider, InterpretationRequest, InterpretationResponse } from './types';
+export { IFlowProvider } from './iflow';
+export { CerebrasProvider } from './cerebras';
+export { getSystemPrompt, buildPrompt } from './prompts';

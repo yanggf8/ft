@@ -1,7 +1,7 @@
 # 🤖 FortuneT V2 - Repository Guidelines
 
-**Current Phase**: Phase 2 (Core Features) - Week 9 ✅
-**Status**: AI integration complete, ready for Week 10-11 (Payments)
+**Current Phase**: Phase 3 (Frontend) - Week 14-15 ✅
+**Status**: Frontend complete, ready for Phase 4 (Testing)
 
 ---
 
@@ -35,6 +35,32 @@ FortuneT V2 is a Cloudflare-native migration with AI-powered storytelling featur
 - Approximate moon sign
 - Basic planetary positions
 
+### Week 9: AI Integration ✅
+
+#### Provider Strategy (3-tier failover)
+
+| Priority | Provider | Model | 特點 |
+|----------|----------|-------|------|
+| Primary | iFlow | GLM-4.6 | 敘事最佳、溫柔專業 |
+| Secondary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
+| Tertiary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
+
+#### AI Mutex DO Features
+- Serialized requests (1 concurrent)
+- Auto failover on error
+- exresource tracking per provider/day:
+  - `requests` - 請求數
+  - `tokens` - token 用量
+  - `errors` - 錯誤數
+  - `lastError` - 最後錯誤 (time, code, message)
+  - `latencySum` - 延遲總和
+  - `failovers` - failover 次數
+
+#### AI Endpoints
+```bash
+POST /api/charts/interpret    # AI interpretation with failover
+```
+
 ### Deployed Infrastructure
 
 | Component | Status | URL/ID |
@@ -43,41 +69,16 @@ FortuneT V2 is a Cloudflare-native migration with AI-powered storytelling featur
 | **D1 Database** | ✅ Ready | `88d074eb-7331-402b-bc76-1ac3cb0588da` |
 | **R2 Storage** | ✅ Ready | `fortunet-storage` |
 | **Session DO** | ✅ Working | SQLite-backed |
+| **AI Mutex DO** | ✅ Working | SQLite-backed, 3-provider failover |
 | **CI/CD** | ✅ Configured | `.github/workflows/deploy.yml` |
 
-### Phase 1 Exit Criteria
+### Cloudflare Secrets
 
-- [x] Repository structure created
-- [x] Wrangler configured and working locally
-- [x] D1 database created with schema
-- [x] R2 bucket created
-- [x] Session DO working
-- [x] Health endpoint responding
-- [x] CI/CD pipeline configured
-
-### Implemented Endpoints
-
-```bash
-# Health
-GET  /health
-GET  /health/db
-
-# Auth
-POST /api/auth/register
-POST /api/auth/login
-POST /api/auth/logout
-
-# Users
-GET  /api/users/me
-PUT  /api/users/me
-
-# Charts
-GET  /api/charts
-POST /api/charts
-GET  /api/charts/:id
-PUT  /api/charts/:id
-DELETE /api/charts/:id
-```
+| Secret | Purpose |
+|--------|---------|
+| `IFLOW_API_KEY` | Primary AI provider |
+| `GROQ_API_KEY` | Secondary AI provider |
+| `CEREBRAS_API_KEY` | Tertiary AI provider |
 
 ---
 
@@ -88,6 +89,8 @@ fortune-teller-v2/
 ├── MASTER_PLAN.md              # ⭐ Consolidated migration plan
 ├── README.md                   # Project overview
 ├── AGENTS.md                   # This file
+├── FRONTEND_FIXES.md           # Frontend-backend contract fixes
+├── STORYTELLING_ROADMAP.md     # Phase 7 storytelling features
 │
 ├── .github/
 │   └── workflows/
@@ -97,7 +100,18 @@ fortune-teller-v2/
 │   ├── src/
 │   │   ├── index.ts            # Main entry (Hono)
 │   │   ├── durable-objects/
-│   │   │   └── session-do.ts   # Session management
+│   │   │   ├── session-do.ts   # Session management
+│   │   │   └── ai-mutex-do.ts  # AI failover & tracking
+│   │   ├── services/
+│   │   │   ├── billing.ts      # Trial & subscription logic
+│   │   │   ├── ai/
+│   │   │   │   ├── index.ts    # AI exports
+│   │   │   │   ├── prompts.ts  # Shared prompts
+│   │   │   │   ├── iflow.ts    # iFlow provider
+│   │   │   │   ├── cerebras.ts # Cerebras provider
+│   │   │   │   └── types.ts    # AI types
+│   │   │   ├── ziwei/          # ZiWei calculation
+│   │   │   └── western/        # Western calculation
 │   │   ├── middleware/
 │   │   │   ├── auth.ts         # Auth middleware
 │   │   │   └── validate.ts     # Zod validation
@@ -110,11 +124,33 @@ fortune-teller-v2/
 │   ├── wrangler.toml           # Cloudflare config
 │   └── package.json
 │
-├── docs/
-│   ├── audit/                  # ✅ Phase -1 complete
-│   └── phase0/                 # ✅ Phase 0 complete (GO)
+├── frontend/                   # ✅ React + Vite
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.tsx
+│   │   │   ├── ProtectedRoute.tsx
+│   │   │   └── ChartForm.tsx
+│   │   ├── pages/
+│   │   │   ├── HomePage.tsx
+│   │   │   ├── LoginPage.tsx
+│   │   │   ├── ProfilePage.tsx
+│   │   │   └── ChartPage.tsx
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx
+│   │   ├── lib/
+│   │   │   └── api.ts
+│   │   ├── types/
+│   │   │   └── index.ts
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── package.json
 │
-└── phase0-tests/               # Phase 0 validation
+└── docs/
+    ├── audit/                  # ✅ Phase -1 complete
+    └── phase0/                 # ✅ Phase 0 complete (GO)
 ```
 
 ---
@@ -125,9 +161,9 @@ fortune-teller-v2/
 Phase -1: System Audit        Week 0      ✅ COMPLETED
 Phase 0:  Risk Assessment     Week 1-3    ✅ COMPLETED (GO)
 Phase 1:  Foundation          Week 4-6    ✅ COMPLETED
-Phase 2:  Core Features       Week 7-11   ← NEXT
-Phase 3:  Frontend            Week 12-15
-Phase 4:  Integration/Test    Week 16-18
+Phase 2:  Core Features       Week 7-11   ✅ COMPLETED
+Phase 3:  Frontend            Week 12-15  ✅ COMPLETED
+Phase 4:  Integration/Test    Week 16-18  ← NEXT
 Phase 5:  Pre-Migration       Week 19-20
 Phase 6:  Go-Live             Week 21
 Stabilization                 Week 22-25
@@ -145,14 +181,30 @@ Phase 7:  Storytelling        Week 26-33
 - [x] Main & auxiliary star placement
 
 ### Week 9: AI Integration ✅
-- [x] Groq API integration
-- [x] Interpretation generation
-- [x] Rate limiting (10 req/min/IP)
+- [x] 3-provider failover: iFlow → Groq → Cerebras
+- [x] iFlow GLM-4.6 (primary, best narrative)
+- [x] Groq kimi-k2-instruct-0905 (secondary, fast)
+- [x] Cerebras llama-3.3-70b (tertiary, stable)
+- [x] AI Mutex DO (serialized requests, failover)
+- [x] exresource tracking (usage, errors, latency, failovers)
 
-### Week 10-11: Payments ← NEXT
-- [ ] Stripe integration
-- [ ] Subscription management
-- [ ] Webhook handling
+### Week 10-11: Billing ✅
+- [x] Trial period (30 days free)
+- [x] `trial_ends_at` field in users table
+- [x] `billing.ts` service (checkUserAccess)
+- [x] `/api/users/me` returns billing status
+- [ ] Stripe integration (deferred - free trial first)
+
+### Week 12-15: Frontend ✅
+- [x] Vite + React + TypeScript setup
+- [x] Passwordless auth (email-only, sessionId)
+- [x] API client with session management
+- [x] Auth context & protected routes
+- [x] Pages: Home, Login, Profile, Chart
+- [x] Chart creation form (ZiWei/Western)
+- [x] AI interpretation UI
+- [x] Mobile responsive design
+- [x] Build: 179KB (57KB gzipped)
 
 ---
 
@@ -162,8 +214,18 @@ Phase 7:  Storytelling        Week 26-33
 ```bash
 cd backend
 npm run dev                   # Local dev (localhost:8787)
-npm run deploy                # Deploy to Cloudflare
 npm run typecheck             # TypeScript check
+
+# Deploy (use OAuth, not API token)
+unset CLOUDFLARE_API_TOKEN
+npx wrangler deploy
+
+# Secrets management
+npx wrangler secret put IFLOW_API_KEY
+npx wrangler secret put GROQ_API_KEY
+npx wrangler secret put CEREBRAS_API_KEY
+
+# Database
 npm run db:init               # Apply schema to remote D1
 npm run db:init:local         # Apply schema to local D1
 ```
@@ -189,11 +251,12 @@ Required secrets:
 
 ## 🎯 Zero-Cost Strategy
 
-**Current Usage** (Phase 1):
+**Current Usage** (Phase 2):
 - Workers: ~10 requests/day (testing)
 - D1: 0.09 MB / 5 GB limit
-- DO: Minimal (session tests)
+- DO: Minimal (session + AI mutex)
 - R2: 0 MB / 10 GB limit
+- AI: Free tiers (iFlow/Groq/Cerebras)
 
 **Free Tier Limits**:
 - Workers: 100K requests/day
@@ -213,5 +276,6 @@ Required secrets:
 
 ---
 
-**Last Updated**: 2025-12-03
+**Last Updated**: 2025-12-04
 **API URL**: https://fortunet-api.yanggf.workers.dev
+**Frontend Build**: 179KB (57KB gzipped)

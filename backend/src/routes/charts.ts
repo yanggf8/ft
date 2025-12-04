@@ -3,7 +3,6 @@ import type { Env } from '../index';
 import { authMiddleware } from '../middleware/auth';
 import { ziWeiCalculator } from '../services/ziwei';
 import { westernCalculator } from '../services/western';
-import { GroqClient } from '../services/ai';
 
 const charts = new Hono<{ Bindings: Env }>();
 
@@ -133,10 +132,6 @@ charts.post('/interpret', authMiddleware, async (c) => {
     return c.json({ error: 'Too many requests', code: 'RATE_LIMIT', details: 'AI limit: 10 req/min' }, 429);
   }
   
-  if (!c.env.GROQ_API_KEY) {
-    return c.json({ error: 'AI service not configured', code: 'SERVICE_UNAVAILABLE' }, 503);
-  }
-  
   const { chartType, chartData, language, focus } = await c.req.json();
   
   if (!chartType || !chartData) {
@@ -148,16 +143,60 @@ charts.post('/interpret', authMiddleware, async (c) => {
   }
   
   try {
-    const groq = new GroqClient({ apiKey: c.env.GROQ_API_KEY });
-    const result = await groq.interpret({
-      chartType,
-      chartData,
-      language: language || 'zh',
-      focus
+    // At least one AI provider required
+    if (!c.env.IFLOW_API_KEY && !c.env.GROQ_API_KEY && !c.env.CEREBRAS_API_KEY) {
+      return c.json({ error: 'AI service not configured', code: 'SERVICE_UNAVAILABLE' }, 503);
+    }
+    
+    // Route through AI Mutex DO
+    const mutexId = c.env.AI_MUTEX.idFromName('global');
+    const mutex = c.env.AI_MUTEX.get(mutexId);
+    
+    const response = await mutex.fetch('https://ai-mutex/interpret', {
+      method: 'POST',
+      body: JSON.stringify({
+        keys: { iflow: c.env.IFLOW_API_KEY, groq: c.env.GROQ_API_KEY, cerebras: c.env.CEREBRAS_API_KEY },
+        interpretRequest: { chartType, chartData, language: language || 'zh', focus }
+      })
     });
+    
+    if (!response.ok) {
+      const err = await response.json() as { error?: string; code?: string; details?: string };
+      return c.json(err, response.status as 400 | 429 | 500 | 503);
+    }
+    
+    const result = await response.json() as {
+      interpretation: string;
+      provider: string;
+      model: string;
+      tokensUsed?: number;
+      quota?: { provider: string; tokensUsedToday: number; requestsToday: number; limits: { tpd: number; rpd: number } };
+    };
+    
+    // Optionally persist quota to D1 for analytics (async, don't block response)
+    if (result.quota) {
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare(
+          `INSERT INTO ai_quota (id, provider, date, tokens_used, requests_count)
+           VALUES (?, ?, date('now'), ?, ?)
+           ON CONFLICT(provider, date) DO UPDATE SET
+             tokens_used = ?,
+             requests_count = ?,
+             last_request_at = datetime('now')`
+        ).bind(
+          crypto.randomUUID(),
+          result.quota.provider,
+          result.quota.tokensUsedToday,
+          result.quota.requestsToday,
+          result.quota.tokensUsedToday,
+          result.quota.requestsToday
+        ).run()
+      );
+    }
     
     return c.json({
       interpretation: result.interpretation,
+      provider: result.provider,
       model: result.model,
       tokensUsed: result.tokensUsed,
       engineVersion: ENGINE_VERSION

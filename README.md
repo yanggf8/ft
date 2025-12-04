@@ -1,6 +1,6 @@
 # 🚀 FortuneT V2 - Cloudflare Migration
 
-**Status**: Phase 1 (Foundation) - Ready to Start
+**Status**: Phase 3 (Frontend) - Week 14-15 ✅
 **Timeline**: 24 weeks core + 8 weeks storytelling
 
 ---
@@ -8,6 +8,7 @@
 ## 📋 Quick Start
 
 **Start Here** → [MASTER_PLAN.md](./MASTER_PLAN.md)
+**Dev Guide** → [AGENTS.md](./AGENTS.md)
 
 ---
 
@@ -21,95 +22,93 @@
 
 ---
 
-## 📁 Documentation Structure
+## 🎯 Current Progress
 
-### Core Documents
+### Phase 3 Complete ✅
+- ✅ Vite + React + TypeScript frontend
+- ✅ Passwordless auth (email-only, sessionId)
+- ✅ Chart creation form (ZiWei/Western)
+- ✅ AI interpretation UI
+- ✅ Mobile responsive design
+- ✅ Build: 179KB (57KB gzipped)
+
+### Phase 2 Complete ✅
+- ZiWei (紫微斗數) calculation engine
+- Western Zodiac calculation engine
+- AI interpretation with 3-provider failover:
+  - iFlow GLM-4.6 (primary)
+  - Groq kimi-k2-instruct-0905 (secondary)
+  - Cerebras llama-3.3-70b (tertiary)
+- Billing: 30-day free trial for new users
+
+### Live API
+```
+https://fortunet-api.yanggf.workers.dev
+```
+
+---
+
+## 📁 Documentation
+
 | Document | Purpose |
 |----------|---------|
-| **[MASTER_PLAN.md](./MASTER_PLAN.md)** | ⭐ Consolidated migration plan (START HERE) |
+| **[MASTER_PLAN.md](./MASTER_PLAN.md)** | ⭐ Migration plan & timeline |
+| **[AGENTS.md](./AGENTS.md)** | ⭐ Dev guide & coding standards |
+| **[FRONTEND_FIXES.md](./FRONTEND_FIXES.md)** | Frontend-backend contract fixes |
 | [STORYTELLING_ROADMAP.md](./STORYTELLING_ROADMAP.md) | Phase 7 storytelling features |
-
-### Audit & Validation
-| Document | Status |
-|----------|--------|
-| [docs/audit/AUDIT_CHECKLIST.md](./docs/audit/AUDIT_CHECKLIST.md) | ✅ Phase -1 Complete |
-| [docs/phase0/d1_compatibility_report.md](./docs/phase0/d1_compatibility_report.md) | ✅ 100% Pass (14/14) |
-| [docs/phase0/go_no_go_decision.md](./docs/phase0/go_no_go_decision.md) | ✅ GO Decision |
-
-### Technical Reference
-| Document | Purpose |
-|----------|---------|
-| [CLOUDFLARE_ARCHITECTURE.md](./CLOUDFLARE_ARCHITECTURE.md) | Detailed architecture design |
-| [D1_DATABASE_SCHEMA.md](./D1_DATABASE_SCHEMA.md) | Database schema reference |
-| [DURABLE_OBJECTS_DESIGN.md](./DURABLE_OBJECTS_DESIGN.md) | Caching layer design |
-| [AUTHENTICATION_MIGRATION.md](./AUTHENTICATION_MIGRATION.md) | Auth migration details |
-
-### Legacy (Reference Only)
-| Document | Purpose |
-|----------|---------|
-| [MIGRATION_PLAN.md](./MIGRATION_PLAN.md) | Original detailed plan (superseded by MASTER_PLAN) |
-| [DETAILED_MONTHLY_COSTS.md](./DETAILED_MONTHLY_COSTS.md) | Cost breakdown details |
+| [docs/phase0/](./docs/phase0/) | Risk assessment (GO decision) |
 
 ---
 
-## 📅 Timeline Overview
+## 📅 Timeline
 
 ```
-Week 0:     Phase -1: System Audit          ✅ COMPLETED
-Week 1-3:   Phase 0:  Risk Assessment       ✅ COMPLETED (GO)
-Week 4-6:   Phase 1:  Foundation            ← CURRENT
-Week 7-11:  Phase 2:  Core Features
-Week 12-15: Phase 3:  Frontend
-Week 16-18: Phase 4:  Integration & Testing
-Week 19-20: Phase 5:  Pre-Migration
-Week 21:    Phase 6:  Go-Live
-Week 22-25: Stabilization (4 weeks buffer)
-Week 26-33: Phase 7:  Storytelling
+Phase -1: System Audit        Week 0      ✅ COMPLETED
+Phase 0:  Risk Assessment     Week 1-3    ✅ COMPLETED (GO)
+Phase 1:  Foundation          Week 4-6    ✅ COMPLETED
+Phase 2:  Core Features       Week 7-11   ✅ COMPLETED
+Phase 3:  Frontend            Week 12-15  ✅ COMPLETED
+Phase 4:  Integration/Test    Week 16-18  ← NEXT
+Phase 5:  Pre-Migration       Week 19-20
+Phase 6:  Go-Live             Week 21
+Stabilization                 Week 22-25
+Phase 7:  Storytelling        Week 26-33
 ```
 
 ---
 
-## 🎯 Next Actions (Phase 1)
-
-1. **Setup Cloudflare Infrastructure**
-   - Create Cloudflare account/project
-   - Run `wrangler login`
-   - Create D1 database: `wrangler d1 create fortunet-db`
-
-2. **Initialize Backend**
-   - Setup Workers project with Hono
-   - Apply schema to D1
-   - Deploy health check endpoint
-
-3. **Implement Auth**
-   - Session Durable Object
-   - Auth middleware
-   - JWT token handling
-
----
-
-## 💰 Cost Strategy
-
-| Phase | Monthly Cost |
-|-------|--------------|
-| Month 1-2 (Testing) | **$0** (free tiers) |
-| Month 3-4 (Growth) | $30-80 |
-| Month 5+ (Scale) | $100-303 |
-
-**Annual Savings**: $1,600-11,550
-
----
-
-## 🛠️ Tech Stack (Target)
+## 🛠️ Tech Stack
 
 - **Frontend**: React + TypeScript + Vite + Tailwind
 - **Backend**: Cloudflare Workers + Hono
 - **Database**: D1 (SQLite)
 - **Cache**: Durable Objects
 - **Storage**: R2
-- **AI**: Groq (free tier)
-- **Payments**: Stripe
+- **AI**: iFlow / Groq / Cerebras (free tiers)
+- **Payments**: Stripe (Week 10-11)
 
 ---
 
-**Last Updated**: 2025-12-03
+## 💻 Development
+
+### Backend
+```bash
+cd backend
+npm run dev          # Local dev (localhost:8787)
+npm run typecheck    # TypeScript check
+
+# Deploy (use OAuth)
+unset CLOUDFLARE_API_TOKEN
+npx wrangler deploy
+```
+
+### Frontend
+```bash
+cd frontend
+npm run dev          # Local dev (localhost:5173)
+npm run build        # Production build
+```
+
+---
+
+**Last Updated**: 2025-12-04

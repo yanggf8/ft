@@ -47,10 +47,11 @@ auth.post('/register', async (c) => {
   }
   
   const userId = crypto.randomUUID();
+  const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days trial
   
   await c.env.DB.prepare(
-    'INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)'
-  ).bind(userId, email, full_name || null).run();
+    'INSERT INTO users (id, email, full_name, trial_ends_at) VALUES (?, ?, ?, ?)'
+  ).bind(userId, email, full_name || null, trialEndsAt).run();
   
   // Create session
   const sessionId = crypto.randomUUID();
