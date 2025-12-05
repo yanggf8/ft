@@ -8,7 +8,9 @@
     "db:init": "wrangler d1 execute fortunet-db --remote --file=scripts/schema.sql",
     "db:init:local": "wrangler d1 execute fortunet-db --local --file=scripts/schema.sql",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --grep integration"
   },
   "dependencies": {
     "hono": "^4.6.0",

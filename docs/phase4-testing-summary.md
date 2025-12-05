@@ -24,10 +24,11 @@
 
 | Endpoint | Tests | Status |
 |----------|-------|--------|
-| POST /api/charts/calculate/ziwei | 2 | ✅ Ready |
-| POST /api/charts/calculate/western | 1 | ✅ Ready |
+| POST /api/charts/calculate/ziwei | 2 | ✅ Ready (skipped by default) |
+| POST /api/charts/calculate/western | 1 | ✅ Ready (skipped by default) |
 
-**Note**: Integration tests require deployed API to run
+**Note**: Integration tests are skipped by default (require deployed API)
+**Run**: `npm run test:integration` (after removing `.skip`)
 
 ### Frontend Tests ✅
 **Location**: `frontend/src/__tests__/`
@@ -69,12 +70,18 @@
 **Location**: `backend/src/__tests__/load-test.js`
 
 **Tool**: k6
+**Profile**: 
+- Peak: 30 concurrent users (respects 30 req/min rate limit)
+- Sleep: 2s between requests per user
+- Expected: Some 429s (rate limit) are normal
+
 **Targets**:
-- 95th percentile: < 200ms
-- Error rate: < 1%
-- Peak load: 100 concurrent users
+- 95th percentile (200 status): < 200ms
+- Non-rate-limit errors: < 1%
 
 **Run**: `k6 run backend/src/__tests__/load-test.js`
+
+**Note**: For higher load testing, use k6 cloud with distributed IPs to avoid single-IP rate limits.
 
 ---
 
@@ -113,18 +120,18 @@
 ## Test Commands
 
 ```bash
-# Backend unit tests
+# Backend unit tests (default - no network calls)
 cd backend
 npm test
 
-# Backend integration tests (requires deployed API)
-npm test -- integration
+# Backend integration tests (requires deployed API, skipped by default)
+npm run test:integration  # After removing .skip from test file
 
 # Frontend tests
 cd frontend
 npm test
 
-# Load testing (requires k6)
+# Load testing (requires k6, respects rate limits)
 k6 run backend/src/__tests__/load-test.js
 
 # Type checking

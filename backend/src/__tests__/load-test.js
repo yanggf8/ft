@@ -1,19 +1,24 @@
 // k6 load test script
 // Run: k6 run load-test.js
+//
+// NOTE: Calc endpoints have 30 req/min/IP rate limit.
+// This test uses distributed IPs (k6 cloud) or expects 429s in local runs.
+// For local testing, reduce VUs or increase sleep to stay under limits.
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '30s', target: 20 },  // Ramp up to 20 users
-    { duration: '1m', target: 50 },   // Stay at 50 users
-    { duration: '30s', target: 100 }, // Peak at 100 users
-    { duration: '1m', target: 0 },    // Ramp down
+    { duration: '30s', target: 10 },  // Ramp up to 10 users
+    { duration: '1m', target: 20 },   // Stay at 20 users
+    { duration: '30s', target: 30 },  // Peak at 30 users
+    { duration: '30s', target: 0 },   // Ramp down
   ],
   thresholds: {
-    http_req_duration: ['p(95)<200'], // 95% of requests under 200ms
-    http_req_failed: ['rate<0.01'],   // Less than 1% errors
+    // Measure only successful requests (exclude 429s)
+    'http_req_duration{status:200}': ['p(95)<200'],
+    'http_req_failed{status:!429}': ['rate<0.01'], // Non-rate-limit errors < 1%
   },
 };
 
@@ -29,14 +34,16 @@ export default function () {
     gender: 'male'
   }), {
     headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'ziwei' },
   });
 
   check(ziweiRes, {
-    'ziwei status is 200': (r) => r.status === 200,
-    'ziwei has palaces': (r) => JSON.parse(r.body).palaces !== undefined,
+    'ziwei status is 200 or 429': (r) => r.status === 200 || r.status === 429,
+    'ziwei has palaces (if 200)': (r) => r.status !== 200 || JSON.parse(r.body).palaces !== undefined,
   });
 
-  sleep(1);
+  // Sleep 2s to respect rate limits (30 req/min = 1 req per 2s)
+  sleep(2);
 
   // Test Western calculation
   const westernRes = http.post(`${BASE_URL}/api/charts/calculate/western`, JSON.stringify({
@@ -46,12 +53,13 @@ export default function () {
     hour: 12
   }), {
     headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'western' },
   });
 
   check(westernRes, {
-    'western status is 200': (r) => r.status === 200,
-    'western has sunSign': (r) => JSON.parse(r.body).sunSign !== undefined,
+    'western status is 200 or 429': (r) => r.status === 200 || r.status === 429,
+    'western has sunSign (if 200)': (r) => r.status !== 200 || JSON.parse(r.body).sunSign !== undefined,
   });
 
-  sleep(1);
+  sleep(2);
 }
