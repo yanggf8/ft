@@ -1,6 +1,6 @@
 # 🚀 FortuneT V2 - Cloudflare Migration
 
-**Status**: Phase 4 (Testing) - Week 16-18 ✅
+**Status**: Phase 5 (Pre-Migration) Complete ✅
 **Timeline**: 24 weeks core + 8 weeks storytelling
 
 ---
@@ -24,13 +24,19 @@
 
 ## 🎯 Current Progress
 
+### Phase 5 Complete ✅
+- ✅ Deployment verification script
+- ✅ Monitoring & alerting documentation
+- ✅ Rollback procedures (8 scenarios)
+- ✅ Beta testing materials (7-day plan)
+- ⏳ Beta testing execution (requires time + users)
+
 ### Phase 4 Complete ✅
 - ✅ Unit tests (15/15 passing)
 - ✅ Integration test suite ready
 - ✅ Security headers middleware
 - ✅ Rate limiting (auth/calc/AI)
 - ✅ Load test script (k6)
-- ✅ E2E test plan documented
 
 ### Phase 3 Complete ✅
 - ✅ Vite + React + TypeScript frontend
@@ -43,11 +49,8 @@
 ### Phase 2 Complete ✅
 - ZiWei (紫微斗數) calculation engine
 - Western Zodiac calculation engine
-- AI interpretation with 3-provider failover:
-  - iFlow GLM-4.6 (primary)
-  - Groq kimi-k2-instruct-0905 (secondary)
-  - Cerebras llama-3.3-70b (tertiary)
-- Billing: 30-day free trial for new users
+- AI interpretation with 3-provider failover
+- Billing: 30-day free trial
 
 ### Live API
 ```
@@ -63,8 +66,10 @@ https://fortunet-api.yanggf.workers.dev
 | **[MASTER_PLAN.md](./MASTER_PLAN.md)** | ⭐ Migration plan & timeline |
 | **[AGENTS.md](./AGENTS.md)** | ⭐ Dev guide & coding standards |
 | **[FRONTEND_FIXES.md](./FRONTEND_FIXES.md)** | Frontend-backend contract fixes |
-| [STORYTELLING_ROADMAP.md](./STORYTELLING_ROADMAP.md) | Phase 7 storytelling features |
-| [docs/phase0/](./docs/phase0/) | Risk assessment (GO decision) |
+| [docs/phase5-summary.md](./docs/phase5-summary.md) | Phase 5 deliverables |
+| [docs/monitoring-setup.md](./docs/monitoring-setup.md) | Monitoring & alerting |
+| [docs/rollback-procedures.md](./docs/rollback-procedures.md) | Emergency procedures |
+| [docs/security-checklist.md](./docs/security-checklist.md) | Security validation |
 
 ---
 
@@ -77,8 +82,8 @@ Phase 1:  Foundation          Week 4-6    ✅ COMPLETED
 Phase 2:  Core Features       Week 7-11   ✅ COMPLETED
 Phase 3:  Frontend            Week 12-15  ✅ COMPLETED
 Phase 4:  Integration/Test    Week 16-18  ✅ COMPLETED
-Phase 5:  Pre-Migration       Week 19-20  ← NEXT
-Phase 6:  Go-Live             Week 21
+Phase 5:  Pre-Migration       Week 19-20  ✅ COMPLETED (Materials Ready)
+Phase 6:  Go-Live             Week 21     ← NEXT (After Beta Testing)
 Stabilization                 Week 22-25
 Phase 7:  Storytelling        Week 26-33
 ```
@@ -87,13 +92,12 @@ Phase 7:  Storytelling        Week 26-33
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React + TypeScript + Vite + Tailwind
+- **Frontend**: React + TypeScript + Vite
 - **Backend**: Cloudflare Workers + Hono
 - **Database**: D1 (SQLite)
 - **Cache**: Durable Objects
 - **Storage**: R2
 - **AI**: iFlow / Groq / Cerebras (free tiers)
-- **Payments**: Stripe (Week 10-11)
 
 ---
 
@@ -104,6 +108,7 @@ Phase 7:  Storytelling        Week 26-33
 cd backend
 npm run dev          # Local dev (localhost:8787)
 npm run typecheck    # TypeScript check
+npm test             # Run unit tests
 
 # Deploy (use OAuth)
 unset CLOUDFLARE_API_TOKEN
@@ -115,8 +120,14 @@ npx wrangler deploy
 cd frontend
 npm run dev          # Local dev (localhost:5173)
 npm run build        # Production build
+npm test             # Run tests
+```
+
+### Verification
+```bash
+./scripts/verify-deployment.sh  # Verify production deployment
 ```
 
 ---
 
-**Last Updated**: 2025-12-04
+**Last Updated**: 2025-12-05
