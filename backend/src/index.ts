@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { SessionDO } from './durable-objects/session-do';
 import { AIMutexDO } from './durable-objects/ai-mutex-do';
+import { securityHeaders } from './middleware/security';
 import auth from './routes/auth';
 import users from './routes/users';
 import charts from './routes/charts';
@@ -24,6 +25,9 @@ export interface Env {
 }
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Security headers
+app.use('*', securityHeaders);
 
 // Request ID for debugging
 app.use('*', async (c, next) => {
