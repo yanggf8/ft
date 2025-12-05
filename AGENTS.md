@@ -1,7 +1,19 @@
 # 🤖 FortuneT V2 - Repository Guidelines
 
-**Current Phase**: Phase 4 (Testing) - Week 16-18 ✅
-**Status**: Testing complete, ready for Phase 5 (Pre-Migration)
+**Current Phase**: Phase 5 (Pre-Migration) - Week 19-20
+**Status**: Beta testing preparation
+
+---
+
+## ⚠️ Critical Rules
+
+### Wrangler Deployment
+**Always use OAuth, never API tokens for deployment:**
+```bash
+unset CLOUDFLARE_API_TOKEN    # Must run this first
+npx wrangler deploy           # Will prompt for OAuth login
+```
+**Why**: API tokens have permission issues. OAuth provides full access.
 
 ---
 
@@ -216,9 +228,9 @@ cd backend
 npm run dev                   # Local dev (localhost:8787)
 npm run typecheck             # TypeScript check
 
-# Deploy (use OAuth, not API token)
-unset CLOUDFLARE_API_TOKEN
-npx wrangler deploy
+# Deploy (IMPORTANT: Always use OAuth, not API token)
+unset CLOUDFLARE_API_TOKEN    # Must unset token first
+npx wrangler deploy           # Will prompt for OAuth login
 
 # Secrets management
 npx wrangler secret put IFLOW_API_KEY
@@ -229,6 +241,8 @@ npx wrangler secret put CEREBRAS_API_KEY
 npm run db:init               # Apply schema to remote D1
 npm run db:init:local         # Apply schema to local D1
 ```
+
+**⚠️ Deployment Rule**: Always `unset CLOUDFLARE_API_TOKEN` before deploying. Wrangler should use OAuth authentication, not API tokens, to avoid permission issues.
 
 ### CI/CD Setup (GitHub)
 Required secrets:

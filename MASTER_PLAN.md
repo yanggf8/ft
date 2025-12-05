@@ -703,30 +703,29 @@ npm run test --prefix frontend # API client tests ready
 
 ## 🚀 Phase 5: Pre-Migration (Week 19-20)
 
-**Goal**: Data migration and beta testing.
+**Goal**: Beta testing and production readiness validation.
 
-### Week 19: Data Migration
+**Note**: This is a new project (not migrating from existing system), so focus is on beta testing rather than data migration.
 
-```typescript
-// scripts/migrate-data.ts
-async function migrateData() {
-  // 1. Export from PostgreSQL
-  const users = await exportUsers();
-  const charts = await exportCharts();
-  const subscriptions = await exportSubscriptions();
+### Week 19: Deployment & Monitoring Setup ✅
 
-  // 2. Transform data
-  const transformedUsers = users.map(transformUser);
-  const transformedCharts = charts.map(transformChart);
+#### Deployment Verification
+- ✅ Automated verification script (`scripts/verify-deployment.sh`)
+- ✅ Health checks (API, DB, calculations)
+- ✅ Security headers validation
+- ✅ Rate limiting verification
 
-  // 3. Import to D1
-  await importToD1(transformedUsers, 'users');
-  await importToD1(transformedCharts, 'charts');
+#### Monitoring Setup
+- ✅ Cloudflare Analytics (built-in)
+- ✅ Structured logging plan
+- ✅ AI provider monitoring via DO
+- ✅ Alert strategy documented
 
-  // 4. Verify integrity
-  await verifyMigration();
-}
-```
+#### Rollback Procedures
+- ✅ Workers rollback (`wrangler rollback`)
+- ✅ Frontend rollback (Pages)
+- ✅ Database recovery procedures
+- ✅ Incident response plan
 
 ### Week 20: Beta Testing
 - Internal team testing (3 days)
@@ -735,11 +734,12 @@ async function migrateData() {
 - Final go/no-go decision
 
 ### Phase 5 Exit Criteria
-- [ ] Data migrated successfully
-- [ ] Data integrity verified
-- [ ] Beta testing complete
-- [ ] All critical bugs fixed
+- [ ] Deployment verification passing
+- [ ] Monitoring alerts configured
 - [ ] Rollback procedures tested
+- [ ] Beta testing complete
+- [ ] All P0/P1 bugs fixed
+- [ ] Go/no-go decision made
 
 ---
 
