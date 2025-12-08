@@ -7,13 +7,33 @@
 
 ## ⚠️ Critical Rules
 
-### Wrangler Deployment
-**Always use OAuth, never API tokens for deployment:**
+### Wrangler Commands - Always Use OAuth
+**For ANY wrangler command, always unset API token first:**
 ```bash
-unset CLOUDFLARE_API_TOKEN    # Must run this first
-npx wrangler deploy           # Will prompt for OAuth login
+unset CLOUDFLARE_API_TOKEN && npx wrangler [command]
 ```
-**Why**: API tokens have permission issues. OAuth provides full access.
+
+**Examples:**
+```bash
+# Deploy
+unset CLOUDFLARE_API_TOKEN && npx wrangler deploy
+
+# Check deployments
+unset CLOUDFLARE_API_TOKEN && npx wrangler deployments list
+
+# Manage secrets
+unset CLOUDFLARE_API_TOKEN && npx wrangler secret put IFLOW_API_KEY
+
+# D1 commands
+unset CLOUDFLARE_API_TOKEN && npx wrangler d1 execute fortunet-db --remote --command "SELECT COUNT(*) FROM users"
+
+# Pages deploy
+unset CLOUDFLARE_API_TOKEN && npx wrangler pages deploy dist
+```
+
+**Why**: API tokens have permission issues. OAuth provides full access to all Cloudflare features.
+
+**Rule**: Combine `unset CLOUDFLARE_API_TOKEN &&` with every `npx wrangler` command.
 
 ---
 
