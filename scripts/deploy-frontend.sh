@@ -35,27 +35,37 @@ if [ -f "dist/.build-info" ]; then
     echo ""
     echo "Rebuilding..."
     npm run build
-    echo "$CURRENT_COMMIT" > dist/.build-info
   fi
 else
   echo -e "${YELLOW}⚠ No build info found, rebuilding...${NC}"
   npm run build
-  echo "$CURRENT_COMMIT" > dist/.build-info
 fi
 
 echo ""
 echo "📦 Build verified and ready"
 echo ""
 echo "☁️  Deploying to Cloudflare Pages..."
-echo "   (This will prompt for OAuth login)"
 echo ""
 
+# Use wrangler with OAuth (unset API token)
 unset CLOUDFLARE_API_TOKEN
+
+# Deploy with wrangler
 npx wrangler pages deploy dist --project-name=fortunet
 
-echo ""
-echo -e "${GREEN}✅ Deployment complete!${NC}"
-echo ""
-echo "Frontend: https://fortunet.pages.dev"
-echo "Backend:  https://fortunet-api.yanggf.workers.dev"
-echo ""
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+  echo ""
+  echo -e "${GREEN}✅ Deployment complete!${NC}"
+  echo ""
+  echo "Frontend: https://fortunet.pages.dev"
+  echo "Backend:  https://fortunet-api.yanggf.workers.dev"
+  echo ""
+else
+  echo ""
+  echo -e "${RED}❌ Deployment failed with exit code $EXIT_CODE${NC}"
+  echo ""
+  exit $EXIT_CODE
+fi
+
