@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && git rev-parse HEAD > dist/.build-info",
     "preview": "vite preview",
     "test": "vitest",
     "deploy": "npm run build && wrangler pages deploy dist --project-name=fortunet",
