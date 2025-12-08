@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=fortunet",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name=fortunet --branch=main"
   },
   "dependencies": {
     "react": "^18.3.1",

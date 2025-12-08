@@ -4,12 +4,20 @@
 
 ```bash
 cd frontend
-npm run build
 unset CLOUDFLARE_API_TOKEN
-npx wrangler pages deploy dist --project-name=fortunet
+npm run deploy
 ```
 
 **Note**: This will prompt for OAuth login in your browser.
+
+## Scripts Available
+
+```bash
+npm run deploy        # Build and deploy to Cloudflare Pages
+npm run deploy:prod   # Deploy to production branch
+npm run build         # Build only (no deploy)
+npm run preview       # Preview build locally
+```
 
 ## Expected Result
 
@@ -34,6 +42,14 @@ No additional configuration needed!
 3. Create a chart
 4. Request AI interpretation
 
+## Backend Deployment
+
+```bash
+cd backend
+unset CLOUDFLARE_API_TOKEN
+npm run deploy
+```
+
 ## Custom Domain (Optional)
 
 To use a custom domain like `app.fortunet.com`:
@@ -47,3 +63,4 @@ To use a custom domain like `app.fortunet.com`:
 
 **Backend API**: https://fortunet-api.yanggf.workers.dev
 **Frontend**: https://fortunet.pages.dev (after deployment)
+
