@@ -1,7 +1,11 @@
 # 🤖 FortuneT V2 - Repository Guidelines
 
 **Current Phase**: Phase 5 (Pre-Migration) - Week 20 ✅
-**Status**: Beta testing materials ready, awaiting execution
+**Status**: Production live, beta testing materials ready
+
+**Live URLs**:
+- Frontend: https://fortunet.pages.dev
+- Backend: https://fortunet-api.yanggf.workers.dev
 
 ---
 
