@@ -4,13 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "bash -c 'unset CLOUDFLARE_API_TOKEN && wrangler deploy'",
+    "deploy:unsafe": "wrangler deploy",
     "db:init": "wrangler d1 execute fortunet-db --remote --file=scripts/schema.sql",
     "db:init:local": "wrangler d1 execute fortunet-db --local --file=scripts/schema.sql",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:integration": "vitest run --grep integration"
+    "test": "echo 'No tests configured (integration tests require RUN_INTEGRATION=true)'",
+    "test:integration": "RUN_INTEGRATION=true vitest run",
+    "test:integration:staging": "TEST_API_URL=https://staging.fortunet-api.yanggf.workers.dev RUN_INTEGRATION=true vitest run"
   },
   "dependencies": {
     "hono": "^4.6.0",

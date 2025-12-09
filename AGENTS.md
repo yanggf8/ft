@@ -104,8 +104,8 @@ POST /api/charts/interpret    # AI interpretation with failover
 | **Workers API** | ✅ Live | https://fortunet-api.yanggf.workers.dev |
 | **D1 Database** | ✅ Ready | `88d074eb-7331-402b-bc76-1ac3cb0588da` |
 | **R2 Storage** | ✅ Ready | `fortunet-storage` |
-| **Session DO** | ✅ Working | SQLite-backed |
-| **AI Mutex DO** | ✅ Working | SQLite-backed, 3-provider failover |
+| **Session DO** | ✅ Working | DO storage (key-value) |
+| **AI Mutex DO** | ✅ Working | DO storage, 3-provider failover |
 | **CI/CD** | ✅ Configured | `.github/workflows/deploy.yml` |
 
 ### Cloudflare Secrets
@@ -251,6 +251,8 @@ Phase 7:  Storytelling        Week 26-33
 cd backend
 npm run dev                   # Local dev (localhost:8787)
 npm run typecheck             # TypeScript check
+npm test                      # Safe: Does nothing (prevents accidental API calls)
+npm run test:integration      # Run integration tests (calls production API)
 
 # Deploy (IMPORTANT: Always use OAuth, not API token)
 unset CLOUDFLARE_API_TOKEN    # Must unset token first
@@ -285,9 +287,14 @@ Required secrets:
 - **Quotes**: Single quotes
 - **Semicolons**: Required
 
----
+### Testing Philosophy
+- **Integration tests only** - No unit tests, no mocks, no placeholders
+- **Real APIs** - Tests must call actual deployed services
+- **Real data** - No fake data or stubs
+- **Real environment** - Test against production or staging only
+- **Rule**: If you can't test it with real integration, don't write the test
 
-## 🎯 Zero-Cost Strategy
+---
 
 **Current Usage** (Phase 2):
 - Workers: ~10 requests/day (testing)

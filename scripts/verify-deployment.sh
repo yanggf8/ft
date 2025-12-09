@@ -60,14 +60,14 @@ else
   exit 1
 fi
 
-# Test 5: Security headers (optional - will be deployed soon)
+# Test 5: Security headers
 echo -n "5. Security headers... "
 HEADERS=$(curl -sI "$API_URL/health")
 if echo "$HEADERS" | grep -qi "x-frame-options" && \
    echo "$HEADERS" | grep -qi "x-content-type-options"; then
   echo -e "${GREEN}✓${NC}"
 else
-  echo -e "${RED}⚠${NC} (not deployed yet, non-blocking)"
+  echo -e "${RED}✗${NC} (headers missing)"
 fi
 
 # Test 6: Rate limiting

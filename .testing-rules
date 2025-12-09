@@ -1,0 +1,85 @@
+# Testing Rules - FortuneT V2
+
+## Absolute Rules
+
+1. **Integration tests only**
+   - No unit tests
+   - No mocks
+   - No stubs
+   - No placeholders
+   - No fake data
+
+2. **Real environment only**
+   - Test against actual deployed services
+   - Use production or staging URLs
+   - Call real APIs
+   - Use real databases
+
+3. **If you can't test it with real integration, don't write the test**
+
+4. **Tests must be opt-in**
+   - Default `npm test` must NOT call live APIs
+   - Require explicit `RUN_INTEGRATION=true` flag
+   - Prevent accidental CI/offline failures
+   - Prevent rate limit burns
+
+## Environment Variables
+
+- `RUN_INTEGRATION=true` - Enable integration tests
+- `TEST_API_URL` - Override API URL (default: production)
+
+## Commands
+
+```bash
+# Safe (does nothing)
+npm test
+
+# Run integration tests (production)
+npm run test:integration
+
+# Run integration tests (staging)
+npm run test:integration:staging
+
+# Run with custom URL
+TEST_API_URL=http://localhost:8787 RUN_INTEGRATION=true npm test
+```
+
+## Examples
+
+✅ ALLOWED:
+```typescript
+it('should calculate ziwei chart', async () => {
+  const response = await fetch('https://fortunet-api.yanggf.workers.dev/api/charts/calculate/ziwei', {
+    method: 'POST',
+    body: JSON.stringify({ year: 1990, month: 5, day: 15, hour: 14, gender: 'male' })
+  });
+  expect(response.status).toBe(200);
+});
+```
+
+❌ FORBIDDEN:
+```typescript
+// NO unit tests
+it('should format date', () => {
+  expect(formatDate('2024-01-01')).toBe('...');
+});
+
+// NO mocks
+const mockFetch = vi.fn();
+
+// NO stubs
+const stubData = { fake: 'data' };
+```
+
+## Rationale
+
+- Unit tests don't prove the system works
+- Mocks hide integration issues
+- Real tests catch real problems
+- If it works in production, it works
+
+## Enforcement
+
+- Code review: Reject PRs with unit tests or mocks
+- CI/CD: Only run integration tests
+- Documentation: This file is the source of truth

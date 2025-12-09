@@ -8,8 +8,9 @@
     "build": "tsc && vite build && git rev-parse HEAD > dist/.build-info",
     "preview": "vite preview",
     "test": "vitest",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name=fortunet",
-    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name=fortunet --branch=main"
+    "deploy": "bash -c 'npm run build && unset CLOUDFLARE_API_TOKEN && wrangler pages deploy dist --project-name=fortunet'",
+    "deploy:unsafe": "npm run build && wrangler pages deploy dist --project-name=fortunet",
+    "deploy:prod": "bash -c 'npm run build && unset CLOUDFLARE_API_TOKEN && wrangler pages deploy dist --project-name=fortunet --branch=main'"
   },
   "dependencies": {
     "react": "^18.3.1",
