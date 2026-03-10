@@ -229,7 +229,7 @@ Phase 7:  Storytelling        Week 26-33
 - [x] `trial_ends_at` field in users table
 - [x] `billing.ts` service (checkUserAccess)
 - [x] `/api/users/me` returns billing status
-- [ ] Stripe integration (deferred - free trial first)
+- [ ] Native app IAP integration (planned - Apple / Google store billing)
 
 ### Week 12-15: Frontend ✅
 - [x] Vite + React + TypeScript setup

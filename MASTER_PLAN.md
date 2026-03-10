@@ -99,7 +99,7 @@ cat package.json | jq '.dependencies, .devDependencies'
 **Required Output**: `docs/audit/dependencies.md`
 - All Python packages with versions
 - All npm packages with versions
-- External API dependencies (Groq, Stripe, etc.)
+- External API dependencies (Groq, App Store Server API, Google Play Developer API, etc.)
 - Environment variables list
 
 ### Phase -1 Exit Criteria
@@ -385,8 +385,10 @@ CREATE TABLE IF NOT EXISTS favorites (
 CREATE TABLE IF NOT EXISTS subscriptions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
+  provider TEXT NOT NULL, -- 'app_store' | 'play_store'
+  product_id TEXT NOT NULL,
+  original_transaction_id TEXT,
+  purchase_token TEXT,
   plan TEXT NOT NULL, -- 'free' | 'premium'
   status TEXT NOT NULL, -- 'active' | 'canceled' | 'past_due'
   current_period_end TEXT,
@@ -395,7 +397,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_stripe ON subscriptions(stripe_subscription_id);
+CREATE INDEX idx_subscriptions_provider_ref ON subscriptions(provider, original_transaction_id, purchase_token);
 ```
 
 ### Week 6: Authentication System
@@ -466,7 +468,7 @@ export class SessionDO implements DurableObject {
 
 ## ⚙️ Phase 2: Core Features (Week 7-11)
 
-**Goal**: Port calculation engines and integrate AI/payments.
+**Goal**: Port calculation engines and integrate AI/billing foundations.
 
 ### Week 7-8: Chart Calculation Engines
 
@@ -556,50 +558,40 @@ POST /api/charts/interpret
 }
 ```
 
-#### Stripe Integration (Deferred)
-- Will add when ready to charge
-- Schema already supports subscriptions table
+#### Native In-App Purchase Integration (Planned)
+- Web payments are not planned for FortuneT.
+- Paid digital access will be sold inside the native app using Apple In-App Purchase on iOS and Google Play Billing on Android.
+- Backend remains the source of truth for entitlements after store-side verification.
+- Current production schema still contains Stripe placeholder fields and will need a migration before mobile billing launch.
 
-#### Stripe Handler: `backend/src/services/stripe-handler.ts`
+#### Billing Backend Shape
 ```typescript
-import Stripe from 'stripe';
-
-export class StripeHandler {
-  private stripe: Stripe;
-
-  constructor(secretKey: string) {
-    this.stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' });
-  }
-
-  async createCheckoutSession(userId: string, priceId: string): Promise<string> {
-    const session = await this.stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: 'https://fortunet.com/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'https://fortunet.com/cancel',
-      metadata: { userId },
-    });
-    return session.url!;
-  }
-
-  async handleWebhook(payload: string, signature: string, webhookSecret: string): Promise<void> {
-    const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
-    
-    switch (event.type) {
-      case 'checkout.session.completed':
-        // Create subscription in DB
-        break;
-      case 'customer.subscription.updated':
-        // Update subscription status
-        break;
-      case 'customer.subscription.deleted':
-        // Cancel subscription
-        break;
-    }
-  }
+interface StoreSubscription {
+  provider: 'app_store' | 'play_store';
+  productId: string;
+  originalTransactionId?: string; // Apple
+  purchaseToken?: string; // Google Play
+  status: 'active' | 'inactive' | 'cancelled' | 'past_due' | 'trialing';
+  currentPeriodEnd?: string;
+  environment: 'sandbox' | 'production';
 }
 ```
+
+#### Required Backend Endpoints
+```bash
+POST /api/billing/ios/verify
+POST /api/billing/android/verify
+POST /api/billing/apple/notifications
+POST /api/billing/google/notifications
+GET  /api/billing/entitlements
+```
+
+#### Verification Flow
+1. Native app completes the store purchase flow.
+2. App sends App Store transaction data or Play purchase token to the backend.
+3. Backend verifies with Apple App Store Server API or Google Play Developer API.
+4. Backend updates `subscriptions` and `users.subscription_tier`.
+5. App reads entitlements from `/api/users/me` or `/api/billing/entitlements`.
 
 ### Phase 2 Exit Criteria
 - [x] Zi Wei engine ported and tested
@@ -607,7 +599,7 @@ export class StripeHandler {
 - [x] AI integration with 3-provider failover (iFlow/Groq/Cerebras)
 - [x] exresource tracking implemented
 - [x] Trial period billing (30 days free)
-- [ ] Stripe integration (deferred)
+- [ ] Native app IAP integration (App Store / Play Store)
 - [ ] All endpoints tested
 - [ ] Performance targets met (<200ms calculations, <3s AI)
 
@@ -905,6 +897,5 @@ const COST_ALERTS = {
 ---
 
 **Document Version**: 3.0
-**Last Updated**: 2025-12-03
-**Next Action**: Start Phase -1 System Audit
-
+**Last Updated**: 2026-03-10
+**Next Action**: Plan native app IAP implementation

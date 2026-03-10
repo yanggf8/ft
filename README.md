@@ -28,6 +28,10 @@
 - **Free Trial** - 30 days for all new users
 - **Passwordless Auth** - Email-only login
 
+### Billing Direction
+- **Native App IAP** - Planned for Apple App Store and Google Play
+- **No Web Checkout** - Web payments are not the current monetization path
+
 ### Infrastructure ✅
 - **Frontend**: React + TypeScript + Vite (179KB / 57KB gzipped)
 - **Backend**: Cloudflare Workers + Hono
@@ -137,6 +141,6 @@ Phase 6:  Go-Live             Week 21     ← READY (Beta Testing)
 
 ---
 
-**Last Updated**: 2025-12-08
+**Last Updated**: 2026-03-10
 **Version**: 2.0.0
 **License**: Private
