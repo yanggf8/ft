@@ -1,4 +1,16 @@
+import type { Interpretation } from '../types';
+
 const API_URL = import.meta.env.VITE_API_URL || 'https://fortunet-api.yanggf.workers.dev';
+
+export interface BirthData {
+  birth_year: number;
+  birth_month: number;
+  birth_day: number;
+  birth_hour?: number | null;
+  birth_minute?: number | null;
+  gender?: 'male' | 'female';
+  timezone?: string;
+}
 
 class ApiClient {
   private sessionId: string | null = null;
@@ -42,54 +54,37 @@ class ApiClient {
     return data;
   }
 
+  async logout() {
+    await this.request('/api/auth/logout', { method: 'POST' });
+    this.setSession(null);
+  }
+
   async getMe() {
     return this.request('/api/users/me');
   }
 
-  async createChart(chartType: 'ziwei' | 'western', birthData: any) {
-    // First calculate the chart
-    const calcEndpoint = chartType === 'ziwei' ? '/api/charts/calculate/ziwei' : '/api/charts/calculate/western';
-    const chartData = await this.request(calcEndpoint, {
-      method: 'POST',
-      body: JSON.stringify(birthData)
-    });
-
-    // Then save it
-    return this.request('/api/charts', {
-      method: 'POST',
-      body: JSON.stringify({
-        chart_type: chartType,
-        chart_name: `${chartType} - ${new Date().toLocaleDateString()}`,
-        birth_data: birthData,
-        chart_data: chartData
-      })
+  // Update birth data
+  async updateBirthData(data: BirthData) {
+    return this.request('/api/users/me/birth', {
+      method: 'PUT',
+      body: JSON.stringify(data)
     });
   }
 
-  async getCharts() {
-    return this.request('/api/charts');
+  // Get interpretations list
+  async getInterpretations(): Promise<Interpretation[]> {
+    const data = await this.request('/api/charts');
+    return Array.isArray(data?.interpretations) ? data.interpretations : [];
   }
 
-  async getChart(id: string) {
-    return this.request(`/api/charts/${id}`);
+  // Get or calculate chart for divination type
+  async getChart(type: 'ziwei' | 'western') {
+    return this.request(`/api/charts/${type}`);
   }
 
-  async interpretChart(chartId: string) {
-    // Get the chart first
-    const chart = await this.getChart(chartId);
-    
-    // Call interpret with correct payload
-    const result = await this.request('/api/charts/interpret', {
-      method: 'POST',
-      body: JSON.stringify({
-        chartType: chart.chart_type,
-        chartData: chart.chart_data,
-        language: 'zh'
-      })
-    });
-
-    // Return the interpretation
-    return { ...chart, ai_interpretation: result.interpretation };
+  // Request AI interpretation
+  async interpret(type: 'ziwei' | 'western') {
+    return this.request(`/api/charts/${type}/interpret`, { method: 'POST' });
   }
 }
 

@@ -2,6 +2,14 @@ export interface User {
   id: string;
   email: string;
   full_name?: string;
+  birth_year?: number;
+  birth_month?: number;
+  birth_day?: number;
+  birth_hour?: number;
+  birth_minute?: number;
+  gender?: 'male' | 'female';
+  timezone?: string;
+  hasBirthData: boolean;
   billing: {
     tier: 'free' | 'premium' | 'professional';
     isTrialing: boolean;
@@ -10,23 +18,12 @@ export interface User {
   };
 }
 
-export interface Chart {
+export interface Interpretation {
   id: string;
   user_id: string;
-  chart_type: 'ziwei' | 'western';
-  chart_name: string;
-  birth_data: Record<string, any>;
-  chart_data: Record<string, any>;
+  divination_type: 'ziwei' | 'western';
+  chart_data: Record<string, unknown>;
   ai_interpretation?: string;
+  birth_data_hash: string;
   created_at: string;
-}
-
-export interface BirthData {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute?: number;
-  gender: 'male' | 'female';
-  timezone?: string;
 }

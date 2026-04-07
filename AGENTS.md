@@ -92,10 +92,14 @@ FortuneT V2 is a Cloudflare-native migration with AI-powered storytelling featur
   - `latencySum` - 延遲總和
   - `failovers` - failover 次數
 
-#### AI Endpoints
+#### Chart & AI Endpoints (Birth-Data Centric)
 ```bash
-POST /api/charts/interpret    # AI interpretation with failover
+PUT  /api/users/me/birth        # Save birth data to user profile (invalidates cache)
+GET  /api/charts/:type          # Auto-calculate chart from stored birth data (cached)
+POST /api/charts/:type/interpret # AI interpretation with failover (cached)
+GET  /api/charts                # List user's cached interpretations
 ```
+`:type` is `ziwei` or `western`. Birth data is stored once on the user profile; charts are derived from it and cached per `(user_id, divination_type)` keyed by `birth_data_hash`. Updating birth data deletes all cached interpretations for that user.
 
 ### Deployed Infrastructure
 
@@ -140,23 +144,21 @@ fortune-teller-v2/
 │   │   │   └── ai-mutex-do.ts  # AI failover & tracking
 │   │   ├── services/
 │   │   │   ├── billing.ts      # Trial & subscription logic
-│   │   │   ├── ai/
-│   │   │   │   ├── index.ts    # AI exports
-│   │   │   │   ├── prompts.ts  # Shared prompts
-│   │   │   │   ├── iflow.ts    # iFlow provider
-│   │   │   │   ├── cerebras.ts # Cerebras provider
-│   │   │   │   └── types.ts    # AI types
+│   │   │   ├── ai/             # 3-provider failover (iFlow/Groq/Cerebras)
 │   │   │   ├── ziwei/          # ZiWei calculation
 │   │   │   └── western/        # Western calculation
 │   │   ├── middleware/
 │   │   │   ├── auth.ts         # Auth middleware
-│   │   │   └── validate.ts     # Zod validation
+│   │   │   ├── security.ts     # Security headers
+│   │   │   ├── cache.ts        # HTTP cache headers + ETag helpers
+│   │   │   └── edgeCache.ts    # Cloudflare Cache API (health endpoint only)
 │   │   └── routes/
-│   │       ├── auth.ts
-│   │       ├── users.ts
-│   │       └── charts.ts
+│   │       ├── auth.ts         # register/login/logout
+│   │       ├── users.ts        # /me, PUT /me/birth
+│   │       └── charts.ts       # GET /:type, POST /:type/interpret
 │   ├── scripts/
-│   │   └── schema.sql          # D1 schema
+│   │   ├── schema.sql          # D1 schema (birth-data centric)
+│   │   └── migrate-v2.sql      # v1→v2 migration
 │   ├── wrangler.toml           # Cloudflare config
 │   └── package.json
 │
@@ -165,12 +167,12 @@ fortune-teller-v2/
 │   │   ├── components/
 │   │   │   ├── Layout.tsx
 │   │   │   ├── ProtectedRoute.tsx
-│   │   │   └── ChartForm.tsx
+│   │   │   └── BirthDataForm.tsx  # Birth data entry (on profile)
 │   │   ├── pages/
 │   │   │   ├── HomePage.tsx
 │   │   │   ├── LoginPage.tsx
 │   │   │   ├── ProfilePage.tsx
-│   │   │   └── ChartPage.tsx
+│   │   │   └── DivinationPage.tsx # /divination/:type
 │   │   ├── contexts/
 │   │   │   └── AuthContext.tsx
 │   │   ├── lib/

@@ -41,39 +41,44 @@ testOrSkip('Charts API Integration', () => {
       const data = await response.json() as any;
       expect(data.email).toBe(testEmail);
       expect(data.trial_ends_at).toBeDefined();
+      expect(data.hasBirthData).toBe(false);
     });
   });
 
-  describe('POST /api/charts/calculate/ziwei', () => {
-    it('should calculate ziwei chart', async () => {
-      const response = await fetch(`${API_URL}/api/charts/calculate/ziwei`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+  describe('PUT /api/users/me/birth', () => {
+    it('should save birth data', async () => {
+      const response = await fetch(`${API_URL}/api/users/me/birth`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionId}`
+        },
         body: JSON.stringify({
-          year: 1990,
-          month: 5,
-          day: 15,
-          hour: 14,
+          birth_year: 1990,
+          birth_month: 5,
+          birth_day: 15,
+          birth_hour: 14,
           gender: 'male'
         })
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
-      expect(data.birthInfo).toBeDefined();
-      expect(data.palaces).toHaveLength(12);
+      expect(data.success).toBe(true);
+      expect(data.birth_data_hash).toBeDefined();
     });
 
-    it('should reject invalid year', async () => {
-      const response = await fetch(`${API_URL}/api/charts/calculate/ziwei`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    it('should reject invalid birth data', async () => {
+      const response = await fetch(`${API_URL}/api/users/me/birth`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionId}`
+        },
         body: JSON.stringify({
-          year: 1800,
-          month: 5,
-          day: 15,
-          hour: 14,
-          gender: 'male'
+          birth_year: 1800,
+          birth_month: 5,
+          birth_day: 15
         })
       });
 
@@ -81,98 +86,90 @@ testOrSkip('Charts API Integration', () => {
     });
   });
 
-  describe('POST /api/charts/calculate/western', () => {
-    it('should calculate western chart', async () => {
-      const response = await fetch(`${API_URL}/api/charts/calculate/western`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: 1990,
-          month: 3,
-          day: 25,
-          hour: 12
-        })
+  describe('GET /api/charts/:type', () => {
+    it('should calculate ziwei chart from stored birth data', async () => {
+      const response = await fetch(`${API_URL}/api/charts/ziwei`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${sessionId}` }
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
-      expect(data.sunSign).toBeDefined();
-      expect(data.sunSign.name).toBe('Aries');
+      expect(data.chart_data).toBeDefined();
+      expect(data.divination_type).toBe('ziwei');
+    });
+
+    it('should calculate western chart from stored birth data', async () => {
+      const response = await fetch(`${API_URL}/api/charts/western`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${sessionId}` }
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data.chart_data).toBeDefined();
+      expect(data.chart_data.sunSign).toBeDefined();
+    });
+
+    it('should return cached chart on second request', async () => {
+      const response = await fetch(`${API_URL}/api/charts/ziwei`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${sessionId}` }
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(data.fromCache).toBe(true);
+    });
+
+    it('should reject without auth', async () => {
+      const response = await fetch(`${API_URL}/api/charts/ziwei`, {
+        method: 'GET'
+      });
+
+      expect(response.status).toBe(401);
     });
   });
 
-  describe('POST /api/charts/interpret', () => {
-    let ziweiChart: any;
-
+  describe('POST /api/charts/:type/interpret', () => {
     it('should interpret ziwei chart with AI', async () => {
-      // First get a chart
-      const chartRes = await fetch(`${API_URL}/api/charts/calculate/ziwei`, {
+      const response = await fetch(`${API_URL}/api/charts/ziwei/interpret`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          year: 1990,
-          month: 5,
-          day: 15,
-          hour: 14,
-          gender: 'male'
-        })
-      });
-      ziweiChart = await chartRes.json();
-
-      // Then interpret it
-      const response = await fetch(`${API_URL}/api/charts/interpret`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionId}`
-        },
-        body: JSON.stringify({
-          chartType: 'ziwei',
-          chartData: ziweiChart
-        })
+        headers: { 'Authorization': `Bearer ${sessionId}` }
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
       expect(data.interpretation).toBeDefined();
       expect(data.interpretation.length).toBeGreaterThan(50);
-    }, 30000); // 30s timeout for AI
+    }, 30000);
 
-    it('should interpret western chart with AI', async () => {
-      // First get a chart
-      const chartRes = await fetch(`${API_URL}/api/charts/calculate/western`, {
+    it('should return cached interpretation on second request', async () => {
+      const response = await fetch(`${API_URL}/api/charts/ziwei/interpret`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          year: 1990,
-          month: 3,
-          day: 25,
-          hour: 12
-        })
-      });
-      const westernChart = await chartRes.json();
-
-      // Then interpret it
-      const response = await fetch(`${API_URL}/api/charts/interpret`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionId}`
-        },
-        body: JSON.stringify({
-          chartType: 'western',
-          chartData: westernChart
-        })
+        headers: { 'Authorization': `Bearer ${sessionId}` }
       });
 
       expect(response.status).toBe(200);
       const data = await response.json() as any;
-      expect(data.interpretation).toBeDefined();
-      expect(data.interpretation.length).toBeGreaterThan(50);
-    }, 30000); // 30s timeout for AI
+      expect(data.fromCache).toBe(true);
+    }, 30000);
+  });
+
+  describe('POST /api/auth/logout', () => {
+    it('should invalidate session on logout', async () => {
+      const logoutRes = await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sessionId}` }
+      });
+      expect(logoutRes.status).toBe(200);
+
+      // Session should be invalid now
+      const meRes = await fetch(`${API_URL}/api/users/me`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${sessionId}` }
+      });
+      expect(meRes.status).toBe(401);
+    });
   });
 });

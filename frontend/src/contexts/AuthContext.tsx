@@ -7,7 +7,8 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string) => Promise<void>;
   register: (email: string, fullName?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,10 +17,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshUser = async () => {
+    try {
+      const userData = await api.getMe();
+      setUser(userData);
+    } catch {
+      api.setSession(null);
+      setUser(null);
+    }
+  };
+
   useEffect(() => {
     const sessionId = api.getSession();
     if (sessionId) {
-      api.getMe().then(setUser).catch(() => api.setSession(null)).finally(() => setLoading(false));
+      refreshUser().finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
@@ -27,23 +38,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string) => {
     await api.login(email);
-    const userData = await api.getMe();
-    setUser(userData);
+    await refreshUser();
   };
 
   const register = async (email: string, fullName?: string) => {
     await api.register(email, fullName);
-    const userData = await api.getMe();
-    setUser(userData);
+    await refreshUser();
   };
 
-  const logout = () => {
-    api.setSession(null);
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Even if server call fails, clear local state
+      api.setSession(null);
+    }
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

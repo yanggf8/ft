@@ -12,8 +12,9 @@ export function HomePage() {
         
         {user ? (
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/chart/new" style={{ background: '#4F46E5', color: 'white', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500' }}>建立命盤</Link>
-            <Link to="/profile" style={{ background: 'white', color: '#4F46E5', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500', border: '2px solid #4F46E5' }}>查看我的命盤</Link>
+            <Link to="/divination/ziwei" style={{ background: '#4F46E5', color: 'white', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500' }}>紫微斗數</Link>
+            <Link to="/divination/western" style={{ background: 'white', color: '#4F46E5', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500', border: '2px solid #4F46E5' }}>西洋占星</Link>
+            <Link to="/profile" style={{ background: 'white', color: '#4F46E5', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500', border: '2px solid #4F46E5' }}>我的資料</Link>
           </div>
         ) : (
           <Link to="/login" style={{ background: '#4F46E5', color: 'white', padding: '0.75rem 2rem', borderRadius: '8px', textDecoration: 'none', fontWeight: '500', display: 'inline-block' }}>開始使用</Link>

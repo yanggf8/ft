@@ -1,77 +1,84 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../lib/api';
-import type { Chart } from '../types';
+import { BirthDataForm } from '../components/BirthDataForm';
 
 export function ProfilePage() {
-  const { user } = useAuth();
-  const [charts, setCharts] = useState<Chart[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    api.getCharts().then(setCharts).finally(() => setLoading(false));
-  }, []);
+    if (user && !user.hasBirthData) setShowForm(true);
+  }, [user]);
+
+  const handleSaved = async () => {
+    await refreshUser();
+    setShowForm(false);
+  };
+
+  const cardStyle = { background: 'white', padding: '1.5rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '1.5rem' };
+  const btnStyle = { background: '#4F46E5', color: 'white', padding: '1rem 1.5rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '1rem', width: '100%' };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '2rem' }}>
+    <div style={{ padding: '1.5rem', maxWidth: '600px', margin: '0 auto' }}>
+      {/* Account Info */}
+      <div style={cardStyle}>
         <h2 style={{ marginBottom: '1rem' }}>帳號資訊</h2>
-        <p style={{ marginBottom: '0.5rem' }}><strong>Email:</strong> {user?.email}</p>
-        <p style={{ marginBottom: '0.5rem' }}>
+        <p><strong>Email:</strong> {user?.email}</p>
+        <p>
           <strong>方案:</strong> {user?.billing.tier === 'free' ? '免費' : user?.billing.tier}
           {user?.billing.isTrialing && <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>✓ 試用中</span>}
         </p>
-        {user?.billing.trialEndsAt && (
-          <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            試用期至: {new Date(user.billing.trialEndsAt).toLocaleDateString('zh-TW')}
-          </p>
-        )}
       </div>
 
-      <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <h2>我的命盤</h2>
-          <Link to="/chart/new" style={{ background: '#4F46E5', color: 'white', padding: '0.5rem 1.5rem', borderRadius: '6px', textDecoration: 'none' }}>+ 建立新命盤</Link>
+      {/* Birth Data */}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2>出生資料</h2>
+          {user?.hasBirthData && !showForm && (
+            <button onClick={() => setShowForm(true)} style={{ background: 'none', border: 'none', color: '#4F46E5', cursor: 'pointer' }}>
+              編輯
+            </button>
+          )}
         </div>
 
-        {loading ? (
-          <p>載入中...</p>
-        ) : charts.length === 0 ? (
-          <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>尚無命盤，立即建立第一個命盤吧！</p>
+        {showForm ? (
+          <BirthDataForm
+            initial={{
+              birth_year: user?.birth_year,
+              birth_month: user?.birth_month,
+              birth_day: user?.birth_day,
+              birth_hour: user?.birth_hour,
+              gender: user?.gender
+            }}
+            onSaved={handleSaved}
+          />
+        ) : user?.hasBirthData ? (
+          <p style={{ color: '#374151' }}>
+            {user.birth_year}年{user.birth_month}月{user.birth_day}日
+            {user.birth_hour !== null && user.birth_hour !== undefined ? ` ${user.birth_hour}時` : ' (時辰不詳)'}
+            {user.gender && ` · ${user.gender === 'male' ? '男' : '女'}`}
+          </p>
         ) : (
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            {charts.map(chart => (
-              <Link 
-                key={chart.id} 
-                to={`/chart/${chart.id}`}
-                style={{ 
-                  display: 'block', 
-                  padding: '1rem', 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: '6px', 
-                  textDecoration: 'none',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#4F46E5'}
-                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <span style={{ fontWeight: '500', color: '#1f2937' }}>
-                      {chart.chart_type === 'ziwei' ? '紫微斗數' : '西洋占星'}
-                    </span>
-                    {chart.ai_interpretation && <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', color: '#10b981' }}>✓ 已解讀</span>}
-                  </div>
-                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                    {new Date(chart.created_at).toLocaleDateString('zh-TW')}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <p style={{ color: '#6b7280' }}>請先填寫出生資料以開始算命</p>
         )}
       </div>
+
+      {/* Divination Options */}
+      {user?.hasBirthData && (
+        <div style={cardStyle}>
+          <h2 style={{ marginBottom: '1rem' }}>選擇算命方式</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <button onClick={() => navigate('/divination/ziwei')} style={btnStyle}>
+              紫微斗數
+            </button>
+            <button onClick={() => navigate('/divination/western')} style={{ ...btnStyle, background: '#7C3AED' }}>
+              西洋占星
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

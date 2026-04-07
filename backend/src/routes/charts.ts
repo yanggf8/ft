@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../index';
 import { authMiddleware } from '../middleware/auth';
+import { setCacheHeaders, createETag } from '../middleware/cache';
 import { ziWeiCalculator } from '../services/ziwei';
 import { westernCalculator } from '../services/western';
 
@@ -8,32 +9,16 @@ const charts = new Hono<{ Bindings: Env }>();
 
 const ENGINE_VERSION = '1.0.0';
 
-// Rate limit for calculation endpoints (30 req/min/IP)
-const calcRateLimit = new Map<string, { count: number; reset: number }>();
-const CALC_LIMIT = 30;
-const CALC_WINDOW = 60000;
-
-// Stricter rate limit for AI (10 req/min/IP)
+// Rate limit for AI (10 req/min/IP)
 const aiRateLimit = new Map<string, { count: number; reset: number }>();
 const AI_LIMIT = 10;
-
-function checkCalcRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = calcRateLimit.get(ip);
-  if (!entry || now > entry.reset) {
-    calcRateLimit.set(ip, { count: 1, reset: now + CALC_WINDOW });
-    return true;
-  }
-  if (entry.count >= CALC_LIMIT) return false;
-  entry.count++;
-  return true;
-}
+const WINDOW_MS = 60000;
 
 function checkAiRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = aiRateLimit.get(ip);
   if (!entry || now > entry.reset) {
-    aiRateLimit.set(ip, { count: 1, reset: now + CALC_WINDOW });
+    aiRateLimit.set(ip, { count: 1, reset: now + WINDOW_MS });
     return true;
   }
   if (entry.count >= AI_LIMIT) return false;
@@ -41,266 +26,215 @@ function checkAiRateLimit(ip: string): boolean {
   return true;
 }
 
-// Calculate ZiWei chart (no auth required for calculation only)
-charts.post('/calculate/ziwei', async (c) => {
-  const ip = c.req.header('cf-connecting-ip') || 'unknown';
-  if (!checkCalcRateLimit(ip)) {
-    return c.json({ error: 'Too many requests', code: 'RATE_LIMIT' }, 429);
-  }
-  
-  const { year, month, day, hour, gender } = await c.req.json();
-  
-  // Validation
-  if (!year || !month || !day || hour === undefined || !gender) {
-    return c.json({ error: 'Missing required fields', code: 'MISSING_FIELDS', details: 'Required: year, month, day, hour, gender' }, 400);
-  }
-  
-  const y = Number(year), m = Number(month), d = Number(day), h = Number(hour);
-  
-  if (y < 1900 || y > 2100) {
-    return c.json({ error: 'Year out of range', code: 'INVALID_YEAR', details: 'Supported range: 1900-2100' }, 400);
-  }
-  if (m < 1 || m > 12) {
-    return c.json({ error: 'Invalid month', code: 'INVALID_MONTH', details: 'Month must be 1-12' }, 400);
-  }
-  if (d < 1 || d > 31) {
-    return c.json({ error: 'Invalid day', code: 'INVALID_DAY', details: 'Day must be 1-31' }, 400);
-  }
-  if (h < 0 || h > 23) {
-    return c.json({ error: 'Invalid hour', code: 'INVALID_HOUR', details: 'Hour must be 0-23' }, 400);
-  }
-  
-  const genderNorm = String(gender).toLowerCase();
-  if (!['male', 'female', 'm', 'f', '男', '女'].includes(genderNorm)) {
-    return c.json({ error: 'Invalid gender', code: 'INVALID_GENDER', details: 'Gender must be male/female/m/f/男/女' }, 400);
-  }
-  
-  try {
-    const chart = ziWeiCalculator.calculate({
-      year: y, month: m, day: d, hour: h,
-      gender: ['female', 'f', '女'].includes(genderNorm) ? 'female' : 'male'
-    });
-    return c.json({ ...chart, engineVersion: ENGINE_VERSION });
-  } catch (e) {
-    return c.json({ error: 'Calculation failed', code: 'CALC_ERROR', details: String(e) }, 500);
-  }
-});
+interface UserBirthData {
+  birth_year: number | null;
+  birth_month: number | null;
+  birth_day: number | null;
+  birth_hour: number | null;
+  birth_minute: number | null;
+  gender: string | null;
+  timezone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  birth_data_hash: string | null;
+}
 
-// Calculate Western zodiac chart
-charts.post('/calculate/western', async (c) => {
-  const ip = c.req.header('cf-connecting-ip') || 'unknown';
-  if (!checkCalcRateLimit(ip)) {
-    return c.json({ error: 'Too many requests', code: 'RATE_LIMIT' }, 429);
-  }
-  
-  const { year, month, day, hour, minute, latitude, longitude } = await c.req.json();
-  
-  if (!year || !month || !day) {
-    return c.json({ error: 'Missing required fields', code: 'MISSING_FIELDS', details: 'Required: year, month, day' }, 400);
-  }
-  
-  const y = Number(year), m = Number(month), d = Number(day);
-  
-  if (y < 1900 || y > 2100) {
-    return c.json({ error: 'Year out of range', code: 'INVALID_YEAR', details: 'Supported range: 1900-2100' }, 400);
-  }
-  if (m < 1 || m > 12) {
-    return c.json({ error: 'Invalid month', code: 'INVALID_MONTH' }, 400);
-  }
-  if (d < 1 || d > 31) {
-    return c.json({ error: 'Invalid day', code: 'INVALID_DAY' }, 400);
-  }
-  
-  try {
-    const chart = westernCalculator.calculate({
-      year: y, month: m, day: d,
-      hour: Number(hour || 12),
-      minute: minute ? Number(minute) : undefined,
-      latitude: latitude ? Number(latitude) : undefined,
-      longitude: longitude ? Number(longitude) : undefined
-    });
-    return c.json({ ...chart, engineVersion: ENGINE_VERSION, note: 'Moon position is approximate (±2 signs)' });
-  } catch (e) {
-    return c.json({ error: 'Calculation failed', code: 'CALC_ERROR', details: String(e) }, 500);
-  }
-});
+// Get user's birth data
+async function getUserBirthData(db: D1Database, userId: string): Promise<UserBirthData | null> {
+  return db.prepare(
+    `SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute, 
+            gender, timezone, latitude, longitude, birth_data_hash
+     FROM users WHERE id = ?`
+  ).bind(userId).first<UserBirthData>();
+}
 
-// AI Interpretation endpoint (requires auth for usage tracking)
-charts.post('/interpret', authMiddleware, async (c) => {
-  const ip = c.req.header('cf-connecting-ip') || 'unknown';
-  if (!checkAiRateLimit(ip)) {
-    return c.json({ error: 'Too many requests', code: 'RATE_LIMIT', details: 'AI limit: 10 req/min' }, 429);
-  }
-  
-  const { chartType, chartData, language, focus } = await c.req.json();
-  
-  if (!chartType || !chartData) {
-    return c.json({ error: 'Missing required fields', code: 'MISSING_FIELDS', details: 'Required: chartType, chartData' }, 400);
-  }
-  
-  if (!['ziwei', 'western'].includes(chartType)) {
-    return c.json({ error: 'Invalid chart type', code: 'INVALID_TYPE', details: 'Must be ziwei or western' }, 400);
-  }
-  
-  try {
-    // At least one AI provider required
-    if (!c.env.IFLOW_API_KEY && !c.env.GROQ_API_KEY && !c.env.CEREBRAS_API_KEY) {
-      return c.json({ error: 'AI service not configured', code: 'SERVICE_UNAVAILABLE' }, 503);
-    }
-    
-    // Route through AI Mutex DO
-    const mutexId = c.env.AI_MUTEX.idFromName('global');
-    const mutex = c.env.AI_MUTEX.get(mutexId);
-    
-    const response = await mutex.fetch('https://ai-mutex/interpret', {
-      method: 'POST',
-      body: JSON.stringify({
-        keys: { iflow: c.env.IFLOW_API_KEY, groq: c.env.GROQ_API_KEY, cerebras: c.env.CEREBRAS_API_KEY },
-        interpretRequest: { chartType, chartData, language: language || 'zh', focus }
-      })
-    });
-    
-    if (!response.ok) {
-      const err = await response.json() as { error?: string; code?: string; details?: string };
-      return c.json(err, response.status as 400 | 429 | 500 | 503);
-    }
-    
-    const result = await response.json() as {
-      interpretation: string;
-      provider: string;
-      model: string;
-      tokensUsed?: number;
-      quota?: { provider: string; tokensUsedToday: number; requestsToday: number; limits: { tpd: number; rpd: number } };
-    };
-    
-    // Optionally persist quota to D1 for analytics (async, don't block response)
-    if (result.quota) {
-      c.executionCtx.waitUntil(
-        c.env.DB.prepare(
-          `INSERT INTO ai_quota (id, provider, date, tokens_used, requests_count)
-           VALUES (?, ?, date('now'), ?, ?)
-           ON CONFLICT(provider, date) DO UPDATE SET
-             tokens_used = ?,
-             requests_count = ?,
-             last_request_at = datetime('now')`
-        ).bind(
-          crypto.randomUUID(),
-          result.quota.provider,
-          result.quota.tokensUsedToday,
-          result.quota.requestsToday,
-          result.quota.tokensUsedToday,
-          result.quota.requestsToday
-        ).run()
-      );
-    }
-    
-    return c.json({
-      interpretation: result.interpretation,
-      provider: result.provider,
-      model: result.model,
-      tokensUsed: result.tokensUsed,
-      engineVersion: ENGINE_VERSION
-    });
-  } catch (e) {
-    console.error('AI interpretation error:', e);
-    return c.json({ error: 'Interpretation failed', code: 'AI_ERROR', details: String(e) }, 500);
-  }
-});
-
-// List user's charts
+// List user's interpretations (cached charts)
 charts.get('/', authMiddleware, async (c) => {
   const { userId } = c.get('user');
-  const limit = Math.min(Number(c.req.query('limit')) || 20, 100);
-  const offset = Number(c.req.query('offset')) || 0;
   
   const results = await c.env.DB.prepare(
-    'SELECT * FROM chart_records WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
-  ).bind(userId, limit, offset).all();
+    'SELECT * FROM interpretations WHERE user_id = ? ORDER BY created_at DESC'
+  ).bind(userId).all();
   
-  return c.json({ charts: results.results, limit, offset });
+  return c.json({ interpretations: results.results });
 });
 
-// Get single chart
-charts.get('/:id', authMiddleware, async (c) => {
+// Get or calculate chart for a divination type
+charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: false }), async (c) => {
   const { userId } = c.get('user');
-  const chartId = c.req.param('id');
-  
-  const chart = await c.env.DB.prepare(
-    'SELECT * FROM chart_records WHERE id = ? AND user_id = ?'
-  ).bind(chartId, userId).first();
-  
-  if (!chart) {
-    return c.json({ error: 'Chart not found' }, 404);
-  }
-  
-  return c.json(chart);
-});
+  const divType = c.req.param('type');
 
-// Create chart
-charts.post('/', authMiddleware, async (c) => {
-  const { userId } = c.get('user');
-  const { chart_type, chart_name, birth_data, chart_data } = await c.req.json();
-  
-  if (!chart_type || !chart_name || !birth_data || !chart_data) {
-    return c.json({ error: 'Missing required fields' }, 400);
+  if (!['ziwei', 'western'].includes(divType)) {
+    return c.json({ error: 'Invalid type. Use: ziwei, western' }, 400);
   }
-  
+
+  // Get user birth data
+  const birth = await getUserBirthData(c.env.DB, userId);
+  if (!birth?.birth_year || !birth?.birth_month || !birth?.birth_day) {
+    return c.json({ error: 'Birth data required', code: 'NO_BIRTH_DATA' }, 400);
+  }
+
+  // Check cache
+  const cached = await c.env.DB.prepare(
+    'SELECT * FROM interpretations WHERE user_id = ? AND divination_type = ? AND birth_data_hash = ?'
+  ).bind(userId, divType, birth.birth_data_hash).first<{
+    id: string;
+    chart_data: string;
+    ai_interpretation: string | null;
+    created_at: string;
+    updated_at: string;
+  }>();
+
+  // Generate ETag from birth_data_hash and updated_at
+  const etag = createETag(birth.birth_data_hash || '', cached?.updated_at || Date.now());
+
+  // Check If-None-Match header for conditional request
+  const ifNoneMatch = c.req.header('if-none-match');
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    return c.newResponse(null, { status: 304 });
+  }
+
+  if (cached) {
+    // Parse chart_data from JSON string to object for consistent response shape
+    const response = {
+      ...cached,
+      chart_data: typeof cached.chart_data === 'string'
+        ? JSON.parse(cached.chart_data)
+        : cached.chart_data,
+      fromCache: true
+    };
+    c.res.headers.set('ETag', etag);
+    return c.json(response);
+  }
+
+  // Calculate chart
+  const hour = birth.birth_hour ?? 12; // default noon if unknown
+  let chartData: unknown;
+
+  if (divType === 'ziwei') {
+    if (!birth.gender) {
+      return c.json({ error: 'Gender required for ZiWei', code: 'NO_GENDER' }, 400);
+    }
+    chartData = ziWeiCalculator.calculate({
+      year: birth.birth_year,
+      month: birth.birth_month,
+      day: birth.birth_day,
+      hour,
+      gender: birth.gender as 'male' | 'female'
+    });
+  } else {
+    chartData = westernCalculator.calculate({
+      year: birth.birth_year,
+      month: birth.birth_month,
+      day: birth.birth_day,
+      hour,
+      minute: birth.birth_minute ?? undefined,
+      latitude: birth.latitude ?? undefined,
+      longitude: birth.longitude ?? undefined
+    });
+  }
+
+  // Save to cache
   const id = crypto.randomUUID();
-  
   await c.env.DB.prepare(
-    'INSERT INTO chart_records (id, user_id, chart_type, chart_name, birth_data, chart_data) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(
-    id, userId, chart_type, chart_name,
-    JSON.stringify(birth_data),
-    JSON.stringify(chart_data)
-  ).run();
-  
-  const chart = await c.env.DB.prepare(
-    'SELECT * FROM chart_records WHERE id = ?'
-  ).bind(id).first();
-  
-  return c.json(chart, 201);
+    `INSERT INTO interpretations (id, user_id, divination_type, chart_data, birth_data_hash)
+     VALUES (?, ?, ?, ?, ?)`
+  ).bind(id, userId, divType, JSON.stringify(chartData), birth.birth_data_hash).run();
+
+  const response = {
+    id,
+    user_id: userId,
+    divination_type: divType,
+    chart_data: chartData,
+    ai_interpretation: null,
+    birth_data_hash: birth.birth_data_hash,
+    fromCache: false,
+    engineVersion: ENGINE_VERSION
+  };
+  c.res.headers.set('ETag', etag);
+  return c.json(response);
 });
 
-// Update chart
-charts.put('/:id', authMiddleware, async (c) => {
+// Request AI interpretation for a chart
+charts.post('/:type/interpret', authMiddleware, setCacheHeaders({ maxAge: 86400, shared: false, mustRevalidate: true }), async (c) => {
   const { userId } = c.get('user');
-  const chartId = c.req.param('id');
-  const { chart_name, is_favorite } = await c.req.json();
-  
-  const existing = await c.env.DB.prepare(
-    'SELECT id FROM chart_records WHERE id = ? AND user_id = ?'
-  ).bind(chartId, userId).first();
-  
-  if (!existing) {
-    return c.json({ error: 'Chart not found' }, 404);
-  }
-  
-  await c.env.DB.prepare(
-    "UPDATE chart_records SET chart_name = COALESCE(?, chart_name), is_favorite = COALESCE(?, is_favorite), updated_at = datetime('now') WHERE id = ?"
-  ).bind(chart_name, is_favorite, chartId).run();
-  
-  const chart = await c.env.DB.prepare(
-    'SELECT * FROM chart_records WHERE id = ?'
-  ).bind(chartId).first();
-  
-  return c.json(chart);
-});
+  const divType = c.req.param('type');
+  const ip = c.req.header('cf-connecting-ip') || 'unknown';
 
-// Delete chart
-charts.delete('/:id', authMiddleware, async (c) => {
-  const { userId } = c.get('user');
-  const chartId = c.req.param('id');
-  
-  const result = await c.env.DB.prepare(
-    'DELETE FROM chart_records WHERE id = ? AND user_id = ?'
-  ).bind(chartId, userId).run();
-  
-  if (!result.meta.changes) {
-    return c.json({ error: 'Chart not found' }, 404);
+  if (!checkAiRateLimit(ip)) {
+    return c.json({ error: 'Too many requests', code: 'RATE_LIMIT' }, 429);
   }
-  
-  return c.json({ success: true });
+
+  if (!['ziwei', 'western'].includes(divType)) {
+    return c.json({ error: 'Invalid type' }, 400);
+  }
+
+  // Get cached chart
+  const interp = await c.env.DB.prepare(
+    'SELECT * FROM interpretations WHERE user_id = ? AND divination_type = ?'
+  ).bind(userId, divType).first<{
+    id: string;
+    chart_data: string;
+    ai_interpretation: string | null;
+    updated_at: string;
+    birth_data_hash: string;
+  }>();
+
+  if (!interp) {
+    return c.json({ error: 'Chart not found. Call GET /:type first' }, 404);
+  }
+
+  // Return cached interpretation if exists
+  if (interp.ai_interpretation) {
+    // Create ETag from interpretation content hash
+    const etag = createETag(interp.birth_data_hash + '-ai', interp.updated_at);
+
+    // Check If-None-Match header for conditional request
+    const ifNoneMatch = c.req.header('if-none-match');
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return c.newResponse(null, { status: 304 });
+    }
+
+    c.res.headers.set('ETag', etag);
+    return c.json({ interpretation: interp.ai_interpretation, fromCache: true });
+  }
+
+  // Check AI providers
+  if (!c.env.IFLOW_API_KEY && !c.env.GROQ_API_KEY && !c.env.CEREBRAS_API_KEY) {
+    return c.json({ error: 'AI service not configured' }, 503);
+  }
+
+  // Call AI via mutex
+  const mutexId = c.env.AI_MUTEX.idFromName('global');
+  const mutex = c.env.AI_MUTEX.get(mutexId);
+
+  const chartData = JSON.parse(interp.chart_data);
+  const response = await mutex.fetch('https://ai-mutex/interpret', {
+    method: 'POST',
+    body: JSON.stringify({
+      keys: { iflow: c.env.IFLOW_API_KEY, groq: c.env.GROQ_API_KEY, cerebras: c.env.CEREBRAS_API_KEY },
+      interpretRequest: { chartType: divType, chartData, language: 'zh' }
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.json() as { error?: string };
+    return c.json(err, response.status as 400 | 500);
+  }
+
+  const result = await response.json() as { interpretation: string; provider: string; model: string };
+
+  // Save interpretation
+  await c.env.DB.prepare(
+    "UPDATE interpretations SET ai_interpretation = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(result.interpretation, interp.id).run();
+
+  return c.json({
+    interpretation: result.interpretation,
+    provider: result.provider,
+    model: result.model,
+    fromCache: false
+  });
 });
 
 export default charts;

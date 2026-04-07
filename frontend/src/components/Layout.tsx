@@ -12,7 +12,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {user ? (
             <>
               <Link to="/profile" style={{ color: 'white' }}>我的命盤</Link>
-              <Link to="/chart/new" style={{ color: 'white' }}>建立命盤</Link>
+              <Link to="/divination/ziwei" style={{ color: 'white' }}>紫微斗數</Link>
+              <Link to="/divination/western" style={{ color: 'white' }}>西洋占星</Link>
               <button onClick={logout} style={{ background: 'transparent', border: '1px solid white', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '4px' }}>登出</button>
             </>
           ) : (
