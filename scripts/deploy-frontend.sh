@@ -57,7 +57,16 @@ EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
   echo ""
-  echo -e "${GREEN}✅ Deployment complete!${NC}"
+  echo "⏳ Waiting for propagation..."
+  sleep 5
+
+  echo "🏥 Smoke test..."
+  HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" https://fortunet.pages.dev 2>/dev/null || echo "000")
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo -e "${GREEN}✅ Deployment complete and site is live!${NC}"
+  else
+    echo -e "${YELLOW}⚠ Deployed but site returned HTTP $HTTP_CODE (may need a few more seconds)${NC}"
+  fi
   echo ""
   echo "Frontend: https://fortunet.pages.dev"
   echo "Backend:  https://fortunet-api.yanggf.workers.dev"
