@@ -8,7 +8,6 @@ import { cors } from 'hono/cors';
 import { SessionDO } from './durable-objects/session-do';
 import { AIMutexDO } from './durable-objects/ai-mutex-do';
 import { securityHeaders } from './middleware/security';
-import { edgeCache } from './middleware/edgeCache';
 import auth from './routes/auth';
 import users from './routes/users';
 import charts from './routes/charts';
@@ -49,8 +48,8 @@ app.use('*', cors({
   credentials: true,
 }));
 
-// Health endpoints - edge cached for faster load balancer checks
-app.get('/health', edgeCache({ ttl: 10 }), (c) =>
+// Health endpoints
+app.get('/health', (c) =>
   c.json({ status: 'ok', timestamp: new Date().toISOString(), environment: c.env.ENVIRONMENT })
 );
 app.get('/health/db', async (c) => {
