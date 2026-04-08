@@ -79,7 +79,6 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 
 ### Cache Headers Middleware
 - `middleware/cache.ts:setCacheHeaders` — sets `Cache-Control` + `Vary: Authorization`. Used on `/me`, `/me/birth`, `/charts/:type`, `/charts/:type/interpret`. Routes manage their own ETags via `createETag(hash, timestamp)` for 304 responses.
-- `middleware/edgeCache.ts:edgeCache` — Cloudflare Cache API wrapper, used only on `/health` (do not apply to authenticated routes — per-token cache key would grow unbounded).
 
 ### Cloudflare Bindings (wrangler.toml)
 - `DB` → D1 database `fortunet-db`

@@ -150,8 +150,7 @@ fortune-teller-v2/
 │   │   ├── middleware/
 │   │   │   ├── auth.ts         # Auth middleware
 │   │   │   ├── security.ts     # Security headers
-│   │   │   ├── cache.ts        # HTTP cache headers + ETag helpers
-│   │   │   └── edgeCache.ts    # Cloudflare Cache API (health endpoint only)
+│   │   │   └── cache.ts        # HTTP cache headers + ETag helpers
 │   │   └── routes/
 │   │       ├── auth.ts         # register/login/logout
 │   │       ├── users.ts        # /me, PUT /me/birth
