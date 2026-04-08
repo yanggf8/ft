@@ -1,0 +1,57 @@
+#!/bin/bash
+# Pre-push hook: build check + GitHub account mismatch detection
+# Prevents pushing broken builds or with wrong gh credentials
+
+set -e
+
+# --- 1. Push permission check ---
+REMOTE_URL=$(git remote get-url origin 2>/dev/null)
+if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
+  REPO_OWNER="${BASH_REMATCH[1]}"
+  REPO_NAME="${BASH_REMATCH[2]}"
+  ACTIVE_ACCOUNT=$(gh api user --jq .login 2>/dev/null || echo "")
+
+  if [[ -n "$ACTIVE_ACCOUNT" ]]; then
+    # Check if active account has push access (owner or collaborator)
+    PERMISSION=$(gh api "repos/$REPO_OWNER/$REPO_NAME/collaborators/$ACTIVE_ACCOUNT/permission" --jq .permission 2>/dev/null || echo "none")
+    if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "write" ]]; then
+      echo "❌ No push access with account '$ACTIVE_ACCOUNT' ($PERMISSION)"
+      echo "   Repo: $REPO_OWNER/$REPO_NAME"
+      echo "   Try: gh auth switch -u <account-with-access>"
+      exit 1
+    fi
+  fi
+fi
+
+# --- 2. Backend typecheck ---
+if [[ -f backend/tsconfig.json ]]; then
+  echo "🔍 Backend typecheck..."
+  cd backend
+  npx tsc --noEmit 2>/dev/null
+  cd ..
+  echo "✅ Backend types OK"
+fi
+
+# --- 3. Frontend build check ---
+if [[ -f frontend/tsconfig.json ]]; then
+  echo "🔍 Frontend typecheck..."
+  cd frontend
+  npx tsc --noEmit 2>/dev/null
+  cd ..
+  echo "✅ Frontend types OK"
+fi
+
+# --- 4. Branch divergence warning ---
+git fetch --quiet origin 2>/dev/null || true
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "")
+if [[ -n "$REMOTE" && "$REMOTE" != "$LOCAL" ]]; then
+  BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+  if [[ "$BEHIND" -gt 0 ]]; then
+    echo "⚠️  Branch is $BEHIND commit(s) behind origin/main"
+    echo "   Consider: git pull --no-rebase"
+    # Warning only, don't block push
+  fi
+fi
+
+echo "✅ Pre-push checks passed"

@@ -8,7 +8,7 @@ interface AuthContextType {
   login: (email: string) => Promise<void>;
   register: (email: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: (noCache?: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,9 +17,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
+  const refreshUser = async (noCache = false) => {
     try {
-      const userData = await api.getMe();
+      const userData = await api.getMe(noCache);
       setUser(userData);
     } catch {
       api.setSession(null);

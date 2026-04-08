@@ -13,7 +13,7 @@ export function ProfilePage() {
   }, [user]);
 
   const handleSaved = async () => {
-    await refreshUser();
+    await refreshUser(true);
     setShowForm(false);
   };
 

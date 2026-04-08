@@ -51,12 +51,18 @@ async function getUserBirthData(db: D1Database, userId: string): Promise<UserBir
 // List user's interpretations (cached charts)
 charts.get('/', authMiddleware, async (c) => {
   const { userId } = c.get('user');
-  
+
   const results = await c.env.DB.prepare(
     'SELECT * FROM interpretations WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(userId).all();
-  
-  return c.json({ interpretations: results.results });
+
+  // Parse chart_data from JSON string to object
+  const interpretations = (results.results || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    chart_data: typeof row.chart_data === 'string' ? JSON.parse(row.chart_data as string) : row.chart_data
+  }));
+
+  return c.json({ interpretations });
 });
 
 // Get or calculate chart for a divination type
@@ -134,11 +140,15 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     });
   }
 
-  // Save to cache
+  // Upsert to cache (INSERT OR REPLACE handles concurrent first-load race)
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
     `INSERT INTO interpretations (id, user_id, divination_type, chart_data, birth_data_hash)
-     VALUES (?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, divination_type) DO UPDATE SET
+       chart_data = excluded.chart_data,
+       birth_data_hash = excluded.birth_data_hash,
+       updated_at = datetime('now')`
   ).bind(id, userId, divType, JSON.stringify(chartData), birth.birth_data_hash).run();
 
   const response = {

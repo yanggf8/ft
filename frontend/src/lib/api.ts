@@ -26,12 +26,14 @@ class ApiClient {
     return this.sessionId;
   }
 
-  private async request(path: string, options: RequestInit = {}) {
+  private async request(path: string, options: RequestInit & { noCache?: boolean } = {}) {
     const sessionId = this.getSession();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+    const { noCache, ...fetchOptions } = options;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(fetchOptions.headers as Record<string, string>) };
     if (sessionId) headers['Authorization'] = `Bearer ${sessionId}`;
+    if (noCache) headers['Cache-Control'] = 'no-cache';
 
-    const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    const res = await fetch(`${API_URL}${path}`, { ...fetchOptions, headers });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
@@ -59,8 +61,8 @@ class ApiClient {
     this.setSession(null);
   }
 
-  async getMe() {
-    return this.request('/api/users/me');
+  async getMe(noCache = false) {
+    return this.request('/api/users/me', { noCache });
   }
 
   // Update birth data
@@ -78,8 +80,8 @@ class ApiClient {
   }
 
   // Get or calculate chart for divination type
-  async getChart(type: 'ziwei' | 'western') {
-    return this.request(`/api/charts/${type}`);
+  async getChart(type: 'ziwei' | 'western', noCache = false) {
+    return this.request(`/api/charts/${type}`, { noCache });
   }
 
   // Request AI interpretation
