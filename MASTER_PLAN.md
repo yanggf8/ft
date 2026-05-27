@@ -472,50 +472,26 @@ export class SessionDO implements DurableObject {
 
 ### Week 7-8: Chart Calculation Engines
 
-#### Zi Wei Engine: `backend/src/services/ziwei-engine.ts`
-```typescript
-interface BirthData {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  gender: 'male' | 'female';
-}
+#### Zi Wei Engine: `backend/src/services/ziwei/calculator.ts` ✅
+**Status**: Implemented (Phase 2, Week 7-8)
 
-interface ZiWeiChart {
-  lifePalace: Palace;
-  palaces: Palace[];
-  stars: Star[];
-  tenYearLuck: TenYearPeriod[];
-}
+**Actual Implementation**:
+- `ZiWeiCalculator` class with full solar-to-lunar conversion
+- Four pillars, life/body palace calculation
+- 14 main stars + auxiliary star placement
+- Five element determination
 
-export class ZiWeiEngine {
-  calculate(birthData: BirthData): ZiWeiChart {
-    // Port existing calculation logic here
-    // This is the core business logic from your Flask app
-    throw new Error('TODO: Port from existing codebase');
-  }
-}
-```
+See: `backend/src/services/ziwei/calculator.ts`, `lunar.ts`, `constants.ts`
 
-#### Zodiac Engine: `backend/src/services/zodiac-engine.ts`
-```typescript
-interface ZodiacChart {
-  sunSign: string;
-  moonSign: string;
-  ascendant: string;
-  planets: PlanetPosition[];
-  houses: House[];
-  aspects: Aspect[];
-}
+#### Western Zodiac Engine: `backend/src/services/western/calculator.ts` ✅
+**Status**: Implemented (Phase 2, Week 7-8)
 
-export class ZodiacEngine {
-  calculate(birthData: BirthData): ZodiacChart {
-    // Port existing calculation logic here
-    throw new Error('TODO: Port from existing codebase');
-  }
-}
-```
+**Actual Implementation**:
+- `WesternCalculator` class
+- Sun sign, approximate moon sign (±2 signs)
+- Basic planetary positions
+
+See: `backend/src/services/western/calculator.ts`
 
 ### Week 9: AI Integration ✅
 
@@ -558,11 +534,12 @@ POST /api/charts/interpret
 }
 ```
 
-#### Native In-App Purchase Integration (Planned)
-- Web payments are not planned for FortuneT.
-- Paid digital access will be sold inside the native app using Apple In-App Purchase on iOS and Google Play Billing on Android.
-- Backend remains the source of truth for entitlements after store-side verification.
-- Current production schema still contains Stripe placeholder fields and will need a migration before mobile billing launch.
+#### Native In-App Purchase Integration (Planned — Taiwan-First)
+- **Payment Priority**: 台灣本地支付優先 (LINE Pay, 街口支付, 台灣支付寶, etc.) → Apple/Google store (台灣用戶) → Stripe (國際用戶 only)
+- Web payments are deferred; if implemented, Taiwan local methods before Stripe
+- Paid digital access will be sold inside the native app using Apple In-App Purchase on iOS and Google Play Billing on Android (with Taiwan local payment options prioritized)
+- Backend remains the source of truth for entitlements after store-side verification
+- Current production schema contains Stripe placeholder fields (unused); will be replaced/supplemented with Taiwan payment provider fields before mobile billing launch
 
 #### Billing Backend Shape
 ```typescript

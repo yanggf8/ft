@@ -230,7 +230,8 @@ Phase 7:  Storytelling        Week 26-33
 - [x] `trial_ends_at` field in users table
 - [x] `billing.ts` service (checkUserAccess)
 - [x] `/api/users/me` returns billing status
-- [ ] Native app IAP integration (planned - Apple / Google store billing)
+- [ ] Native app IAP integration (planned - Taiwan-first: LINE Pay / 台灣支付優先, then Apple/Google store billing)
+- [ ] Web payments (deferred - Stripe only for international, behind Taiwan local methods)
 
 ### Week 12-15: Frontend ✅
 - [x] Vite + React + TypeScript setup

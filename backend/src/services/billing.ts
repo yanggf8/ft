@@ -2,7 +2,11 @@
  * Billing Service
  * - 免費試用期管理
  * - 訂閱狀態檢查
- * - Stripe 整合預留
+ *
+ * 支付策略 (Taiwan-First):
+ * - 優先：台灣本地支付 (LINE Pay, 街口支付, 台灣支付寶等)
+ * - 國際：Stripe (僅作為國際用戶備選)
+ * - Native App IAP：Apple App Store / Google Play (台灣本地支付優先)
  */
 
 const TRIAL_DAYS = 30; // 免費試用天數

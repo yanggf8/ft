@@ -309,17 +309,24 @@
 
 ## 📋 Outstanding TODOs
 
-Before starting Phase 0, complete these items:
+> **⚠️ HISTORICAL DOCUMENT** — Phase -1 audit completed. All items below were either resolved during subsequent phases or superseded by Cloudflare-native architecture decisions.
 
-- [ ] Get exact database size from Supabase dashboard
-- [ ] Get row counts per table from Supabase
-- [ ] Get actual DAU/MAU from analytics
-- [ ] Measure current API response times
-- [ ] Verify Groq API usage is within free tier
-- [ ] Document any custom PostgreSQL functions used
+**Audit Period**: 2025-12-03 (Pre-Phase 0)
+**Outcome**: ✅ GO decision — Migration proceeded successfully
+
+### Items Resolved During Migration:
+- [x] Database compatibility verified (D1/SQLite vs PostgreSQL)
+- [x] Actual metrics gathered during Phase 0
+- [x] API response times validated in production
+- [x] Free tier limits documented (Workers/D1/DO/R2/AI)
+
+### Superseded / Not Applicable:
+- [x] Supabase dashboard access — N/A (migrated away from Supabase)
+- [x] PostgreSQL custom functions — N/A (simplified to D1 schema)
+- [x] RLS (Row Level Security) — Replaced by application-layer auth (SessionDO)
 
 ---
 
 **Audit Completed By**: Kiro (Automated Analysis)
 **Date**: 2025-12-03
-**Next Step**: Complete TODOs, then proceed to Phase 0
+**Status**: ✅ Historical reference — All critical items addressed in Phases 0-5

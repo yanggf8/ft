@@ -187,9 +187,11 @@ app.get('/admin/stats', authMiddleware, async (c) => {
 - `GET /health` - Basic health
 - `GET /health/db` - Database connectivity
 
-### Additional Endpoints (TODO)
-- `GET /health/ai` - AI providers status
-- `GET /health/do` - Durable Objects status
+### Additional Endpoints (Deferred)
+- `GET /health/ai` - AI providers status (nice-to-have, not critical)
+- `GET /health/do` - Durable Objects status (nice-to-have, not critical)
+
+**Current workaround**: Check Cloudflare Dashboard → Workers → Durable Objects for DO status; AI failures are visible in response payloads (exresource tracking).
 
 ---
 

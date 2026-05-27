@@ -28,9 +28,10 @@
 - **Free Trial** - 30 days for all new users
 - **Passwordless Auth** - Email-only login
 
-### Billing Direction
-- **Native App IAP** - Planned for Apple App Store and Google Play
-- **No Web Checkout** - Web payments are not the current monetization path
+### Billing Direction (Taiwan-First)
+- **Native App IAP** - Planned (Taiwan local payments first: LINE Pay / 台灣支付優先, then Apple/Google store)
+- **Web Payments** - Deferred; if implemented, Taiwan local methods (LINE Pay, 街口支付, etc.) before Stripe (international only)
+- **Current**: 30-day free trial only (no payments live)
 
 ### Infrastructure ✅
 - **Frontend**: React + TypeScript + Vite (179KB / 57KB gzipped)
