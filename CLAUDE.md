@@ -13,11 +13,13 @@ FortuneT V2 is an AI-powered Chinese/Western astrology platform. Backend runs on
 
 ### Backend (from `backend/`)
 ```bash
-npm run dev              # Local dev server (localhost:8787)
-npm run typecheck        # TypeScript type checking
-npm run test:integration # Integration tests (calls real APIs, needs RUN_INTEGRATION=true)
-npm run db:init          # Apply schema.sql to remote D1
-npm run db:init:local    # Apply schema.sql to local D1
+npm run dev                      # Local dev server (localhost:8787)
+npm run typecheck                # TypeScript type checking
+npm run test:integration         # Integration tests (calls real APIs, needs RUN_INTEGRATION=true)
+npm run test:integration:staging # Integration tests against staging
+npm run db:init                  # Apply schema.sql to remote D1
+npm run db:init:local            # Apply schema.sql to local D1
+npm run deploy                   # Deploy (unsets CLOUDFLARE_API_TOKEN, then wrangler deploy)
 ```
 
 ### Frontend (from `frontend/`)
@@ -25,18 +27,26 @@ npm run db:init:local    # Apply schema.sql to local D1
 npm run dev              # Local dev server (localhost:5173)
 npm test                 # Vitest tests
 npm run build            # TypeScript check + Vite build (REQUIRED before deploy)
+npm run deploy           # build + unset token + deploy to Pages
+npm run deploy:prod      # Same, deploying to the main branch
 ```
 
 ### Deployment (always unset API token first)
 ```bash
-# Backend
-cd backend && unset CLOUDFLARE_API_TOKEN && npx wrangler deploy
-
-# Frontend (build is included in deploy script)
-cd frontend && unset CLOUDFLARE_API_TOKEN && npm run deploy
+cd backend  && npm run deploy   # Builds nothing; unsets token then wrangler deploy
+cd frontend && npm run deploy   # Builds, unsets token, then wrangler pages deploy
 ```
 
-**Critical**: Always prefix wrangler commands with `unset CLOUDFLARE_API_TOKEN &&` to force OAuth authentication. API tokens have permission issues.
+The `deploy` / `deploy:prod` scripts already wrap `unset CLOUDFLARE_API_TOKEN` — prefer them. `deploy:unsafe` variants skip the unset (do not use unless you know why).
+
+**Critical**: OAuth auth is required; API tokens have permission issues. If running `wrangler` directly, always prefix with `unset CLOUDFLARE_API_TOKEN &&`.
+
+### Helper Scripts (from project root)
+```bash
+./scripts/deploy-backend.sh     # Typecheck + deploy backend + health check
+./scripts/deploy-frontend.sh    # Build + deploy frontend with checks
+./scripts/verify-deployment.sh  # Verify production services are healthy
+```
 
 ## Architecture
 
@@ -91,7 +101,7 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 
 - TypeScript strict mode, 2-space indent, single quotes, semicolons required
 - File names: `kebab-case.ts`, variables: `camelCase`, constants: `UPPER_SNAKE_CASE`
-- **Integration tests only** — no unit tests, no mocks. Tests must call real deployed services.
+- **Integration tests only** — no unit tests, no mocks. Tests must call real deployed services. See `.testing-rules` for the full testing philosophy.
 - No database constraints — design for flexibility
 - No feature flags
 - Frontend must be built before every deploy
