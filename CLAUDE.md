@@ -55,9 +55,10 @@ The `deploy` / `deploy:prod` scripts already wrap `unset CLOUDFLARE_API_TOKEN` �
 - **Routes**: `routes/auth.ts`, `routes/users.ts`, `routes/charts.ts` — API endpoints under `/api/`
 - **Auth**: Passwordless email login. Sessions stored in `SessionDO` (Durable Object). Auth middleware validates `Bearer <sessionId>` header via DO lookup.
 - **Durable Objects**:
-  - `SessionDO` — Session storage (key-value in DO SQLite)
-  - `AIMutexDO` — Serializes AI requests (1 concurrent), manages 3-provider failover, tracks usage metrics
-- **AI Providers** (`services/ai/`): 3-tier failover: iFlow GLM-4.6 → Groq Kimi-K2 → Cerebras Llama-3.3-70b
+  - `SessionDO` — Session storage (key-value in DO SQLite). Sessions expire after 7 days; `refreshSession()` extends TTL on use.
+  - `AIMutexDO` — Serializes AI requests (1 concurrent via in-memory queue), manages 3-provider failover, tracks per-provider/per-day "exresource" metrics (requests, tokens, errors, latency, failovers) in DO storage.
+- **AI Providers**: 3-tier failover defined by the `PROVIDERS` array in `durable-objects/ai-mutex-do.ts`: iFlow `GLM-4.6` (rpm 1) → Groq `moonshotai/kimi-k2-instruct-0905` (rpm 30, rpd 14400) → Cerebras `llama-3.3-70b` (rpm 30, rpd 14400). A provider is skipped when its API key is missing, its daily quota (rpd) is exhausted, or its per-minute limit (rpm) is hit; on error the DO fails over to the next. All providers failing returns 503 `ALL_PROVIDERS_FAILED`.
+  - **Implementation detail**: Only iFlow has a dedicated adapter class (`services/ai/iflow.ts`). Groq and Cerebras are called inline in `ai-mutex-do.ts:callProvider` via the OpenAI-compatible `/chat/completions` endpoint. `services/ai/cerebras.ts` exists but is **not** used by the DO. Shared prompts live in `services/ai/prompts.ts` (`getSystemPrompt`, `buildPrompt`).
 - **Calculation Engines**: `services/ziwei/` (紫微斗數) and `services/western/` (Western zodiac)
 - **Billing** (`services/billing.ts`): 30-day free trial, `checkUserAccess()`. Native IAP planned (no web checkout).
 - **Database**: Cloudflare D1 (SQLite). Schema in `scripts/schema.sql`.
@@ -77,8 +78,10 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 - `interpretations` table caches one chart per `(user_id, divination_type)`, keyed by `birth_data_hash`
 - When a user updates birth data via `PUT /api/users/me/birth`, all their cached interpretations are deleted
 - `birth_data_hash` is computed in `routes/users.ts:computeBirthHash` and used as cache invalidation key
+- `scripts/schema.sql` also defines `subscriptions`, `usage_tracking`, and `ai_quota` tables that are **not yet used** by any code (provisioned for planned billing/quota features). Only `users` and `interpretations` are live.
 
 ### API Endpoints
+- `GET /health` — liveness (status, timestamp, `ENVIRONMENT` var); `GET /health/db` — checks D1 connectivity. Used by deploy/verify scripts.
 - `POST /api/auth/register | /login | /logout` — passwordless email auth
 - `GET /api/users/me` — profile + billing + `hasBirthData` flag
 - `PUT /api/users/me/birth` — save birth data (invalidates interpretations cache)
@@ -87,8 +90,13 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 - `POST /api/charts/:type/interpret` — runs AI interpretation for the cached chart. Requires `GET /api/charts/:type` to have been called first (404 otherwise).
 - `GET /api/charts` — list all of user's cached interpretations
 
-### Cache Headers Middleware
-- `middleware/cache.ts:setCacheHeaders` — sets `Cache-Control` + `Vary: Authorization`. Used on `/me`, `/me/birth`, `/charts/:type`, `/charts/:type/interpret`. Routes manage their own ETags via `createETag(hash, timestamp)` for 304 responses.
+### Cross-Cutting Middleware (`backend/src/middleware/`)
+- **Cache** (`cache.ts:setCacheHeaders`) — sets `Cache-Control` + `Vary: Authorization`. Per-endpoint TTLs: `GET /me` 300s, `PUT /me/birth` 0s (no-store), `GET /charts/:type` 3600s, `POST /charts/:type/interpret` 86400s + `must-revalidate` — all `private`. ETag-based 304 responses (`createETag(hash, timestamp)`) are implemented only on the two `/charts/:type` routes.
+- **Auth** (`auth.ts`) — validates `Bearer <sessionId>` against `SessionDO`. `optionalAuth` exists but is currently unused.
+- **Security** (`security.ts`) — sets `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`, CSP.
+- **Rate limiting** — in-route, per-IP, 10 req/min on auth endpoints (`routes/auth.ts`) and AI interpretation (`routes/charts.ts`); returns 429 when exceeded.
+- `index.ts` adds CORS (allows localhost, `*.pages.dev`, `*.workers.dev` with credentials) and an `x-request-id` header on every response.
+- `middleware/validate.ts` holds Zod schemas but is **not** wired into routes (routes validate manually).
 
 ### Cloudflare Bindings (wrangler.toml)
 - `DB` → D1 database `fortunet-db`
@@ -105,3 +113,9 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 - No database constraints — design for flexibility
 - No feature flags
 - Frontend must be built before every deploy
+
+## Git & CI
+
+- **Pre-push hook** (`.githooks/pre-push`, installed via `bash .githooks/install.sh`): verifies GitHub push access, then runs **both** backend and frontend `typecheck`, and warns if the branch is behind `origin/main`. A push is blocked on type errors.
+- **CI** (`.github/workflows/deploy.yml`): on push/PR to `main` runs **backend typecheck only** (no frontend typecheck, no integration tests, no staging env); deploys to production only on push to `main`. The pre-push hook — not CI — is what guards frontend types, so do not rely on CI to catch them.
+- `frontend npm run build` writes the current commit SHA to `dist/.build-info`.
