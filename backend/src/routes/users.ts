@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import { authMiddleware } from '../middleware/auth';
 import { setCacheHeaders } from '../middleware/cache';
+import { validate, updateProfileSchema } from '../middleware/validate';
 import { checkUserAccess } from '../services/billing';
 
 const users = new Hono<{ Bindings: Env }>();
@@ -115,10 +116,10 @@ users.put('/me/birth', authMiddleware, setCacheHeaders({ maxAge: 0 }), async (c)
 });
 
 // Update profile (name, avatar)
-users.put('/me', authMiddleware, setCacheHeaders({ maxAge: 0 }), async (c) => {
+users.put('/me', authMiddleware, setCacheHeaders({ maxAge: 0 }), validate(updateProfileSchema), async (c) => {
   const { userId } = c.get('user');
-  const { full_name, avatar_url } = await c.req.json();
-  
+  const { full_name, avatar_url } = c.get('validated');
+
   await c.env.DB.prepare(
     "UPDATE users SET full_name = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = ?"
   ).bind(full_name || null, avatar_url || null, userId).run();

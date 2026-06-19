@@ -34,7 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS interpretations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    divination_type TEXT NOT NULL CHECK (divination_type IN ('ziwei', 'western', 'bazi')),
+    divination_type TEXT NOT NULL,   -- 'ziwei' | 'western' | 'bazi' | 'story' (no CHECK: flexible per project policy)
     chart_data TEXT NOT NULL,        -- calculated chart JSON
     ai_interpretation TEXT,          -- AI generated text
     birth_data_hash TEXT NOT NULL,   -- invalidate if user birth data changes

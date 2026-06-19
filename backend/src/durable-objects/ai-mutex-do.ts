@@ -90,7 +90,7 @@ export class AIMutexDO extends DurableObject {
   private async handleRequest(request: Request): Promise<Response> {
     const body = await request.json() as {
       keys: { iflow?: string; groq?: string; cerebras?: string };
-      interpretRequest: { chartType: 'ziwei' | 'western'; chartData: Record<string, unknown>; language?: 'zh' | 'en'; focus?: string };
+      interpretRequest: { chartType: 'ziwei' | 'western' | 'story'; chartData: Record<string, unknown>; language?: 'zh' | 'en'; focus?: string };
     };
 
     const { keys, interpretRequest } = body;
@@ -122,12 +122,13 @@ export class AIMutexDO extends DurableObject {
     return Response.json({ error: 'All providers failed', code: 'ALL_PROVIDERS_FAILED', lastError, failovers: failoverCount }, { status: 503 });
   }
 
-  private async callProvider(name: ProviderName, model: string, apiKey: string, req: { chartType: 'ziwei' | 'western'; chartData: Record<string, unknown>; language?: 'zh' | 'en'; focus?: string }): Promise<{ interpretation: string; provider: string; model: string; tokensUsed?: number }> {
+  private async callProvider(name: ProviderName, model: string, apiKey: string, req: { chartType: 'ziwei' | 'western' | 'story'; chartData: Record<string, unknown>; language?: 'zh' | 'en'; focus?: string }): Promise<{ interpretation: string; provider: string; model: string; tokensUsed?: number }> {
     const { getSystemPrompt, buildPrompt } = await import('../services/ai/prompts');
+    const maxTokens = req.chartType === 'story' ? 2048 : 1024;
 
     if (name === 'iflow') {
       const { IFlowProvider } = await import('../services/ai/iflow');
-      return new IFlowProvider({ apiKey, model }).interpret(req);
+      return new IFlowProvider({ apiKey, model, maxTokens }).interpret(req);
     }
 
     // Groq & Cerebras: OpenAI-compatible
@@ -138,13 +139,16 @@ export class AIMutexDO extends DurableObject {
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: getSystemPrompt(req.chartType, req.language) }, { role: 'user', content: buildPrompt(req) }],
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         temperature: 0.7,
       }),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!res.ok) throw new Error(`${name} ${res.status}: ${await res.text()}`);
     const data = await res.json() as { choices: { message: { content: string } }[]; usage?: { total_tokens: number } };
-    return { interpretation: data.choices[0]?.message?.content || '', provider: name, model, tokensUsed: data.usage?.total_tokens };
+    const content = data.choices[0]?.message?.content;
+    if (!content) throw new Error(`${name}: empty response`);
+    return { interpretation: content, provider: name, model, tokensUsed: data.usage?.total_tokens };
   }
 }

@@ -43,8 +43,10 @@ export class IFlowProvider implements AIProvider {
     if (!res.ok) throw new Error(`iFlow ${res.status}: ${await res.text()}`);
 
     const data = await res.json() as { choices: { message: { content: string } }[]; usage?: { total_tokens: number } };
+    const content = data.choices[0]?.message?.content;
+    if (!content) throw new Error('iFlow: empty response');
     return {
-      interpretation: data.choices[0]?.message?.content || '',
+      interpretation: content,
       provider: this.name,
       model: this.model,
       tokensUsed: data.usage?.total_tokens,

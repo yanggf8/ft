@@ -88,6 +88,14 @@ class ApiClient {
   async interpret(type: 'ziwei' | 'western') {
     return this.request(`/api/charts/${type}/interpret`, { method: 'POST' });
   }
+
+  async getStory(noCache = false) {
+    return this.request('/api/charts/story', { noCache });
+  }
+
+  async generateStory() {
+    return this.request('/api/charts/story/generate', { method: 'POST' });
+  }
 }
 
 export const api = new ApiClient();

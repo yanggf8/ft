@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { DivinationPage } from './pages/DivinationPage';
+import { StoryPage } from './pages/StoryPage';
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/divination/:type" element={<ProtectedRoute><DivinationPage /></ProtectedRoute>} />
+            <Route path="/story" element={<ProtectedRoute><StoryPage /></ProtectedRoute>} />
           </Routes>
         </Layout>
       </BrowserRouter>
