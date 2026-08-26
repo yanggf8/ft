@@ -42,3 +42,5 @@ export interface ZiWeiChart {
   bodyPalaceIndex: number;
   palaces: Palace[];
 }
+
+export type { ZiWeiChartV3, ZiWeiPalaceV3, ZiWeiStarV3, ZiWeiMeta, MajorLimit } from '../../shared/schemas/ziwei-v3';
