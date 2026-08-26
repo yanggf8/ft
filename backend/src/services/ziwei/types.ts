@@ -31,7 +31,7 @@ export interface Palace {
 export interface ZiWeiChart {
   birthInfo: {
     solar: { year: number; month: number; day: number };
-    lunar: { year: number; month: number; day: number };
+    lunar: { year: number; month: number; day: number; isLeap?: boolean };
     hour: number;
     hourBranch: string;
     gender: string;

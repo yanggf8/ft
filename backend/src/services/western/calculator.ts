@@ -58,33 +58,22 @@ export class WesternCalculator {
   }
 
   private getSunSign(month: number, day: number) {
-    // Zodiac date ranges (approximate)
-    const ranges: [number, number, number, number, number][] = [
-      // [signIndex, startMonth, startDay, endMonth, endDay]
-      [0, 3, 21, 4, 19],   // Aries
-      [1, 4, 20, 5, 20],   // Taurus
-      [2, 5, 21, 6, 20],   // Gemini
-      [3, 6, 21, 7, 22],   // Cancer
-      [4, 7, 23, 8, 22],   // Leo
-      [5, 8, 23, 9, 22],   // Virgo
-      [6, 9, 23, 10, 22],  // Libra
-      [7, 10, 23, 11, 21], // Scorpio
-      [8, 11, 22, 12, 21], // Sagittarius
-      [9, 12, 22, 12, 31], // Capricorn (Dec)
-      [9, 1, 1, 1, 19],    // Capricorn (Jan)
-      [10, 1, 20, 2, 18],  // Aquarius
-      [11, 2, 19, 3, 20],  // Pisces
-    ];
+    // 以「各星座起始日」判斷，含跨年環繞（摩羯 12/22 起）。
+    // ord = 月*100+日 便於比較；舊版的區間寫法會讓 1/20–1/31 提前落入摩羯。
+    const ord = month * 100 + day;
 
-    for (const [idx, sm, sd, em, ed] of ranges) {
-      if ((month === sm && day >= sd) || (month === em && day <= ed) ||
-          (month > sm && month < em)) {
-        const sign = ZODIAC_SIGNS[idx];
-        return { name: sign.name, symbol: sign.symbol, element: sign.element, quality: sign.quality };
+    for (let i = 0; i < ZODIAC_SIGNS.length; i++) {
+      const cur = ZODIAC_SIGNS[i];
+      const next = ZODIAC_SIGNS[(i + 1) % ZODIAC_SIGNS.length];
+      const start = cur.start[0] * 100 + cur.start[1];
+      const end = next.start[0] * 100 + next.start[1]; // 摩羯跨年時 end < start
+      const inRange = start < end ? ord >= start && ord < end : ord >= start || ord < end;
+      if (inRange) {
+        return { name: cur.name, symbol: cur.symbol, element: cur.element, quality: cur.quality };
       }
     }
-    
-    // Default to Aries if not found
+
+    // 理論上不可達（範圍涵蓋全年）；防禦性預設
     const sign = ZODIAC_SIGNS[0];
     return { name: sign.name, symbol: sign.symbol, element: sign.element, quality: sign.quality };
   }

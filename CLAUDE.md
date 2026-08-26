@@ -78,6 +78,7 @@ Birth data lives on the **user profile** (not per-request). Charts are derived f
 - `interpretations` table caches one chart per `(user_id, divination_type)`, keyed by `birth_data_hash`
 - When a user updates birth data via `PUT /api/users/me/birth`, all their cached interpretations are deleted
 - `birth_data_hash` is computed in `routes/users.ts:computeBirthHash` and used as cache invalidation key
+- Cached `chart_data` also embeds `engineVersion` from `services/engine-version.ts`; when it mismatches `ENGINE_VERSION`, `GET /api/charts/:type` recalculates and clears the stale `ai_interpretation` — bump that constant whenever any calculation algorithm changes
 - `scripts/schema.sql` also defines `subscriptions`, `usage_tracking`, and `ai_quota` tables that are **not yet used** by any code (provisioned for planned billing/quota features). Only `users` and `interpretations` are live.
 
 ### API Endpoints

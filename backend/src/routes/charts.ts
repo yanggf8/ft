@@ -4,10 +4,9 @@ import { authMiddleware } from '../middleware/auth';
 import { setCacheHeaders, createETag } from '../middleware/cache';
 import { ziWeiCalculator } from '../services/ziwei';
 import { westernCalculator } from '../services/western';
+import { ENGINE_VERSION } from '../services/engine-version';
 
 const charts = new Hono<{ Bindings: Env }>();
-
-const ENGINE_VERSION = '1.0.0';
 
 // Rate limit for AI (10 req/min/IP)
 const aiRateLimit = new Map<string, { count: number; reset: number }>();
@@ -101,16 +100,19 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
   }
 
   if (cached) {
-    // Parse chart_data from JSON string to object for consistent response shape
-    const response = {
-      ...cached,
-      chart_data: typeof cached.chart_data === 'string'
-        ? JSON.parse(cached.chart_data)
-        : cached.chart_data,
-      fromCache: true
-    };
-    c.res.headers.set('ETag', etag);
-    return c.json(response);
+    const parsedChart = typeof cached.chart_data === 'string'
+      ? JSON.parse(cached.chart_data)
+      : cached.chart_data;
+    // 引擎演算法更新（engineVersion 不符）時視同 cache miss，重新計算
+    if (parsedChart?.engineVersion === ENGINE_VERSION) {
+      const response = {
+        ...cached,
+        chart_data: parsedChart,
+        fromCache: true
+      };
+      c.res.headers.set('ETag', etag);
+      return c.json(response);
+    }
   }
 
   // Calculate chart
@@ -140,7 +142,16 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     });
   }
 
-  // Upsert to cache (INSERT OR REPLACE handles concurrent first-load race)
+  // Embed engine version into stored chart data so future engine changes invalidate this cache
+  const chartDataWithVersion = {
+    ...(chartData as Record<string, unknown>),
+    engineVersion: ENGINE_VERSION
+  };
+
+  // Upsert to cache (INSERT OR REPLACE handles concurrent first-load race).
+  // DO UPDATE only fires when an existing row was stale (hash mismatch or old engine
+  // version), so clearing ai_interpretation here never discards a valid reading —
+  // an old-chart interpretation must not survive onto the recalculated chart.
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
     `INSERT INTO interpretations (id, user_id, divination_type, chart_data, birth_data_hash)
@@ -148,14 +159,15 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
      ON CONFLICT(user_id, divination_type) DO UPDATE SET
        chart_data = excluded.chart_data,
        birth_data_hash = excluded.birth_data_hash,
+       ai_interpretation = NULL,
        updated_at = datetime('now')`
-  ).bind(id, userId, divType, JSON.stringify(chartData), birth.birth_data_hash).run();
+  ).bind(id, userId, divType, JSON.stringify(chartDataWithVersion), birth.birth_data_hash).run();
 
   const response = {
     id,
     user_id: userId,
     divination_type: divType,
-    chart_data: chartData,
+    chart_data: chartDataWithVersion,
     ai_interpretation: null,
     birth_data_hash: birth.birth_data_hash,
     fromCache: false,
