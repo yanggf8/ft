@@ -17,6 +17,7 @@
 | Big5 測量 | TIPI 十題中性題幹；命理包裝只出現在結果呈現 |
 | TIPI 融合 | 先驗＋校正：預測以實測向量為準；落差分析當洞察 |
 | 預測模型 | 人格 × 情境交互 |
+| API 型別契約 | **新端點採 Zod schema**（V3 圖型/personality/predict）：schema 放 `shared/schemas/`，後端 zValidator、前端 import 型別；既有端點不動，漸進採納 |
 
 ## 1. 目標與非目標
 
