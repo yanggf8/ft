@@ -31,7 +31,7 @@ export interface Palace {
 export interface ZiWeiChart {
   birthInfo: {
     solar: { year: number; month: number; day: number };
-    lunar: { year: number; month: number; day: number };
+    lunar: { year: number; month: number; day: number; isLeap?: boolean };
     hour: number;
     hourBranch: string;
     gender: string;
@@ -42,3 +42,5 @@ export interface ZiWeiChart {
   bodyPalaceIndex: number;
   palaces: Palace[];
 }
+
+export type { ZiWeiChartV3, ZiWeiPalaceV3, ZiWeiStarV3, ZiWeiMeta, MajorLimit } from '../../shared/schemas/ziwei-v3';
