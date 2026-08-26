@@ -2,9 +2,10 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import { authMiddleware } from '../middleware/auth';
 import { setCacheHeaders, createETag } from '../middleware/cache';
-import { ziWeiCalculator } from '../services/ziwei';
+import { iztroAdapter } from '../services/ziwei/iztro-adapter';
 import { westernCalculator } from '../services/western';
-import { ENGINE_VERSION } from '../services/engine-version';
+import { ENGINE_VERSION_ZIWEI, ENGINE_VERSION_WESTERN, CHART_SCHEMA_VERSION } from '../services/engine-version';
+import { ZiWeiV3ResponseSchema } from '../shared/schemas/ziwei-v3';
 
 const charts = new Hono<{ Bindings: Env }>();
 
@@ -41,7 +42,7 @@ interface UserBirthData {
 // Get user's birth data
 async function getUserBirthData(db: D1Database, userId: string): Promise<UserBirthData | null> {
   return db.prepare(
-    `SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute, 
+    `SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute,
             gender, timezone, latitude, longitude, birth_data_hash
      FROM users WHERE id = ?`
   ).bind(userId).first<UserBirthData>();
@@ -79,6 +80,8 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     return c.json({ error: 'Birth data required', code: 'NO_BIRTH_DATA' }, 400);
   }
 
+  const expectedVersion = divType === 'ziwei' ? ENGINE_VERSION_ZIWEI : ENGINE_VERSION_WESTERN;
+
   // Check cache
   const cached = await c.env.DB.prepare(
     'SELECT * FROM interpretations WHERE user_id = ? AND divination_type = ? AND birth_data_hash = ?'
@@ -90,8 +93,8 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     updated_at: string;
   }>();
 
-  // Generate ETag from birth_data_hash and updated_at
-  const etag = createETag(birth.birth_data_hash || '', cached?.updated_at || Date.now());
+  // Generate ETag from birth_data_hash, version and updated_at (per-type version included)
+  const etag = createETag(`${birth.birth_data_hash || ''}-${expectedVersion}-${CHART_SCHEMA_VERSION}`, cached?.updated_at || Date.now());
 
   // Check If-None-Match header for conditional request
   const ifNoneMatch = c.req.header('if-none-match');
@@ -103,8 +106,9 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     const parsedChart = typeof cached.chart_data === 'string'
       ? JSON.parse(cached.chart_data)
       : cached.chart_data;
-    // 引擎演算法更新（engineVersion 不符）時視同 cache miss，重新計算
-    if (parsedChart?.engineVersion === ENGINE_VERSION) {
+    const storedVersion = parsedChart?.meta?.engineVersionZiwei ?? parsedChart?.engineVersion;
+    // Per-type version check: mismatch is treated as cache miss
+    if (storedVersion === expectedVersion) {
       const response = {
         ...cached,
         chart_data: parsedChart,
@@ -123,11 +127,12 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     if (!birth.gender) {
       return c.json({ error: 'Gender required for ZiWei', code: 'NO_GENDER' }, 400);
     }
-    chartData = ziWeiCalculator.calculate({
+    chartData = iztroAdapter.calculate({
       year: birth.birth_year,
       month: birth.birth_month,
       day: birth.birth_day,
       hour,
+      minute: birth.birth_minute ?? undefined,
       gender: birth.gender as 'male' | 'female'
     });
   } else {
@@ -142,10 +147,18 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     });
   }
 
-  // Embed engine version into stored chart data so future engine changes invalidate this cache
+  // Embed per-type engine version and schema version into stored chart data
   const chartDataWithVersion = {
     ...(chartData as Record<string, unknown>),
-    engineVersion: ENGINE_VERSION
+    meta: {
+      ...((chartData as Record<string, unknown>).meta as Record<string, unknown> ?? {}),
+      engineVersionZiwei: divType === 'ziwei' ? ENGINE_VERSION_ZIWEI : undefined,
+      engineVersionWestern: divType === 'western' ? ENGINE_VERSION_WESTERN : undefined,
+      chartSchemaVersion: CHART_SCHEMA_VERSION,
+    },
+    // Back-compat top-level (keep one release):
+    engineVersion: expectedVersion,
+    chartSchemaVersion: CHART_SCHEMA_VERSION,
   };
 
   // Upsert to cache (INSERT OR REPLACE handles concurrent first-load race).
@@ -171,8 +184,19 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     ai_interpretation: null,
     birth_data_hash: birth.birth_data_hash,
     fromCache: false,
-    engineVersion: ENGINE_VERSION
+    engineVersion: expectedVersion,
+    chartSchemaVersion: CHART_SCHEMA_VERSION
   };
+
+  // Zod validation for ziwei V3 response (shape guard before shipping)
+  if (divType === 'ziwei') {
+    const parsed = ZiWeiV3ResponseSchema.safeParse(response);
+    if (!parsed.success) {
+      console.error('ZiWei V3 schema violation', parsed.error.flatten());
+      return c.json({ error: 'Chart schema violation' }, 500);
+    }
+  }
+
   c.res.headers.set('ETag', etag);
   return c.json(response);
 });
@@ -204,6 +228,18 @@ charts.post('/:type/interpret', authMiddleware, setCacheHeaders({ maxAge: 86400,
 
   if (!interp) {
     return c.json({ error: 'Chart not found. Call GET /:type first' }, 404);
+  }
+
+  // Stale version guard: if cached chart was built with old engine, require recalc first
+  {
+    const chartDataParsed = typeof interp.chart_data === 'string' ? JSON.parse(interp.chart_data) : JSON.parse(interp.chart_data as unknown as string);
+    const storedVersion = (chartDataParsed as Record<string, unknown>)?.meta
+      ? ((chartDataParsed as Record<string, unknown>).meta as Record<string, unknown>).engineVersionZiwei as string ?? (chartDataParsed as Record<string, unknown>).engineVersion as string
+      : (chartDataParsed as Record<string, unknown>).engineVersion as string;
+    const expectedVersion = divType === 'ziwei' ? ENGINE_VERSION_ZIWEI : ENGINE_VERSION_WESTERN;
+    if (storedVersion !== expectedVersion) {
+      return c.json({ error: 'Chart version stale, recalculation required', code: 'RECALC_REQUIRED' }, 409);
+    }
   }
 
   // Return cached interpretation if exists
