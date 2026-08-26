@@ -84,9 +84,30 @@ class ApiClient {
     return this.request(`/api/charts/${type}`, { noCache });
   }
 
-  // Request AI interpretation
+  private authHeaders(): Record<string, string> {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    const sid = this.getSession();
+    if (sid) h['Authorization'] = `Bearer ${sid}`;
+    return h;
+  }
+
+  // Request AI interpretation (409 RECALC_REQUIRED auto-retry)
   async interpret(type: 'ziwei' | 'western') {
-    return this.request(`/api/charts/${type}/interpret`, { method: 'POST' });
+    const res = await fetch(`${API_URL}/api/charts/${type}/interpret`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    if (res.status === 409) {
+      await this.getChart(type, true);
+      const retry = await fetch(`${API_URL}/api/charts/${type}/interpret`, {
+        method: 'POST',
+        headers: this.authHeaders(),
+      });
+      if (!retry.ok) throw new Error(await retry.text());
+      return retry.json();
+    }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
   }
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { ZiWeiPalaceGrid } from '../components/ZiWeiPalaceGrid';
 
 const TITLES: Record<string, string> = { ziwei: '紫微斗數', western: '西洋占星' };
 
@@ -102,14 +103,43 @@ export function DivinationPage() {
 }
 
 function ZiWeiDisplay({ data }: { data: Record<string, unknown> }) {
-  const d = data as { lunarDate?: { year: number; month: number; day: number }; lifePalace?: string; bodyPalace?: string; fiveElement?: string; mainStars?: string[] };
+  const d = data as unknown as {
+    birthInfo?: { lunar?: { year: number; month: number; day: number; isLeap?: boolean } };
+    fiveElement?: string;
+    majorLimits?: { startAge: number; endAge: number; stem: string; branch: string }[];
+    palaces?: { index: number; name: string; branch: string; stem: string; stars: { name: string; type: string; brightness?: string; sihua?: string }[]; isLifePalace?: boolean; isBodyPalace?: boolean }[];
+    lifePalaceIndex?: number;
+    meta?: { chartSchemaVersion?: number; engineVersionZiwei?: string; assumed?: boolean };
+    // V2 fallback fields
+    lunarDate?: { year: number; month: number; day: number };
+    lifePalace?: string;
+    bodyPalace?: string;
+    mainStars?: string[];
+  };
+  // Back-compat: if old V2 shape stored before A1, fall back to raw JSON
+  if (!d.palaces) {
+    if (d.lunarDate || d.lifePalace || d.mainStars) {
+      return (
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          {d.lunarDate && <p><strong>農曆:</strong> {d.lunarDate.year}年{d.lunarDate.month}月{d.lunarDate.day}日</p>}
+          {d.lifePalace && <p><strong>命宮:</strong> {d.lifePalace}</p>}
+          {d.bodyPalace && <p><strong>身宮:</strong> {d.bodyPalace}</p>}
+          {d.fiveElement && <p><strong>五行局:</strong> {d.fiveElement}</p>}
+          {d.mainStars && <p><strong>主星:</strong> {d.mainStars.join('、')}</p>}
+        </div>
+      );
+    }
+    return <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>{JSON.stringify(d, null, 2)}</pre>;
+  }
   return (
-    <div style={{ display: 'grid', gap: '0.5rem' }}>
-      {d.lunarDate && <p><strong>農曆:</strong> {d.lunarDate.year}年{d.lunarDate.month}月{d.lunarDate.day}日</p>}
-      {d.lifePalace && <p><strong>命宮:</strong> {d.lifePalace}</p>}
-      {d.bodyPalace && <p><strong>身宮:</strong> {d.bodyPalace}</p>}
-      {d.fiveElement && <p><strong>五行局:</strong> {d.fiveElement}</p>}
-      {d.mainStars && <p><strong>主星:</strong> {d.mainStars.join('、')}</p>}
+    <div style={{ display: 'grid', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.9rem' }}>
+        {d.birthInfo?.lunar && <span><strong>農曆:</strong> {d.birthInfo.lunar.year}年{d.birthInfo.lunar.month}月{d.birthInfo.lunar.day}日{d.birthInfo.lunar.isLeap ? '(閏)' : ''}</span>}
+        {d.fiveElement && <span><strong>五行局:</strong> {d.fiveElement}</span>}
+        {d.majorLimits && d.majorLimits.length > 0 && <span><strong>大限:</strong> {d.majorLimits.map((m) => `${m.startAge}-${m.endAge} ${m.stem}${m.branch}`).join(' · ')}</span>}
+        {d.meta && <span style={{ color: '#6b7280' }}>#{d.meta.chartSchemaVersion} · {d.meta.engineVersionZiwei}{d.meta.assumed ? ' · assumed' : ''}</span>}
+      </div>
+      <ZiWeiPalaceGrid palaces={d.palaces} />
     </div>
   );
 }
