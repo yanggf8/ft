@@ -878,6 +878,30 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 > 1. 測試 `chart_data.sunSign` 斷言揭露：Phase A `ft-western` 輸出 V3 無頂層 `sunSign`/`moonSign`，前端契約（`WesternChart`）不符。Phase B 於 `ft-schema::WesternChartV3` 補上，由真實 Sun/Moon 黃經推導（非舊近似表）。
 > 2. `Date.UTC` 為 `Date` 的靜態方法；`Reflect::apply(Date, ...)` 是呼叫建構子 → 回 Date object → `.as_f64()` = NaN。必須取 `Date.UTC` 屬性再 apply。
 
+### Phase C 執行進度（2026-08-27，已部署並驗證）
+
+| 項目 | 狀態 |
+|---|---|
+| Leptos 0.8.20 CSR 前端 | ✅ `crates/web` 取代 React `frontend/`（945 行），routes/pages/components 全遷，`ft-schema::api` 共用 wire type |
+| build 工具鏈 | ✅ `scripts/build-web.sh`（cargo build + `wasm-bindgen --target web`，**不用 trunk**）；`scripts/deploy-web.sh`（+ `wrangler pages deploy`）。wasm 570KB gz（workspace `[profile.release]` opt-level=z+LTO）|
+| E2E 驗證 | ✅ Playwright + prod API：register → 出生資料保存 → 紫微 12 宮渲染（土五局、命宮/身宮、紫微(得)）|
+| CORS 修正 | ✅ preflight 缺 `cache-control`（前端 `no-cache` header）→ `crates/api/src/lib.rs` allow-headers 補上 |
+
+### Phase D 執行進度（2026-08-27，清理完成）
+
+| 項目 | 狀態 |
+|---|---|
+| 刪 TS 殘留 | ✅ `backend/`（TS Hono worker）與 `frontend/`（React）整個移除 |
+| `schema.sql` 救回 | ✅ `backend/scripts/schema.sql` → `scripts/schema.sql`（D1 唯一權威 schema，含 story 型別、無 CHECK）|
+| deploy scripts | ✅ 刪 `deploy-backend.sh`/`deploy-frontend.sh`；建 `deploy-web.sh`；`deploy-engine.sh` 保留 |
+| CI | ✅ `deploy.yml` 重寫：fmt/clippy/build wasm（移除 API-token 部署，部署走 OAuth 手動）。pre-push hook 同步改 Rust 檢查 |
+| CLAUDE.md | ✅ 全面更新為 Rust stack 描述 |
+| `.testing-rules` | ✅ 改為 Rust 版（保留 integration-only / real-env 哲學）|
+
+> **Phase C/D 事實修正**：`wasm-bindgen --target web` 不自動執行（需 index.html boot script `await init()`）；
+> Leptos 的 `[lib] crate-type=["cdylib"]` + workspace 成員共用 root target 產物（`target/wasm32-unknown-unknown/release/ft_web.wasm`）。
+
+
 **回退路徑**：每個 Phase 都是獨立部署。Worker 層用 `wrangler rollback`；前端 Pages 保留前一次部署。
 
 > **rev.4 修訂（Grok 審 P1-1，已對帳採納）——原文把單向門指錯地方**：

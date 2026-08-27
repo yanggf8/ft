@@ -72,13 +72,7 @@ impl DurableObject for AIMutexDO {
 
         let (tx, rx) = oneshot::channel();
         let queued_at = clock::now_ms();
-        QUEUE.with(|q| {
-            q.borrow_mut().push_back(QueuedEntry {
-                queued_at,
-                req,
-                tx,
-            })
-        });
+        QUEUE.with(|q| q.borrow_mut().push_back(QueuedEntry { queued_at, req, tx }));
 
         // Drive the queue. If another fetch is already processing, this returns immediately
         // and the current request will be picked up by the in-flight loop.
@@ -160,7 +154,11 @@ impl AIMutexDO {
         let mut last_error: Option<(String, String, String)> = None;
         let mut failover_count = 0u32;
 
-        let max_tokens = if interpret.chartType == "story" { 2048 } else { 1024 };
+        let max_tokens = if interpret.chartType == "story" {
+            2048
+        } else {
+            1024
+        };
 
         for (name, rpm, _) in RPM_LIMITS.iter() {
             let api_key = match body.keys.get(*name) {
@@ -194,12 +192,16 @@ impl AIMutexDO {
                 Ok(result) => {
                     let latency = clock::now_ms() - start;
                     let tokens = result.tokens_used.unwrap_or(0.0);
-                    self.record(RecordCtx {
-                        provider: name.to_string(),
-                        tokens,
-                        latency,
-                        failovers: failover_count,
-                    }, &today).await?;
+                    self.record(
+                        RecordCtx {
+                            provider: name.to_string(),
+                            tokens,
+                            latency,
+                            failovers: failover_count,
+                        },
+                        &today,
+                    )
+                    .await?;
                     return response_for(result, name, model, latency, failover_count, &today);
                 }
                 Err(e) => {
@@ -242,19 +244,41 @@ impl AIMutexDO {
         let key = rpm_key(provider);
         let rec: Option<MinuteRecord> = self.state.storage().get(&key).await?;
         if rec.is_none() || now > rec.as_ref().unwrap().reset {
-            self.state.storage().put(&key, &MinuteRecord { count: 1.0, reset: now + 60000.0 }).await?;
+            self.state
+                .storage()
+                .put(
+                    &key,
+                    &MinuteRecord {
+                        count: 1.0,
+                        reset: now + 60000.0,
+                    },
+                )
+                .await?;
             return Ok(true);
         }
         let rec = rec.unwrap();
         if rec.count >= limit as f64 {
             return Ok(false);
         }
-        self.state.storage().put(&key, &MinuteRecord { count: rec.count + 1.0, reset: rec.reset }).await?;
+        self.state
+            .storage()
+            .put(
+                &key,
+                &MinuteRecord {
+                    count: rec.count + 1.0,
+                    reset: rec.reset,
+                },
+            )
+            .await?;
         Ok(true)
     }
 
     async fn rpd_blocked(&self, provider: &str, today: &str) -> Result<bool> {
-        let limit = RPD_LIMITS.iter().find(|(p, _)| *p == provider).map(|(_, l)| *l).unwrap_or(f64::INFINITY);
+        let limit = RPD_LIMITS
+            .iter()
+            .find(|(p, _)| *p == provider)
+            .map(|(_, l)| *l)
+            .unwrap_or(f64::INFINITY);
         if limit.is_infinite() {
             return Ok(false);
         }
@@ -275,7 +299,13 @@ impl AIMutexDO {
         Ok(())
     }
 
-    async fn record_error(&self, provider: &str, today: &str, code: &str, message: &str) -> Result<()> {
+    async fn record_error(
+        &self,
+        provider: &str,
+        today: &str,
+        code: &str,
+        message: &str,
+    ) -> Result<()> {
         let key = exresource_key(provider, today);
         let cur: Option<ExResource> = self.state.storage().get(&key).await?;
         let mut v = cur.unwrap_or(empty_exresource());
@@ -329,7 +359,14 @@ struct RecordCtx {
     failovers: u32,
 }
 
-fn response_for(result: ProviderResult, provider: &str, model: &str, latency: f64, failovers: u32, today: &str) -> Result<Response> {
+fn response_for(
+    result: ProviderResult,
+    provider: &str,
+    model: &str,
+    latency: f64,
+    failovers: u32,
+    today: &str,
+) -> Result<Response> {
     Response::from_json(&serde_json::json!({
         "interpretation": result.interpretation,
         "provider": provider,

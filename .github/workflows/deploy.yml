@@ -1,4 +1,4 @@
-name: Deploy
+name: CI
 
 on:
   push:
@@ -7,35 +7,21 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  # Rust compile check across the wasm crates (the API worker, the engine worker,
+  # and the Leptos frontend). Deployment is manual via OAuth (wrangler deploy /
+  # scripts/deploy-*.sh) — no API token in CI, matching the project's OAuth-first
+  # policy and avoiding token permission issues.
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-        working-directory: backend
-      - run: npm run typecheck
-        working-directory: backend
-
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-        working-directory: backend
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: backend
+          targets: wasm32-unknown-unknown
+          components: clippy,rustfmt
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy (wasm32)
+        run: cargo clippy --target wasm32-unknown-unknown --all-targets
+      - name: build wasm crates
+        run: cargo build -p ft-worker -p ft-api -p ft-web --target wasm32-unknown-unknown

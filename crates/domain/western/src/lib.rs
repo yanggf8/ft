@@ -30,13 +30,22 @@ pub fn calculate(jd_utc: f64, lat_deg: f64, lon_east_deg: f64) -> WesternChartV3
     let planets = vec![
         ("Sun", sun_lon),
         ("Moon", moon_lon),
-        ("Mercury", to_deg(vsop87::vsop87d::mercury(jd_tt).longitude())),
+        (
+            "Mercury",
+            to_deg(vsop87::vsop87d::mercury(jd_tt).longitude()),
+        ),
         ("Venus", to_deg(vsop87::vsop87d::venus(jd_tt).longitude())),
         ("Mars", to_deg(vsop87::vsop87d::mars(jd_tt).longitude())),
-        ("Jupiter", to_deg(vsop87::vsop87d::jupiter(jd_tt).longitude())),
+        (
+            "Jupiter",
+            to_deg(vsop87::vsop87d::jupiter(jd_tt).longitude()),
+        ),
         ("Saturn", to_deg(vsop87::vsop87d::saturn(jd_tt).longitude())),
         ("Uranus", to_deg(vsop87::vsop87d::uranus(jd_tt).longitude())),
-        ("Neptune", to_deg(vsop87::vsop87d::neptune(jd_tt).longitude())),
+        (
+            "Neptune",
+            to_deg(vsop87::vsop87d::neptune(jd_tt).longitude()),
+        ),
     ];
 
     WesternChartV3::from_longitudes(planets, asc_lon, jd_utc)
@@ -59,7 +68,13 @@ mod tests {
         let jd = 2448028.5;
         let c = calculate(jd, 25.0, 121.5);
         let sun = c.planets.iter().find(|p| p.name == "Sun").unwrap();
-        assert!(sun.longitude >= 30.0 && sun.longitude < 60.0, "sun lon {} not Taurus, sign {} deg {}", sun.longitude, sun.sign, sun.degree);
+        assert!(
+            sun.longitude >= 30.0 && sun.longitude < 60.0,
+            "sun lon {} not Taurus, sign {} deg {}",
+            sun.longitude,
+            sun.sign,
+            sun.degree
+        );
     }
     #[test]
     fn moon_longitude_reasonable() {

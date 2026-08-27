@@ -3,8 +3,8 @@
 //! versions so the Stage B in-place deploy over `fortunet-api` keeps existing
 //! session / AI-metric storage bit-compatible (see `ft_schema::storage`).
 
-mod session_do;
 mod ai_mutex_do;
+mod session_do;
 
-pub use session_do::SessionDO;
 pub use ai_mutex_do::AIMutexDO;
+pub use session_do::SessionDO;

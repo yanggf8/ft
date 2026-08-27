@@ -41,5 +41,9 @@ pub fn check_user_access(subscription_tier: &str, trial_ends_at: Option<&str>) -
 fn parse_iso_ms(iso: &str) -> Option<f64> {
     let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(iso));
     let ms = d.get_time();
-    if ms.is_nan() { None } else { Some(ms) }
+    if ms.is_nan() {
+        None
+    } else {
+        Some(ms)
+    }
 }

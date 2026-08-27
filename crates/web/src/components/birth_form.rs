@@ -14,9 +14,7 @@ pub fn BirthDataForm(
     on_saved: Callback<()>,
 ) -> impl IntoView {
     let seed_hour = initial.as_ref().and_then(|u| u.birth_hour);
-    let year = RwSignal::new(
-        initial.as_ref().and_then(|u| u.birth_year).unwrap_or(1995),
-    );
+    let year = RwSignal::new(initial.as_ref().and_then(|u| u.birth_year).unwrap_or(1995));
     let month = RwSignal::new(initial.as_ref().and_then(|u| u.birth_month).unwrap_or(1));
     let day = RwSignal::new(initial.as_ref().and_then(|u| u.birth_day).unwrap_or(1));
     let hour = RwSignal::new(seed_hour.unwrap_or(12));

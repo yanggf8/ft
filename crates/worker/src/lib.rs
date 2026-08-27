@@ -31,13 +31,16 @@ async fn fetch(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
     match path.as_str() {
         "/engine/ziwei" => handle_ziwei(&req).await,
         "/engine/western" => handle_western(&req).await,
-        "/health" => Response::from_json(&serde_json::json!({ "status": "ok", "engine": "ft-worker" })),
+        "/health" => {
+            Response::from_json(&serde_json::json!({ "status": "ok", "engine": "ft-worker" }))
+        }
         _ => Response::error("not found", 404),
     }
 }
 
 fn cors_headers(res: &mut Response) -> Result<()> {
-    res.headers_mut().append("Access-Control-Allow-Origin", "*")?;
+    res.headers_mut()
+        .append("Access-Control-Allow-Origin", "*")?;
     Ok(())
 }
 

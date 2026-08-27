@@ -27,7 +27,9 @@ pub fn LoginPage() -> impl IntoView {
             let email_v = email.get_untracked();
             let result = if is_register.get_untracked() {
                 let name = full_name.get_untracked();
-                api::register(&email_v, Some(name.as_str())).await.map(|_| ())
+                api::register(&email_v, Some(name.as_str()))
+                    .await
+                    .map(|_| ())
             } else {
                 api::login(&email_v).await.map(|_| ())
             };

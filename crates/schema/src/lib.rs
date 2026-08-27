@@ -184,24 +184,44 @@ impl WesternChartV3 {
                 } else if name == "Moon" {
                     body.moon = Some(meta.clone());
                 }
-                WesternPlanet { name: name.to_string(), longitude: lon, sign, degree }
+                WesternPlanet {
+                    name: name.to_string(),
+                    longitude: lon,
+                    sign,
+                    degree,
+                }
             })
             .collect();
         let (asc_sign, asc_deg) = sign_degree(asc_lon);
-        let ascendant = WesternAscendant { longitude: asc_lon, sign: asc_sign.clone(), degree: asc_deg };
+        let ascendant = WesternAscendant {
+            longitude: asc_lon,
+            sign: asc_sign.clone(),
+            degree: asc_deg,
+        };
         let asc_sign_idx = sign_index(&asc_sign);
         let houses = (0..12)
             .map(|i| {
                 let sign_idx = (asc_sign_idx + i) % 12;
                 let sign = ZODIAC[sign_idx].to_string();
                 let cusp = (asc_sign_idx as f64 * 30.0 + i as f64 * 30.0).rem_euclid(360.0);
-                WesternHouse { index: i as u8 + 1, sign, cusp }
+                WesternHouse {
+                    index: i as u8 + 1,
+                    sign,
+                    cusp,
+                }
             })
             .collect();
         // Fall back to the ascendant's sign if Sun/Moon were absent (never in practice).
         let sun_sign = body.sun.unwrap_or_else(|| sign_meta(&asc_sign));
         let moon_sign = body.moon.unwrap_or_else(|| sign_meta(&asc_sign));
-        Self { planets, sun_sign, moon_sign, ascendant, houses, jd_utc }
+        Self {
+            planets,
+            sun_sign,
+            moon_sign,
+            ascendant,
+            houses,
+            jd_utc,
+        }
     }
 }
 
@@ -211,7 +231,20 @@ struct BodyBuilder {
     moon: Option<WesternSign>,
 }
 
-const ZODIAC: [&str; 12] = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+const ZODIAC: [&str; 12] = [
+    "Aries",
+    "Taurus",
+    "Gemini",
+    "Cancer",
+    "Leo",
+    "Virgo",
+    "Libra",
+    "Scorpio",
+    "Sagittarius",
+    "Capricorn",
+    "Aquarius",
+    "Pisces",
+];
 
 /// per-sign display metadata: `(name, symbol, element, quality)`.
 const ZODIAC_META: [(&str, &str, &str, &str); 12] = [

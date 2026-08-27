@@ -7,14 +7,19 @@
 use std::sync::{Arc, Mutex};
 use worker::*;
 
-use super::common::{apply_cache_headers, auth_user, client_ip, create_etag, embed_meta, extracted_version, is_story_chart_current, ok_json, parse_chart};
 use super::super::error;
 use super::super::services::ai::ProviderResult;
 use super::super::services::clock;
 use super::super::services::db;
 use super::super::services::engine::{self, EngineBirth};
-use super::super::services::engine_version::{CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI};
+use super::super::services::engine_version::{
+    CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI,
+};
 use super::super::services::uuid;
+use super::common::{
+    apply_cache_headers, auth_user, client_ip, create_etag, embed_meta, extracted_version,
+    is_story_chart_current, ok_json, parse_chart,
+};
 use super::R;
 
 const AI_RATE_LIMIT: u32 = 10;
@@ -485,15 +490,30 @@ async fn get_birth_data(db: &worker::D1Database, user: &str) -> Result<UserBirth
 fn anything_configured(ctx: &RouteContext<()>) -> bool {
     let res = ["IFLOW_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY"]
         .iter()
-        .any(|name| ctx.env.secret(name).map(|s| !s.to_string().is_empty()).unwrap_or(false));
+        .any(|name| {
+            ctx.env
+                .secret(name)
+                .map(|s| !s.to_string().is_empty())
+                .unwrap_or(false)
+        });
     res
 }
 
 /// Call the AI_MUTEX DO. `Ok(Some(..))` on success, `Ok(None)` on 503 (all providers
 /// failed / queue full), `Err(Response)` carries a status for other failures.
-async fn call_ai_mutex(ctx: &RouteContext<()>, chart_type: &str, chart_data: &serde_json::Value) -> Result<Option<ProviderResult>, Response> {
-    let ns = ctx.env.durable_object("AI_MUTEX").map_err(|_| error::error("ai unavailable", 503))?;
-    let stub = ns.id_from_name("global").and_then(|id| id.get_stub()).map_err(|_| error::error("ai unavailable", 503))?;
+async fn call_ai_mutex(
+    ctx: &RouteContext<()>,
+    chart_type: &str,
+    chart_data: &serde_json::Value,
+) -> Result<Option<ProviderResult>, Response> {
+    let ns = ctx
+        .env
+        .durable_object("AI_MUTEX")
+        .map_err(|_| error::error("ai unavailable", 503))?;
+    let stub = ns
+        .id_from_name("global")
+        .and_then(|id| id.get_stub())
+        .map_err(|_| error::error("ai unavailable", 503))?;
     let mut keys_map = serde_json::Map::new();
     if let Some(v) = secret_or(&ctx.env, "IFLOW_API_KEY") {
         keys_map.insert("iflow".to_string(), serde_json::Value::String(v));
@@ -510,7 +530,8 @@ async fn call_ai_mutex(ctx: &RouteContext<()>, chart_type: &str, chart_data: &se
         "interpretRequest": { "chartType": chart_type, "chartData": chart_data, "language": "zh" },
     });
     let mut init = RequestInit::new();
-    init.with_method(Method::Post).with_body(Some(body.to_string().into()));
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
     let req = Request::new_with_init("https://ai-mutex/interpret", &init)
         .map_err(|_| error::error("ai unavailable", 503))?;
     let mut res = stub
@@ -523,13 +544,35 @@ async fn call_ai_mutex(ctx: &RouteContext<()>, chart_type: &str, chart_data: &se
     let status = res.status_code();
     if status != 200 {
         let err: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
-        return Err(Response::from_json(&err).unwrap_or_else(|_| error::error("ai error", 500)).with_status(status));
+        return Err(Response::from_json(&err)
+            .unwrap_or_else(|_| error::error("ai error", 500))
+            .with_status(status));
     }
-    let data: serde_json::Value = res.json().await.map_err(|_| error::error("ai bad response", 502))?;
-    let interpretation = data.get("interpretation").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let provider = data.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let model = data.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    Ok(Some(ProviderResult { interpretation, provider, model, tokens_used: None }))
+    let data: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|_| error::error("ai bad response", 502))?;
+    let interpretation = data
+        .get("interpretation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let provider = data
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let model = data
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(Some(ProviderResult {
+        interpretation,
+        provider,
+        model,
+        tokens_used: None,
+    }))
 }
 
 fn secret_or(env: &Env, name: &str) -> Option<String> {
@@ -540,7 +583,9 @@ fn secret_or(env: &Env, name: &str) -> Option<String> {
 }
 
 fn validate_ziwei_v3(resp: &serde_json::Value) -> Result<(), String> {
-    let palaces = resp.pointer("/chart_data/palaces").and_then(|v| v.as_array());
+    let palaces = resp
+        .pointer("/chart_data/palaces")
+        .and_then(|v| v.as_array());
     if palaces.map(|a| a.len()) != Some(12) {
         return Err("palaces.length != 12".to_string());
     }

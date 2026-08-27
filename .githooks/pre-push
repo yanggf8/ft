@@ -12,7 +12,6 @@ if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
   ACTIVE_ACCOUNT=$(gh api user --jq .login 2>/dev/null || echo "")
 
   if [[ -n "$ACTIVE_ACCOUNT" ]]; then
-    # Check if active account has push access (owner or collaborator)
     PERMISSION=$(gh api "repos/$REPO_OWNER/$REPO_NAME/collaborators/$ACTIVE_ACCOUNT/permission" --jq .permission 2>/dev/null || echo "none")
     if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "write" ]]; then
       echo "❌ No push access with account '$ACTIVE_ACCOUNT' ($PERMISSION)"
@@ -23,23 +22,15 @@ if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
   fi
 fi
 
-# --- 2. Backend typecheck ---
-if [[ -f backend/tsconfig.json ]]; then
-  echo "🔍 Backend typecheck..."
-  cd backend
-  npx tsc --noEmit 2>/dev/null
-  cd ..
-  echo "✅ Backend types OK"
-fi
+# --- 2. Rust format check ---
+echo "🔍 cargo fmt --check ..."
+cargo fmt --all --check >/dev/null 2>&1 || { echo "❌ cargo fmt check failed"; exit 1; }
+echo "✅ fmt OK"
 
-# --- 3. Frontend build check ---
-if [[ -f frontend/tsconfig.json ]]; then
-  echo "🔍 Frontend typecheck..."
-  cd frontend
-  npx tsc --noEmit 2>/dev/null
-  cd ..
-  echo "✅ Frontend types OK"
-fi
+# --- 3. Rust wasm build check ---
+echo "🔍 cargo build (wasm32) ..."
+cargo check -p ft-api -p ft-worker -p ft-web --target wasm32-unknown-unknown >/dev/null 2>&1 || { echo "❌ cargo build failed (wasm32)"; exit 1; }
+echo "✅ wasm build OK"
 
 # --- 4. Branch divergence warning ---
 git fetch --quiet origin 2>/dev/null || true
@@ -50,7 +41,6 @@ if [[ -n "$REMOTE" && "$REMOTE" != "$LOCAL" ]]; then
   if [[ "$BEHIND" -gt 0 ]]; then
     echo "⚠️  Branch is $BEHIND commit(s) behind origin/main"
     echo "   Consider: git pull --no-rebase"
-    # Warning only, don't block push
   fi
 fi
 

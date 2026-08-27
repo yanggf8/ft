@@ -48,10 +48,7 @@ pub async fn fetch_engine_chart(
             let jd = jd_from_birth(birth);
             let lat = birth.latitude.unwrap_or(25.0);
             let lon = birth.longitude.unwrap_or(121.5);
-            format!(
-                "/engine/western?jdUtc={}&lat={}&lon={}",
-                jd, lat, lon
-            )
+            format!("/engine/western?jdUtc={}&lat={}&lon={}", jd, lat, lon)
         }
         _ => return Err(worker::Error::from("unknown chart type")),
     };
@@ -115,13 +112,7 @@ pub fn jd_from_birth(birth: &EngineBirth) -> f64 {
     let a = (14 - mm) / 12;
     let yyq = yy + 4800 - a;
     let mmq = mm + 12 * a - 3;
-    let jdn = dd
-        + (153 * mmq + 2) / 5
-        + 365 * yyq
-        + yyq / 4
-        - yyq / 100
-        + yyq / 400
-        - 32045;
+    let jdn = dd + (153 * mmq + 2) / 5 + 365 * yyq + yyq / 4 - yyq / 100 + yyq / 400 - 32045;
     jdn as f64 + (hh as f64 - 12.0) / 24.0
 }
 
@@ -193,7 +184,11 @@ fn tz_offset_ms(tz: &str, local_as_utc: f64) -> f64 {
             "month" => month = val.parse().unwrap_or(1.0),
             "day" => day = val.parse().unwrap_or(1.0),
             "hour" => {
-                hour = if val == "24" { 0.0 } else { val.parse().unwrap_or(0.0) }
+                hour = if val == "24" {
+                    0.0
+                } else {
+                    val.parse().unwrap_or(0.0)
+                }
             }
             "minute" => minute = val.parse().unwrap_or(0.0),
             "second" => second = val.parse().unwrap_or(0.0),

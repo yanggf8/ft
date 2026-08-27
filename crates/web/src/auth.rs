@@ -19,7 +19,10 @@ pub struct AuthCtx {
 
 impl AuthCtx {
     pub fn new() -> Self {
-        Self { user: RwSignal::new(None), loading: RwSignal::new(true) }
+        Self {
+            user: RwSignal::new(None),
+            loading: RwSignal::new(true),
+        }
     }
 
     /// Re-fetch `/api/users/me`. On failure the session is dropped, mirroring the

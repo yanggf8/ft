@@ -71,10 +71,7 @@ fn hash_str(s: &str) -> String {
     let mut hash: i32 = 0;
     for ch in s.chars() {
         let code = ch as i32; // UTF-16 code unit; ASCII inputs only in practice
-        hash = hash
-            .wrapping_shl(5)
-            .wrapping_sub(hash)
-            .wrapping_add(code);
+        hash = hash.wrapping_shl(5).wrapping_sub(hash).wrapping_add(code);
         // `hash |= 0` — ToInt32; i32 already sign-extends to the same value.
     }
     // JS `hash.toString(16)` for a negative number yields "-" + hex of magnitude.

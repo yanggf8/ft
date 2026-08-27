@@ -22,10 +22,14 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if req.method() == Method::Options {
         let mut res = Response::empty()?.with_status(204);
         decorate(&mut res, &req)?;
-        res.headers_mut()
-            .set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")?;
-        res.headers_mut()
-            .set("Access-Control-Allow-Headers", "authorization,content-type,cache-control")?;
+        res.headers_mut().set(
+            "Access-Control-Allow-Methods",
+            "GET,POST,PUT,DELETE,OPTIONS",
+        )?;
+        res.headers_mut().set(
+            "Access-Control-Allow-Headers",
+            "authorization,content-type,cache-control",
+        )?;
         res.headers_mut().set("Access-Control-Max-Age", "86400")?;
         return Ok(res);
     }
@@ -40,7 +44,12 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     // TS app.notFound returns { error: "Not found" } JSON. Worker Router's fallback
     // is plain-text 404 — normalize it to JSON so clients always get the same shape.
     if res.status_code() == 404 {
-        let ct = res.headers().get("content-type").ok().flatten().unwrap_or_default();
+        let ct = res
+            .headers()
+            .get("content-type")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
         if !ct.contains("application/json") {
             res = error::error("Not found", 404);
         }
@@ -56,15 +65,11 @@ fn decorate(res: &mut Response, req: &Request) -> Result<()> {
     res.headers_mut().set("x-request-id", &gen_request_id())?;
 
     // Security headers — mirrors backend/src/middleware/security.ts
-    res.headers_mut()
-        .set("X-Content-Type-Options", "nosniff")?;
+    res.headers_mut().set("X-Content-Type-Options", "nosniff")?;
     res.headers_mut().set("X-Frame-Options", "DENY")?;
+    res.headers_mut().set("X-XSS-Protection", "1; mode=block")?;
     res.headers_mut()
-        .set("X-XSS-Protection", "1; mode=block")?;
-    res.headers_mut().set(
-        "Referrer-Policy",
-        "strict-origin-when-cross-origin",
-    )?;
+        .set("Referrer-Policy", "strict-origin-when-cross-origin")?;
     res.headers_mut().set(
         "Permissions-Policy",
         "geolocation=(), microphone=(), camera=()",
@@ -103,7 +108,12 @@ fn decorate(res: &mut Response, req: &Request) -> Result<()> {
 /// on the exact hostname (NOT substring), and no Origin header at all -> None so
 /// no `Access-Control-Allow-*` is emitted (never `*` alongside credentials).
 fn resolve_origin(req: &Request) -> Option<String> {
-    let origin = req.headers().get("Origin").ok().flatten().filter(|v| !v.is_empty())?;
+    let origin = req
+        .headers()
+        .get("Origin")
+        .ok()
+        .flatten()
+        .filter(|v| !v.is_empty())?;
     // Parse as a full URL and compare the hostname exactly, so
     // `https://evil.com/path?next=localhost` or `https://notlocalhost.attacker.com`
     // are rejected even though they contain the literal "localhost"/"127.0.0.1".
@@ -117,7 +127,11 @@ fn resolve_origin(req: &Request) -> Option<String> {
         || host == "[::1]"
         || host.ends_with(".pages.dev")
         || host.ends_with(".workers.dev");
-    if allowed { Some(origin) } else { None }
+    if allowed {
+        Some(origin)
+    } else {
+        None
+    }
 }
 
 fn gen_request_id() -> String {

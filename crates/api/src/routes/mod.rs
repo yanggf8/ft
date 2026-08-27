@@ -37,15 +37,27 @@ pub fn router(_env: Env) -> R<'static> {
     .get_async("/health/db", |_, ctx: RouteContext<()>| async move {
         let db = match ctx.env.d1("DB") {
             Ok(db) => db,
-            Err(_) => return Ok(Response::from_json(&serde_json::json!({ "status": "error", "error": "db not ready" })).expect("ok json").with_status(500)),
+            Err(_) => {
+                return Ok(Response::from_json(
+                    &serde_json::json!({ "status": "error", "error": "db not ready" }),
+                )
+                .expect("ok json")
+                .with_status(500))
+            }
         };
         match db::first::<serde_json::Value>(&db, "SELECT 1 as ok", &[]).await {
             Ok(v) => Ok(ok_json(&serde_json::json!({ "status": "ok", "db": v }))),
-            Err(e) => Ok(Response::from_json(&serde_json::json!({ "status": "error", "error": e.to_string() })).expect("ok json").with_status(500)),
+            Err(e) => Ok(Response::from_json(
+                &serde_json::json!({ "status": "error", "error": e.to_string() }),
+            )
+            .expect("ok json")
+            .with_status(500)),
         }
     })
     .get_async("/", |_, _: RouteContext<()>| async move {
-        Ok(ok_json(&serde_json::json!({ "name": "FortuneT V2 API", "version": "1.0.0" })))
+        Ok(ok_json(
+            &serde_json::json!({ "name": "FortuneT V2 API", "version": "1.0.0" }),
+        ))
     })
 }
 

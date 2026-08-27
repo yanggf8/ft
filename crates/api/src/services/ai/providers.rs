@@ -51,8 +51,14 @@ pub async fn call_provider(
 
     let (url, auth) = match name {
         "iflow" => (IFLOW_API_URL.to_string(), format!("Bearer {}", api_key)),
-        "groq" => (format!("{}/chat/completions", GROQ_BASE), format!("Bearer {}", api_key)),
-        "cerebras" => (format!("{}/chat/completions", CEREBRAS_BASE), format!("Bearer {}", api_key)),
+        "groq" => (
+            format!("{}/chat/completions", GROQ_BASE),
+            format!("Bearer {}", api_key),
+        ),
+        "cerebras" => (
+            format!("{}/chat/completions", CEREBRAS_BASE),
+            format!("Bearer {}", api_key),
+        ),
         other => return Err(format!("unknown provider {}", other)),
     };
 
@@ -115,5 +121,6 @@ async fn send_with_timeout(req: Request) -> Result<worker::Response, Error> {
             "provider timeout after {}ms",
             PROVIDER_TIMEOUT_MS
         ))),
-    }; x
+    };
+    x
 }

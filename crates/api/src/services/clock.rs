@@ -11,7 +11,10 @@ pub fn now_ms() -> f64 {
 
 /// Current time as an ISO-8601 UTC string (mirrors `new Date().toISOString()`).
 pub fn now_iso() -> String {
-    JsDate::new_0().to_iso_string().as_string().unwrap_or_default()
+    JsDate::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default()
 }
 
 /// Current date as a `YYYY-MM-DD` string (mirrors `new Date().toISOString().split('T')[0]`).

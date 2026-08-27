@@ -61,7 +61,11 @@ fn storage() -> Option<web_sys::Storage> {
 }
 
 pub fn get_session() -> Option<String> {
-    storage()?.get_item(SESSION_KEY).ok().flatten().filter(|s| !s.is_empty())
+    storage()?
+        .get_item(SESSION_KEY)
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty())
 }
 
 pub fn set_session(session_id: Option<&str>) {
@@ -122,7 +126,10 @@ async fn send_json<B: Serialize, T: DeserializeOwned>(
         .header("Content-Type", "application/json")
         .json(body)
         .map_err(|e| ApiErr::Network(e.to_string()))?;
-    let resp = req.send().await.map_err(|e| ApiErr::Network(e.to_string()))?;
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
     decode(resp).await
 }
 
@@ -149,7 +156,9 @@ pub async fn register(email: &str, full_name: Option<&str>) -> Result<SessionRes
 }
 
 pub async fn login(email: &str) -> Result<SessionResponse, ApiErr> {
-    let body = LoginRequest { email: email.to_string() };
+    let body = LoginRequest {
+        email: email.to_string(),
+    };
     let res: SessionResponse = send_json(Request::post(&url("/api/auth/login")), &body).await?;
     set_session(Some(&res.sessionId));
     Ok(res)

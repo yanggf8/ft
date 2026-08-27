@@ -3,9 +3,9 @@
 
 use worker::*;
 
-use super::common::{apply_cache_headers, auth_user, ok_json};
 use super::super::error;
 use super::super::services::{billing, birth_hash, db};
+use super::common::{apply_cache_headers, auth_user, ok_json};
 use super::R;
 
 #[derive(Debug, serde::Deserialize)]
@@ -28,21 +28,32 @@ struct UserRow {
 
 #[derive(Debug, serde::Deserialize)]
 struct BirthBody {
-    #[serde(default)] birth_year: Option<i64>,
-    #[serde(default)] birth_month: Option<i64>,
-    #[serde(default)] birth_day: Option<i64>,
-    #[serde(default)] birth_hour: Option<i64>,
-    #[serde(default)] birth_minute: Option<i64>,
-    #[serde(default)] gender: Option<String>,
-    #[serde(default)] timezone: Option<String>,
-    #[serde(default)] latitude: Option<f64>,
-    #[serde(default)] longitude: Option<f64>,
+    #[serde(default)]
+    birth_year: Option<i64>,
+    #[serde(default)]
+    birth_month: Option<i64>,
+    #[serde(default)]
+    birth_day: Option<i64>,
+    #[serde(default)]
+    birth_hour: Option<i64>,
+    #[serde(default)]
+    birth_minute: Option<i64>,
+    #[serde(default)]
+    gender: Option<String>,
+    #[serde(default)]
+    timezone: Option<String>,
+    #[serde(default)]
+    latitude: Option<f64>,
+    #[serde(default)]
+    longitude: Option<f64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct ProfileBody {
-    #[serde(default)] full_name: Option<String>,
-    #[serde(default)] avatar_url: Option<String>,
+    #[serde(default)]
+    full_name: Option<String>,
+    #[serde(default)]
+    avatar_url: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -237,6 +248,10 @@ fn is_valid_url(s: &str) -> bool {
     if s.contains(' ') {
         return false;
     }
-    let after_scheme = if lower.starts_with("https://") { &s[8..] } else { &s[7..] };
+    let after_scheme = if lower.starts_with("https://") {
+        &s[8..]
+    } else {
+        &s[7..]
+    };
     after_scheme.contains('.') && !after_scheme.is_empty()
 }

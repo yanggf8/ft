@@ -5,12 +5,12 @@
 use std::sync::{Arc, Mutex};
 use worker::*;
 
-use super::common::{client_ip, ok_json};
 use super::super::error;
 use super::super::services::billing;
 use super::super::services::clock;
 use super::super::services::db;
 use super::super::services::uuid;
+use super::common::{client_ip, ok_json};
 use super::R;
 
 const RATE_LIMIT: u32 = 10;
@@ -150,7 +150,8 @@ async fn create_session(ctx: &RouteContext<()>, user_id: &str, email: &str) -> R
     let stub = ns.id_from_name(&session_id)?.get_stub()?;
     let body = serde_json::json!({ "userId": user_id, "email": email });
     let mut init = RequestInit::new();
-    init.with_method(Method::Post).with_body(Some(body.to_string().into()));
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
     let res = stub
         .fetch_with_request(Request::new_with_init("http://do/create", &init)?)
         .await?;

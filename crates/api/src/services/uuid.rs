@@ -30,8 +30,8 @@ fn fallback_uuid() -> String {
             s.push('-');
         }
         let b = match i {
-            6 => (b & 0x0f) | 0x40,   // version 4
-            8 => (b & 0x3f) | 0x80,   // variant 10
+            6 => (b & 0x0f) | 0x40, // version 4
+            8 => (b & 0x3f) | 0x80, // variant 10
             _ => *b,
         };
         s.push_str(&format!("{:02x}", b));

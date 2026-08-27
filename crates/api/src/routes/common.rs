@@ -3,14 +3,19 @@
 use worker::*;
 
 use super::super::error;
-use super::super::services::engine_version::{CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI};
+use super::super::services::engine_version::{
+    CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI,
+};
 
 pub fn ok_json(v: &serde_json::Value, status: u16) -> Response {
     Response::from_json(v).expect("ok json").with_status(status)
 }
 
 pub fn client_ip(req: &Request) -> String {
-    req.headers().get("cf-connecting-ip").ok().flatten()
+    req.headers()
+        .get("cf-connecting-ip")
+        .ok()
+        .flatten()
         .or_else(|| req.headers().get("x-forwarded-for").ok().flatten())
         .unwrap_or_else(|| "unknown".to_string())
 }
@@ -80,10 +85,16 @@ pub fn parse_chart(raw: Option<&str>) -> serde_json::Value {
 /// Extract the stored engine version from a parsed chart (meta.engineVersionZiwei, or
 /// top-level engineVersion). Mirrors the TS `storedVersion` read in charts.ts.
 pub fn extracted_version(parsed: &serde_json::Value) -> String {
-    if let Some(v) = parsed.pointer("/meta/engineVersionZiwei").and_then(|x| x.as_str()) {
+    if let Some(v) = parsed
+        .pointer("/meta/engineVersionZiwei")
+        .and_then(|x| x.as_str())
+    {
         return v.to_string();
     }
-    if let Some(v) = parsed.pointer("/meta/engineVersionWestern").and_then(|x| x.as_str()) {
+    if let Some(v) = parsed
+        .pointer("/meta/engineVersionWestern")
+        .and_then(|x| x.as_str())
+    {
         return v.to_string();
     }
     if let Some(v) = parsed.get("engineVersion").and_then(|x| x.as_str()) {
@@ -94,31 +105,56 @@ pub fn extracted_version(parsed: &serde_json::Value) -> String {
 
 /// Embed per-type engine version + schema version into stored chart data (mirrors the
 /// TS `chartDataWithVersion` builder). Always writes `meta` even when absent.
-pub fn embed_meta(mut chart: serde_json::Value, div_type: &str, expected_version: &str) -> serde_json::Value {
+pub fn embed_meta(
+    mut chart: serde_json::Value,
+    div_type: &str,
+    expected_version: &str,
+) -> serde_json::Value {
     // Ensure `meta` exists — TS always spreads `...(chart.meta ?? {})` so we must create it.
     let has_meta = chart.get("meta").and_then(|m| m.as_object()).is_some();
     if has_meta {
         if let Some(meta) = chart.get_mut("meta").and_then(|m| m.as_object_mut()) {
             if div_type == "ziwei" {
-                meta.insert("engineVersionZiwei".into(), serde_json::json!(expected_version));
+                meta.insert(
+                    "engineVersionZiwei".into(),
+                    serde_json::json!(expected_version),
+                );
             } else {
-                meta.insert("engineVersionWestern".into(), serde_json::json!(expected_version));
+                meta.insert(
+                    "engineVersionWestern".into(),
+                    serde_json::json!(expected_version),
+                );
             }
-            meta.insert("chartSchemaVersion".into(), serde_json::json!(CHART_SCHEMA_VERSION));
+            meta.insert(
+                "chartSchemaVersion".into(),
+                serde_json::json!(CHART_SCHEMA_VERSION),
+            );
         }
     } else if let Some(obj) = chart.as_object_mut() {
         let mut new_meta = serde_json::Map::new();
         if div_type == "ziwei" {
-            new_meta.insert("engineVersionZiwei".into(), serde_json::json!(expected_version));
+            new_meta.insert(
+                "engineVersionZiwei".into(),
+                serde_json::json!(expected_version),
+            );
         } else {
-            new_meta.insert("engineVersionWestern".into(), serde_json::json!(expected_version));
+            new_meta.insert(
+                "engineVersionWestern".into(),
+                serde_json::json!(expected_version),
+            );
         }
-        new_meta.insert("chartSchemaVersion".into(), serde_json::json!(CHART_SCHEMA_VERSION));
+        new_meta.insert(
+            "chartSchemaVersion".into(),
+            serde_json::json!(CHART_SCHEMA_VERSION),
+        );
         obj.insert("meta".into(), serde_json::Value::Object(new_meta));
     }
     if let Some(obj) = chart.as_object_mut() {
         obj.insert("engineVersion".into(), serde_json::json!(expected_version));
-        obj.insert("chartSchemaVersion".into(), serde_json::json!(CHART_SCHEMA_VERSION));
+        obj.insert(
+            "chartSchemaVersion".into(),
+            serde_json::json!(CHART_SCHEMA_VERSION),
+        );
     }
     chart
 }
@@ -146,8 +182,14 @@ pub fn is_story_chart_current(raw_chart: Option<&str>) -> bool {
     if parsed.is_null() {
         return false;
     }
-    parsed.pointer("/meta/engineVersionZiwei").and_then(|x| x.as_str()) == Some(ENGINE_VERSION_ZIWEI)
-        && parsed.pointer("/meta/engineVersionWestern").and_then(|x| x.as_str()) == Some(ENGINE_VERSION_WESTERN)
+    parsed
+        .pointer("/meta/engineVersionZiwei")
+        .and_then(|x| x.as_str())
+        == Some(ENGINE_VERSION_ZIWEI)
+        && parsed
+            .pointer("/meta/engineVersionWestern")
+            .and_then(|x| x.as_str())
+            == Some(ENGINE_VERSION_WESTERN)
         && parsed
             .pointer("/meta/chartSchemaVersion")
             .and_then(|x| x.as_number())

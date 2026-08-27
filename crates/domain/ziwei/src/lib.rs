@@ -4,14 +4,17 @@
 use ft_schema::*;
 use x_iztro::{by_solar, Config, Gender, Language};
 
-const EARTHLY_BRANCHES: [&str; 12] =
-    ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+const EARTHLY_BRANCHES: [&str; 12] = [
+    "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥",
+];
 const YANG_STEMS: [&str; 5] = ["甲", "丙", "戊", "庚", "壬"];
 
 /// hour -> iztro time_index. Mirrors backend iztro-adapter.ts timeIndexFromHour:
 /// hour 23 -> 12 (晚子); else branch = EARTHLY_BRANCHES[(hour+1)/2 % 12] index.
 pub fn hour_to_time_index(hour: u8) -> u8 {
-    if hour == 23 { return 12; }
+    if hour == 23 {
+        return 12;
+    }
     let branch_idx = ((hour as usize + 1) / 2) % 12;
     branch_idx as u8
 }
@@ -62,11 +65,24 @@ fn parse_four_pillars(dto: &serde_json::Value) -> StemBranchX4 {
     let sb = |key: &str| -> StemBranch {
         let arr = cd[key].as_array().cloned().unwrap_or_default();
         StemBranch {
-            stem: arr.first().and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            branch: arr.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            stem: arr
+                .first()
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            branch: arr
+                .get(1)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         }
     };
-    StemBranchX4 { year: sb("yearly"), month: sb("monthly"), day: sb("daily"), hour: sb("hourly") }
+    StemBranchX4 {
+        year: sb("yearly"),
+        month: sb("monthly"),
+        day: sb("daily"),
+        hour: sb("hourly"),
+    }
 }
 
 /// Reorder x-iztro decadal (branch-ordered, 寅-first) into production order:
@@ -89,8 +105,14 @@ fn reorder_major_limits(
                     by_palace[pi] = Some(MajorLimit {
                         start_age: start as u8,
                         end_age: range.get(1).and_then(|v| v.as_u64()).unwrap_or(0) as u8,
-                        stem: p["decadal"]["heavenlyStem"].as_str().unwrap_or("").to_string(),
-                        branch: p["decadal"]["earthlyBranch"].as_str().unwrap_or("").to_string(),
+                        stem: p["decadal"]["heavenlyStem"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string(),
+                        branch: p["decadal"]["earthlyBranch"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string(),
                         palace_index: pi as u8,
                     });
                 }
@@ -106,7 +128,11 @@ fn reorder_major_limits(
         if let Some(Some(m)) = by_palace.get(idx) {
             result.push(m.clone());
         }
-        idx = if shun { (idx + 1) % 12 } else { (idx + 11) % 12 };
+        idx = if shun {
+            (idx + 1) % 12
+        } else {
+            (idx + 11) % 12
+        };
     }
     result
 }
@@ -118,19 +144,37 @@ pub fn calculate(
     fix_leap: bool,
 ) -> Result<ZiWeiChartV3, String> {
     let is_male = matches!(gender, "male" | "M" | "男");
-    let g = if is_male { Gender::Male } else { Gender::Female };
-    let astrolabe =
-        by_solar(solar_date, time_index, g, fix_leap, Language::ZhTW, Config::default())
-            .map_err(|e| e.to_string())?;
+    let g = if is_male {
+        Gender::Male
+    } else {
+        Gender::Female
+    };
+    let astrolabe = by_solar(
+        solar_date,
+        time_index,
+        g,
+        fix_leap,
+        Language::ZhTW,
+        Config::default(),
+    )
+    .map_err(|e| e.to_string())?;
     let dto = serde_json::to_value(astrolabe.to_dto()).map_err(|e| e.to_string())?;
 
     let four_pillars = parse_four_pillars(&dto);
-    let soul_branch = dto["earthlyBranchOfSoulPalace"].as_str().unwrap_or("").to_string();
-    let body_branch = dto["earthlyBranchOfBodyPalace"].as_str().unwrap_or("").to_string();
+    let soul_branch = dto["earthlyBranchOfSoulPalace"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let body_branch = dto["earthlyBranchOfBodyPalace"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
     let soul_idx = branch_index(&soul_branch);
     let body_idx = branch_index(&body_branch);
     let five_element = dto["fiveElementsClass"].as_str().unwrap_or("").to_string();
-    let is_leap = dto["rawDates"]["lunarDate"]["isLeap"].as_bool().unwrap_or(false);
+    let is_leap = dto["rawDates"]["lunarDate"]["isLeap"]
+        .as_bool()
+        .unwrap_or(false);
     let year_stem = four_pillars.year.stem.clone();
 
     let raw_palaces = dto["palaces"].as_array().cloned().unwrap_or_default();
@@ -161,28 +205,53 @@ pub fn calculate(
     }
 
     let palaces: Vec<ft_schema::ZiWeiPalaceV3> = (0..12)
-        .map(|i| ground[i].clone().unwrap_or_else(|| ft_schema::ZiWeiPalaceV3 {
-            index: i as u8,
-            name: String::new(),
-            branch: EARTHLY_BRANCHES[i].to_string(),
-            stem: String::new(),
-            stars: Vec::new(),
-            is_life_palace: Some(i == soul_idx),
-            is_body_palace: Some(i == body_idx),
-        }))
+        .map(|i| {
+            ground[i]
+                .clone()
+                .unwrap_or_else(|| ft_schema::ZiWeiPalaceV3 {
+                    index: i as u8,
+                    name: String::new(),
+                    branch: EARTHLY_BRANCHES[i].to_string(),
+                    stem: String::new(),
+                    stars: Vec::new(),
+                    is_life_palace: Some(i == soul_idx),
+                    is_body_palace: Some(i == body_idx),
+                })
+        })
         .collect();
 
     let major_limits = reorder_major_limits(&raw_palaces, soul_idx, &year_stem, is_male);
     let birth_info = BirthInfoV3 {
         solar: SolarDate {
-            year: solar_date.split('-').nth(0).and_then(|x| x.parse().ok()).unwrap_or(0),
-            month: solar_date.split('-').nth(1).and_then(|x| x.parse().ok()).unwrap_or(0),
-            day: solar_date.split('-').nth(2).and_then(|x| x.parse().ok()).unwrap_or(0),
+            year: solar_date
+                .split('-')
+                .nth(0)
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0),
+            month: solar_date
+                .split('-')
+                .nth(1)
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0),
+            day: solar_date
+                .split('-')
+                .nth(2)
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0),
         },
         lunar: parse_lunar(&dto),
         hour: time_index,
-        hour_branch: EARTHLY_BRANCHES[if time_index == 12 { 0 } else { time_index as usize }].to_string(),
-        gender: if is_male { "男".to_string() } else { "女".to_string() },
+        hour_branch: EARTHLY_BRANCHES[if time_index == 12 {
+            0
+        } else {
+            time_index as usize
+        }]
+        .to_string(),
+        gender: if is_male {
+            "男".to_string()
+        } else {
+            "女".to_string()
+        },
     };
 
     Ok(ZiWeiChartV3 {
@@ -219,9 +288,9 @@ mod tests {
     fn hour_to_time_index_matches_prod() {
         // prod timeIndexFromHour: 23->12; else branch[(hour+1)/2%12]
         assert_eq!(hour_to_time_index(23), 12); // 晚子
-        assert_eq!(hour_to_time_index(0), 0);   // 早子
-        assert_eq!(hour_to_time_index(14), 7);  // 未
-        assert_eq!(hour_to_time_index(8), 4);   // 辰
+        assert_eq!(hour_to_time_index(0), 0); // 早子
+        assert_eq!(hour_to_time_index(14), 7); // 未
+        assert_eq!(hour_to_time_index(8), 4); // 辰
         assert_eq!(hour_to_time_index(20), 10); // 戌
     }
     #[test]

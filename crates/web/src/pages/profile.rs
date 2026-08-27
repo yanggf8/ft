@@ -13,7 +13,11 @@ pub fn ProfilePage() -> impl IntoView {
 
     // If the user has no birth data yet, show the form once on first render.
     Effect::new(move |_| {
-        let needs = !auth.user.get_untracked().map(|u| u.hasBirthData).unwrap_or(true);
+        let needs = !auth
+            .user
+            .get_untracked()
+            .map(|u| u.hasBirthData)
+            .unwrap_or(true);
         if needs && !show_form.get_untracked() {
             show_form.set(true);
         }
