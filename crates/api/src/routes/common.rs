@@ -85,6 +85,12 @@ pub fn parse_chart(raw: Option<&str>) -> serde_json::Value {
 /// Extract the stored engine version from a parsed chart (meta.engineVersionZiwei, or
 /// top-level engineVersion). Mirrors the TS `storedVersion` read in charts.ts.
 pub fn extracted_version(parsed: &serde_json::Value) -> String {
+    // Only `meta.engineVersion*` counts as "current". Do NOT fall back to the
+    // top-level `engineVersion` written by the Phase A/B worker: a western cache
+    // created before `embed_meta` started writing `meta` has no `meta.engineVersionWestern`,
+    // and the old top-level `engineVersion` would have matched the expected version and
+    // left a STALE (pre-fix) chart cached forever. A meta-less chart is now treated as
+    // stale → recalculated on next GET. (§8.2 revealed the cached western asc=173°.)
     if let Some(v) = parsed
         .pointer("/meta/engineVersionZiwei")
         .and_then(|x| x.as_str())
@@ -95,9 +101,6 @@ pub fn extracted_version(parsed: &serde_json::Value) -> String {
         .pointer("/meta/engineVersionWestern")
         .and_then(|x| x.as_str())
     {
-        return v.to_string();
-    }
-    if let Some(v) = parsed.get("engineVersion").and_then(|x| x.as_str()) {
         return v.to_string();
     }
     String::new()
