@@ -98,23 +98,26 @@ fn decorate(res: &mut Response, req: &Request) -> Result<()> {
     Ok(())
 }
 
-/// Resolves the allowed origin per TS logic:
-///   if !origin -> "*"
-///   if origin contains localhost / 127.0.0.1 -> origin
-///   if origin ends with .pages.dev / .workers.dev -> origin
-///   else -> null (None)
+/// Resolves the allowed origin. Mirrors the TS `cors()` origin callback: only
+/// localhost / 127.0.0.1 and `*.pages.dev` / `*.workers.dev` are allowed, matched
+/// on the exact hostname (NOT substring), and no Origin header at all -> None so
+/// no `Access-Control-Allow-*` is emitted (never `*` alongside credentials).
 fn resolve_origin(req: &Request) -> Option<String> {
-    let origin = match req.headers().get("Origin").ok().flatten() {
-        Some(v) if !v.is_empty() => v,
-        _ => return Some("*".to_string()),
+    let origin = req.headers().get("Origin").ok().flatten().filter(|v| !v.is_empty())?;
+    // Parse as a full URL and compare the hostname exactly, so
+    // `https://evil.com/path?next=localhost` or `https://notlocalhost.attacker.com`
+    // are rejected even though they contain the literal "localhost"/"127.0.0.1".
+    let url = match web_sys::Url::new(&origin) {
+        Ok(u) => u,
+        Err(_) => return None,
     };
-    if origin.contains("localhost") || origin.contains("127.0.0.1") {
-        return Some(origin);
-    }
-    if origin.ends_with(".pages.dev") || origin.ends_with(".workers.dev") {
-        return Some(origin);
-    }
-    None
+    let host = url.hostname();
+    let allowed = host == "localhost"
+        || host == "127.0.0.1"
+        || host == "[::1]"
+        || host.ends_with(".pages.dev")
+        || host.ends_with(".workers.dev");
+    if allowed { Some(origin) } else { None }
 }
 
 fn gen_request_id() -> String {
