@@ -18,6 +18,7 @@ export interface Env {
   SESSION_DO: DurableObjectNamespace;
   AI_MUTEX: DurableObjectNamespace;
   STORAGE: R2Bucket;
+  FT_ENGINE: Fetcher;
   ENVIRONMENT: string;
   IFLOW_API_KEY?: string;
   GROQ_API_KEY?: string;

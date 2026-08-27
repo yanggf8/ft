@@ -17,7 +17,9 @@ pub struct ZiWeiStarV3 {
     pub name: String,
     #[serde(rename = "type")]
     pub star_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub brightness: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sihua: Option<String>,
 }
 
@@ -29,8 +31,10 @@ pub struct ZiWeiPalaceV3 {
     pub stem: String,
     pub stars: Vec<ZiWeiStarV3>,
     #[serde(rename = "isLifePalace")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub is_life_palace: Option<bool>,
     #[serde(rename = "isBodyPalace")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub is_body_palace: Option<bool>,
 }
 

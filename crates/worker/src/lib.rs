@@ -9,8 +9,7 @@ use worker::*;
 #[derive(Deserialize)]
 struct ZiweiQuery {
     date: String,
-    #[serde(rename = "timeIndex")]
-    time_index: u8,
+    hour: u8,
     gender: Option<String>,
     #[serde(rename = "fixLeap")]
     fix_leap: Option<bool>,
@@ -27,8 +26,9 @@ struct WesternQuery {
 #[event(fetch)]
 async fn fetch(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
     let url = req.url()?;
-    let path = url.path();
-    match path {
+    // Normalize duplicate slashes (service bindings may forward `//engine/...`).
+    let path = url.path().replace("//", "/");
+    match path.as_str() {
         "/engine/ziwei" => handle_ziwei(&req).await,
         "/engine/western" => handle_western(&req).await,
         "/health" => Response::from_json(&serde_json::json!({ "status": "ok", "engine": "ft-worker" })),
@@ -42,10 +42,21 @@ fn cors_headers(res: &mut Response) -> Result<()> {
 }
 
 async fn handle_ziwei(req: &Request) -> Result<Response> {
-    let q: ZiweiQuery = req.query()?;
+    let q: ZiweiQuery = match req.query() {
+        Ok(q) => q,
+        Err(_) => {
+            let mut r = Response::from_json(&serde_json::json!({
+                "error": "missing required params: date, hour",
+                "code": "MISSING_PARAMS"
+            }))?;
+            r = r.with_status(400);
+            return Ok(r);
+        }
+    };
     let gender = q.gender.unwrap_or_else(|| "male".to_string());
     let fix_leap = q.fix_leap.unwrap_or(true);
-    match ft_ziwei::calculate(&q.date, q.time_index, &gender, fix_leap) {
+    let time_index = ft_ziwei::hour_to_time_index(q.hour);
+    match ft_ziwei::calculate(&q.date, time_index, &gender, fix_leap) {
         Ok(chart) => {
             let mut r = Response::from_json(&serde_json::json!({
                 "chart": chart,
@@ -63,7 +74,17 @@ async fn handle_ziwei(req: &Request) -> Result<Response> {
 }
 
 async fn handle_western(req: &Request) -> Result<Response> {
-    let q: WesternQuery = req.query()?;
+    let q: WesternQuery = match req.query() {
+        Ok(q) => q,
+        Err(_) => {
+            let mut r = Response::from_json(&serde_json::json!({
+                "error": "missing required params: jdUtc",
+                "code": "MISSING_PARAMS"
+            }))?;
+            r = r.with_status(400);
+            return Ok(r);
+        }
+    };
     let lat = q.lat.unwrap_or(25.0);
     let lon = q.lon.unwrap_or(121.5);
     let chart = ft_western::calculate(q.jd_utc, lat, lon);

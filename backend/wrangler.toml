@@ -22,6 +22,11 @@ class_name = "AIMutexDO"
 binding = "STORAGE"
 bucket_name = "fortunet-storage"
 
+# Rust engine Worker (service binding) — replaces TS iztroAdapter/westernCalculator
+[[services]]
+binding = "FT_ENGINE"
+service = "fortunet-engine"
+
 # Environment variables
 [vars]
 ENVIRONMENT = "development"

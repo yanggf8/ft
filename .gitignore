@@ -30,3 +30,6 @@ npm-debug.log*
 # Rust
 target/
 Cargo.lock
+
+# Rust worker-build output
+crates/worker/build/

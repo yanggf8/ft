@@ -8,6 +8,14 @@ const EARTHLY_BRANCHES: [&str; 12] =
     ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
 const YANG_STEMS: [&str; 5] = ["甲", "丙", "戊", "庚", "壬"];
 
+/// hour -> iztro time_index. Mirrors backend iztro-adapter.ts timeIndexFromHour:
+/// hour 23 -> 12 (晚子); else branch = EARTHLY_BRANCHES[(hour+1)/2 % 12] index.
+pub fn hour_to_time_index(hour: u8) -> u8 {
+    if hour == 23 { return 12; }
+    let branch_idx = ((hour as usize + 1) / 2) % 12;
+    branch_idx as u8
+}
+
 fn branch_index(b: &str) -> usize {
     EARTHLY_BRANCHES.iter().position(|x| *x == b).unwrap_or(0)
 }
@@ -206,6 +214,15 @@ mod tests {
         let yin = &c.palaces[branch_index("寅")];
         assert_eq!(yin.name, "田宅");
         assert!(yin.stars.iter().any(|s| s.name == "廉貞"));
+    }
+    #[test]
+    fn hour_to_time_index_matches_prod() {
+        // prod timeIndexFromHour: 23->12; else branch[(hour+1)/2%12]
+        assert_eq!(hour_to_time_index(23), 12); // 晚子
+        assert_eq!(hour_to_time_index(0), 0);   // 早子
+        assert_eq!(hour_to_time_index(14), 7);  // 未
+        assert_eq!(hour_to_time_index(8), 4);   // 辰
+        assert_eq!(hour_to_time_index(20), 10); // 戌
     }
     #[test]
     fn leap_month_is_leap() {

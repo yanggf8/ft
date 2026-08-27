@@ -2,8 +2,6 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import { authMiddleware } from '../middleware/auth';
 import { setCacheHeaders, createETag } from '../middleware/cache';
-import { iztroAdapter } from '../services/ziwei/iztro-adapter';
-import { westernCalculator } from '../services/western';
 import { ENGINE_VERSION_ZIWEI, ENGINE_VERSION_WESTERN, CHART_SCHEMA_VERSION } from '../services/engine-version';
 import { ZiWeiV3ResponseSchema } from '../shared/schemas/ziwei-v3';
 
@@ -52,6 +50,88 @@ function isStoryChartCurrent(rawChartData: string | null | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+
+// ── Rust engine service binding ─────────────────────────────────────────────
+// The ziwei/western calculations moved to the Rust `fortunet-engine` Worker
+// (service binding FT_ENGINE). Production adapter logic (hour→timeIndex,
+// zh-TW mapping, sihua codes) is replicated there; this helper only marshals
+// birth data and unwraps the engine's { chart } envelope.
+
+interface EngineBirth {
+  year: number | null;
+  month: number | null;
+  day: number | null;
+  hour: number;
+  gender: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  timezone: string | null;
+}
+
+async function fetchEngineChart(
+  fetcher: Fetcher,
+  type: 'ziwei' | 'western',
+  birth: EngineBirth,
+): Promise<Record<string, unknown>> {
+  const date = `${birth.year}-${String(birth.month).padStart(2, '0')}-${String(birth.day).padStart(2, '0')}`;
+  const url = type === 'ziwei'
+    ? `/engine/ziwei?date=${encodeURIComponent(date)}&hour=${birth.hour}&gender=${encodeURIComponent(birth.gender ?? 'male')}&fixLeap=true`
+    : `/engine/western?jdUtc=${encodeURIComponent(String(jdFromBirth(birth)))}&lat=${encodeURIComponent(String(birth.latitude ?? 25))}&lon=${encodeURIComponent(String(birth.longitude ?? 121.5))}`;
+  // Service binding: host is ignored; path+query forwarded. Ensure single slash.
+  const fullUrl = `https://ft-engine${url.startsWith('/') ? '' : '/'}${url}`;
+
+  const res = await fetcher.fetch(fullUrl);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`ft-engine ${type} failed: ${res.status} ${body.slice(0, 200)}`);
+  }
+  const data = await res.json() as { chart?: Record<string, unknown>; error?: string };
+  if (!data.chart) throw new Error(`ft-engine ${type}: no chart in response ${JSON.stringify(data).slice(0, 200)}`);
+  return data.chart;
+}
+
+// Julian Day (UT) from local civil date + hour + IANA timezone.
+// Converts local birth time to UTC via Intl tz-offset reversal, then Fliegel–Van Flandern.
+function jdFromBirth(birth: EngineBirth): number {
+  const y = birth.year ?? 2000;
+  const m = birth.month ?? 1;
+  const d = birth.day ?? 1;
+  const h = birth.hour ?? 12;
+  const tz = birth.timezone ?? 'Asia/Taipei';
+
+  // Build a UTC instant guessed as if the local wall-clock were UTC (padded hour 24→0).
+  const localAsUtc = Date.UTC(y, m - 1, d, h === 24 ? 0 : h, 0, 0);
+  // Ask Intl what time this instant has in `tz`, and measure the offset it reports.
+  let offsetMs: number;
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+    const parts = Object.fromEntries(dtf.formatToParts(new Date(localAsUtc)).map(p => [p.type, p.value]));
+    const localHour = parts.hour === '24' ? 0 : Number(parts.hour);
+    const localAsUtc2 = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), localHour, Number(parts.minute), Number(parts.second));
+    offsetMs = localAsUtc2 - localAsUtc;
+  } catch {
+    offsetMs = 0; // unknown tz — fall back to treating local wall-clock as UTC
+  }
+
+  const utcMs = localAsUtc - offsetMs;
+  const u = new Date(utcMs);
+  const yy = u.getUTCFullYear();
+  const mm = u.getUTCMonth() + 1;
+  const dd = u.getUTCDate();
+  const hh = u.getUTCHours();
+  // Fliegel–Van Flandern
+  const a = Math.floor((14 - mm) / 12);
+  const yyq = yy + 4800 - a;
+  const mmq = mm + 12 * a - 3;
+  const jdn = dd + Math.floor((153 * mmq + 2) / 5) + 365 * yyq + Math.floor(yyq / 4)
+    - Math.floor(yyq / 100) + Math.floor(yyq / 400) - 32045;
+  // Meeus: JD = JDN + (hh-12)/24. JDN is the integer day number at 00:00 UT.
+  return jdn + (hh - 12) / 24;
 }
 
 // Get user's birth data
@@ -137,24 +217,15 @@ charts.post('/story/generate', authMiddleware, async (c) => {
     return c.json({ story: existing.ai_interpretation, fromCache: true });
   }
 
-  // Compute both charts and merge
+  // Compute both charts and merge (via Rust engine service binding)
   const hour = birth.birth_hour ?? 12;
-  const ziwei = iztroAdapter.calculate({
-    year: birth.birth_year,
-    month: birth.birth_month,
-    day: birth.birth_day,
-    hour,
-    minute: birth.birth_minute ?? undefined,
-    gender: birth.gender as 'male' | 'female'
+  const ziwei = await fetchEngineChart(c.env.FT_ENGINE, 'ziwei', {
+    year: birth.birth_year, month: birth.birth_month, day: birth.birth_day,
+    hour, gender: birth.gender, latitude: null, longitude: null, timezone: birth.timezone,
   });
-  const western = westernCalculator.calculate({
-    year: birth.birth_year,
-    month: birth.birth_month,
-    day: birth.birth_day,
-    hour,
-    minute: birth.birth_minute ?? undefined,
-    latitude: birth.latitude ?? undefined,
-    longitude: birth.longitude ?? undefined
+  const western = await fetchEngineChart(c.env.FT_ENGINE, 'western', {
+    year: birth.birth_year, month: birth.birth_month, day: birth.birth_day,
+    hour, gender: null, latitude: birth.latitude, longitude: birth.longitude, timezone: birth.timezone,
   });
   const merged = {
     ziwei,
@@ -277,23 +348,14 @@ charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: fal
     if (!birth.gender) {
       return c.json({ error: 'Gender required for ZiWei', code: 'NO_GENDER' }, 400);
     }
-    chartData = iztroAdapter.calculate({
-      year: birth.birth_year,
-      month: birth.birth_month,
-      day: birth.birth_day,
-      hour,
-      minute: birth.birth_minute ?? undefined,
-      gender: birth.gender as 'male' | 'female'
+    chartData = await fetchEngineChart(c.env.FT_ENGINE, 'ziwei', {
+      year: birth.birth_year, month: birth.birth_month, day: birth.birth_day,
+      hour, gender: birth.gender, latitude: null, longitude: null, timezone: birth.timezone,
     });
   } else {
-    chartData = westernCalculator.calculate({
-      year: birth.birth_year,
-      month: birth.birth_month,
-      day: birth.birth_day,
-      hour,
-      minute: birth.birth_minute ?? undefined,
-      latitude: birth.latitude ?? undefined,
-      longitude: birth.longitude ?? undefined
+    chartData = await fetchEngineChart(c.env.FT_ENGINE, 'western', {
+      year: birth.birth_year, month: birth.birth_month, day: birth.birth_day,
+      hour, gender: null, latitude: birth.latitude, longitude: birth.longitude, timezone: birth.timezone,
     });
   }
 
