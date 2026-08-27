@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 ft-schema = { path = "../schema" }
 ft-ziwei = { path = "../domain/ziwei" }
+ft-western = { path = "../domain/western" }
 worker = { version = "0.8.5", features = ["d1"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

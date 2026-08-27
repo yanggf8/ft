@@ -1,8 +1,16 @@
 //! Shared DTOs — single source of truth for Worker and Web.
 //! Mirrors backend/src/shared/schemas/ziwei-v3.ts (Zod) but in Rust types.
-//! Phase A: ZiWei V3 types. Western/Big5 types to follow.
+//! Phase A: ZiWei V3 + Western types. Big5 to follow.
 
 use serde::{Deserialize, Serialize};
+
+// ── ZiWei V3 ──
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StemBranch {
+    pub stem: String,
+    pub branch: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZiWeiStarV3 {
@@ -27,20 +35,6 @@ pub struct ZiWeiPalaceV3 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ZiWeiFourPillars {
-    pub year: StemBranch,
-    pub month: StemBranch,
-    pub day: StemBranch,
-    pub hour: StemBranch,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StemBranch {
-    pub stem: String,
-    pub branch: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZiWeiMeta {
     #[serde(rename = "dayDivide")]
     pub day_divide: String,
@@ -50,9 +44,6 @@ pub struct ZiWeiMeta {
     pub fix_leap: bool,
     #[serde(rename = "timeIndex")]
     pub time_index: u8,
-    #[serde(rename = "hourShifted")]
-    pub hour_shifted: Option<bool>,
-    pub assumed: Option<bool>,
     #[serde(rename = "engineVersionZiwei")]
     pub engine_version_ziwei: String,
     #[serde(rename = "chartSchemaVersion")]
@@ -60,13 +51,67 @@ pub struct ZiWeiMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BirthInfoV3 {
+    pub solar: SolarDate,
+    pub lunar: LunarDate,
+    pub hour: u8,
+    #[serde(rename = "hourBranch")]
+    pub hour_branch: String,
+    pub gender: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SolarDate {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LunarDate {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    #[serde(rename = "isLeap")]
+    pub is_leap: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MajorLimit {
+    #[serde(rename = "startAge")]
+    pub start_age: u8,
+    #[serde(rename = "endAge")]
+    pub end_age: u8,
+    pub stem: String,
+    pub branch: String,
+    #[serde(rename = "palaceIndex")]
+    pub palace_index: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZiWeiChartV3 {
     #[serde(rename = "birthInfo")]
-    pub birth_info: serde_json::Value,
-    pub palaces: Vec<ZiWeiPalaceV3>,
+    pub birth_info: BirthInfoV3,
     #[serde(rename = "fourPillars")]
-    pub four_pillars: ZiWeiFourPillars,
+    pub four_pillars: StemBranchX4,
+    #[serde(rename = "fiveElement")]
+    pub five_element: String,
+    #[serde(rename = "lifePalaceIndex")]
+    pub life_palace_index: u8,
+    #[serde(rename = "bodyPalaceIndex")]
+    pub body_palace_index: u8,
+    pub palaces: Vec<ZiWeiPalaceV3>,
+    #[serde(rename = "majorLimits")]
+    pub major_limits: Vec<MajorLimit>,
     pub meta: ZiWeiMeta,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StemBranchX4 {
+    pub year: StemBranch,
+    pub month: StemBranch,
+    pub day: StemBranch,
+    pub hour: StemBranch,
 }
 
 // ── Western chart types ──
@@ -112,7 +157,6 @@ impl WesternChartV3 {
             .collect();
         let (asc_sign, asc_deg) = sign_degree(asc_lon);
         let ascendant = WesternAscendant { longitude: asc_lon, sign: asc_sign.clone(), degree: asc_deg };
-        // Whole Sign: house i cusp = asc_sign_start + i*30
         let asc_sign_idx = sign_index(&asc_sign);
         let houses = (0..12)
             .map(|i| {
