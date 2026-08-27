@@ -836,6 +836,29 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 
 **Phase 0 五道閘門全過，可進 Phase A。**
 
+### Phase A 執行進度（2026-08-27，已部署並生產驗證）
+
+| 項目 | 狀態 |
+|---|---|
+| Rust engine Worker `fortunet-engine` | ✅ 已部署 `fortunet-engine.yanggf.workers.dev`（1.4 MB gzip，startup 2ms），`worker-build` 打包 |
+| `ft-schema`（V3 + Western types）| ✅ `skip_serializing_if` 修正 Zod null 相容 |
+| `ft-ziwei`（x-iztro 封裝）| ✅ wasm 對拍生產 `iztro-adapter.ts` 逐欄一致；`hour_to_time_index` 移值生產；`majorLimits` 依陽男陰女順逆重排 |
+| `ft-western`（solar-ephemeris + vsop87）| ✅ 太陽（geocentric）/ 月球（ELP-MPP02）/ 上升（GMST 封閉公式）/ Whole Sign 宮位 |
+| `fortunet-api` service binding | ✅ `[[services]] FT_ENGINE → fortunet-engine`；`charts.ts` 兩處改用 `fetchEngineChart(env.FT_ENGINE)` |
+| **端到端驗證** | ✅ 註冊 → 生辰 → `GET /api/charts/ziwei` 200，`土五局`、12 宮、`hourBranch=未` |
+| TS Worker 保留 | auth / D1 快取 / 3-provider failover 仍在 `fortunet-api`，未動 |
+
+**Phase A 期間的事實修正（與 spec 原判不同）**：
+
+1. **`x-iztro` 的 DTO 是完整的**——有 `majorStars`/`minorStars`/`adjectiveStars`、`zh-TW` 繁體名、`decadal.range`。`spec §4.1` 說的「field-for-field」對 DTO 成立；先前 P4「6/6 通過」**假通過**，因當時兩邊都用 `zh-CN` + 只比 `majorStars`。改用 wasm 對拍生產 adapter 才浮出真 bug。
+2. **`majorLimits` 需要陽男陰女順 / 陰男陽女逆**（iztro `decadalList()`），非固定 rotation。
+3. **`engineVersion` 不一致（待決策）**：Rust engine 輸出 `meta.engineVersionZiwei = "4.0.0"`，但 `charts.ts` 用 `ENGINE_VERSION_ZIWEI`（`3.0.0`）覆寫。紫微側 `x-iztro` 對拍與 iztro **行為一致，無需 bump**；西洋側則因引擎真實化**應 bump**（見 R6）。**目前 `ENGINE_VERSION_ZIWEI`/`ENGINE_VERSION_WESTERN` 均維持 `3.0.0`，西洋的快取未清——這是在西洋引擎通過 §8.2 事件表前的暫態。**
+
+**待辦**：
+- 西洋引擎對 JPL 的精度對拍（§8.2 事件表）完成後：bump `ENGINE_VERSION_WESTERN` → `4.0.0` 並清西洋快取
+- `scripts/deploy-engine.sh` 已固化部署；`fortunet-api` 用既有 `npm run deploy`
+- `crates/web`（Leptos 前端）為 Phase C，尚未開始
+
 **回退路徑**：每個 Phase 都是獨立部署。Worker 層用 `wrangler rollback`；前端 Pages 保留前一次部署。
 
 > **rev.4 修訂（Grok 審 P1-1，已對帳採納）——原文把單向門指錯地方**：
