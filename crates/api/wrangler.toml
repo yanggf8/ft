@@ -1,0 +1,44 @@
+name = "fortunet-api"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "fortunet-db"
+database_id = "88d074eb-7331-402b-bc76-1ac3cb0588da"
+
+# Durable Objects — same class_names as the JS worker so the in-place deploy keeps
+# existing session + AI-metric storage bit-compatible (Stage B single-way gate).
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+[[durable_objects.bindings]]
+name = "AI_MUTEX"
+class_name = "AIMutexDO"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "fortunet-storage"
+
+# Rust engine Worker (service binding) — the chart calculator.
+[[services]]
+binding = "FT_ENGINE"
+service = "fortunet-engine"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
+# class_names are already in `new_sqlite_classes` and are NOT re-run.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AIMutexDO"]

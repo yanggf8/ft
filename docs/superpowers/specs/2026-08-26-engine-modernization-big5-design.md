@@ -859,6 +859,25 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 - `scripts/deploy-engine.sh` 已固化部署；`fortunet-api` 用既有 `npm run deploy`
 - `crates/web`（Leptos 前端）為 Phase C，尚未開始
 
+### Phase B 執行進度（2026-08-27，已部署並生產驗證 / 單向門通過）
+
+| 項目 | 狀態 |
+|---|---|
+| `ft-api` crate（routes/D1/middleware/AI failover 全遷）| ✅ `routes/auth.rs` `users.rs` `charts.rs`；`services/` billing、birth_hash、engine client、ai prompts+providers、clock、uuid、db helpers；`durable_objects/` SessionDO + AIMutexDO（`#[durable_object(fetch)]`）|
+| **DO storage 相容契約** | ✅ `ft-schema::storage`（Session/ExResource/MinuteRecord，`f64` 處理 JS number）+ serde_wasm_bindgen 橋 → **位元相容** |
+| **birth_hash 位元相容** | ✅ Rust `compute_birth_hash` 對 production 已知值 `-19bbe75a` **完全一致** |
+| **單向門（覆蓋部署保 session）** | ✅ 同 script name（`fortunet-api`）+ 同 `SessionDO`/`AIMutexDO` class_name + 同 migration tag v1/v2 → **canary session 部署後 `GET /users/me` 200**，session/D1 讀回 |
+| 部署量 | wasm 845KB（**330KB gzip**）+ index.js 7.6KB gzip，startup 3ms |
+| `[services] FT_ENGINE` service binding | ✅ charts 兩處改用 engine service-binding client |
+| `ENGINE_VERSION_WESTERN` | **已 bump → `4.0.0`**（引擎真實化 + 頂層 `sunSign`/`moonSign` 契約；舊 3.0.0 快取缺 `sunSign` 需重算）。`ZIWEI` 維持 `3.0.0`（x-iztro 對拍一致）|
+| 整合測試 | `ziwei-iztro.test.ts` ✅ 全綠；`charts.test.ts` 15/17 綠（見下方 AI env 問題）|
+| 引擎修復（Phase B 期間發現）| ① API `jd_from_birth` 原把 `Date` constructor 當 `Date.UTC` 呼叫 → NaN（改取 `Date.UTC` 靜態函數）② `Intl` 回 NaN 時 fallback offset=0 ③ engine `jdUtc` non-finite → 400（原會 1101 掛起）④ `ft-schema::WesternChartV3` 補 `sunSign`/`moonSign`（原缺頂層，前端契約不符）|
+| AI interpret 503（環境問題，非回歸，待辦）| ⚠️ 三 provider 全失效：iflow `empty response`、groq `moonshotai/kimi-k2-instruct-0905` 404、cerebras `llama-3.3-70b` 404。model 一字不差來自 `ai-mutex-do.ts`（生產原設），**Phase B 前即已 503**（Phase A 只驗 `GET charts/ziwei`，未驗 interpret）。**非 Rust 移植回歸。** 待確認 provider model 正名或 key 失效後更新 |
+
+> **Phase B 事實修正**：
+> 1. 測試 `chart_data.sunSign` 斷言揭露：Phase A `ft-western` 輸出 V3 無頂層 `sunSign`/`moonSign`，前端契約（`WesternChart`）不符。Phase B 於 `ft-schema::WesternChartV3` 補上，由真實 Sun/Moon 黃經推導（非舊近似表）。
+> 2. `Date.UTC` 為 `Date` 的靜態方法；`Reflect::apply(Date, ...)` 是呼叫建構子 → 回 Date object → `.as_f64()` = NaN。必須取 `Date.UTC` 屬性再 apply。
+
 **回退路徑**：每個 Phase 都是獨立部署。Worker 層用 `wrangler rollback`；前端 Pages 保留前一次部署。
 
 > **rev.4 修訂（Grok 審 P1-1，已對帳採納）——原文把單向門指錯地方**：

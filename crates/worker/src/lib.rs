@@ -87,6 +87,16 @@ async fn handle_western(req: &Request) -> Result<Response> {
     };
     let lat = q.lat.unwrap_or(25.0);
     let lon = q.lon.unwrap_or(121.5);
+    // A non-finite jdUtc (NaN/Inf, e.g. a failed tz conversion on the caller side)
+    // must not reach the ephemeris math — it panics and produces a 1101 exception.
+    if !q.jd_utc.is_finite() {
+        let mut r = Response::from_json(&serde_json::json!({
+            "error": "invalid jdUtc",
+            "code": "INVALID_JD"
+        }))?;
+        r = r.with_status(400);
+        return Ok(r);
+    }
     let chart = ft_western::calculate(q.jd_utc, lat, lon);
     let mut r = Response::from_json(&serde_json::json!({
         "chart": chart,

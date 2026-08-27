@@ -5,6 +5,7 @@ members = [
   "crates/domain/western",
   "crates/domain/big5",
   "crates/worker",
+  "crates/api",
   "crates/web",
 ]
 resolver = "2"

@@ -2,6 +2,8 @@
 //! Mirrors backend/src/shared/schemas/ziwei-v3.ts (Zod) but in Rust types.
 //! Phase A: ZiWei V3 + Western types. Big5 to follow.
 
+pub mod storage;
+
 use serde::{Deserialize, Serialize};
 
 // ── ZiWei V3 ──
@@ -128,9 +130,27 @@ pub struct WesternPlanet {
     pub degree: f64,
 }
 
+/// A zodiac sign with its display metadata. Mirrors the TS `sunSign`/`moonSign`
+/// objects the front-end reads (`name/symbol/element/quality`); `moonSign` uses
+/// only `name`/`symbol` in the old contract, but we populate the lot uniformly.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WesternSign {
+    pub name: String,
+    pub symbol: String,
+    pub element: String,
+    pub quality: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WesternChartV3 {
     pub planets: Vec<WesternPlanet>,
+    /// Top-level `sunSign` derived from the real Sun longitude (not the approximate
+    /// month/day table). Front-end contract: `chart_data.sunSign`.
+    #[serde(rename = "sunSign")]
+    pub sun_sign: WesternSign,
+    /// Top-level `moonSign` derived from the real Moon longitude.
+    #[serde(rename = "moonSign")]
+    pub moon_sign: WesternSign,
     pub ascendant: WesternAscendant,
     pub houses: Vec<WesternHouse>,
     pub jd_utc: f64,
@@ -152,10 +172,17 @@ pub struct WesternHouse {
 
 impl WesternChartV3 {
     pub fn from_longitudes(planets_raw: Vec<(&str, f64)>, asc_lon: f64, jd_utc: f64) -> Self {
+        let mut body = BodyBuilder::default();
         let planets = planets_raw
             .into_iter()
             .map(|(name, lon)| {
                 let (sign, degree) = sign_degree(lon);
+                let meta = sign_meta(&sign);
+                if name == "Sun" {
+                    body.sun = Some(meta.clone());
+                } else if name == "Moon" {
+                    body.moon = Some(meta.clone());
+                }
                 WesternPlanet { name: name.to_string(), longitude: lon, sign, degree }
             })
             .collect();
@@ -170,11 +197,56 @@ impl WesternChartV3 {
                 WesternHouse { index: i as u8 + 1, sign, cusp }
             })
             .collect();
-        Self { planets, ascendant, houses, jd_utc }
+        // Fall back to the ascendant's sign if Sun/Moon were absent (never in practice).
+        let sun_sign = body.sun.unwrap_or_else(|| sign_meta(&asc_sign));
+        let moon_sign = body.moon.unwrap_or_else(|| sign_meta(&asc_sign));
+        Self { planets, sun_sign, moon_sign, ascendant, houses, jd_utc }
     }
 }
 
+#[derive(Default)]
+struct BodyBuilder {
+    sun: Option<WesternSign>,
+    moon: Option<WesternSign>,
+}
+
 const ZODIAC: [&str; 12] = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+
+/// per-sign display metadata: `(name, symbol, element, quality)`.
+const ZODIAC_META: [(&str, &str, &str, &str); 12] = [
+    ("Aries", "♈", "Fire", "Cardinal"),
+    ("Taurus", "♉", "Earth", "Fixed"),
+    ("Gemini", "♊", "Air", "Mutable"),
+    ("Cancer", "♋", "Water", "Cardinal"),
+    ("Leo", "♌", "Fire", "Fixed"),
+    ("Virgo", "♍", "Earth", "Mutable"),
+    ("Libra", "♎", "Air", "Cardinal"),
+    ("Scorpio", "♏", "Water", "Fixed"),
+    ("Sagittarius", "♐", "Fire", "Mutable"),
+    ("Capricorn", "♑", "Earth", "Cardinal"),
+    ("Aquarius", "♒", "Air", "Fixed"),
+    ("Pisces", "♓", "Water", "Mutable"),
+];
+
+fn sign_meta(name: &str) -> WesternSign {
+    for (n, sym, elem, qual) in ZODIAC_META {
+        if n == name {
+            return WesternSign {
+                name: n.to_string(),
+                symbol: sym.to_string(),
+                element: elem.to_string(),
+                quality: qual.to_string(),
+            };
+        }
+    }
+    // Defensive fallback (should be unreachable).
+    WesternSign {
+        name: name.to_string(),
+        symbol: String::new(),
+        element: String::new(),
+        quality: String::new(),
+    }
+}
 
 fn sign_degree(lon: f64) -> (String, f64) {
     let lon = lon.rem_euclid(360.0);
