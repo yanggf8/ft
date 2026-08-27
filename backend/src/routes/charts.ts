@@ -65,6 +65,127 @@ charts.get('/', authMiddleware, async (c) => {
   return c.json({ interpretations });
 });
 
+// Read cached synthesis story (404 if none). Registered BEFORE /:type so Hono doesn't capture /story.
+charts.get('/story', authMiddleware, setCacheHeaders({ maxAge: 86400, shared: false, mustRevalidate: true }), async (c) => {
+  const { userId } = c.get('user');
+
+  // Read-only: serve the cached story for the current birth_data_hash if one exists.
+  // A story is only ever cached after a successful POST /story/generate (which requires
+  // complete birth data), so a cache miss here always means "not generated yet" -> 404.
+  const birth = await getUserBirthData(c.env.DB, userId);
+  const row = await c.env.DB.prepare(
+    `SELECT id, ai_interpretation, updated_at FROM interpretations
+     WHERE user_id = ? AND divination_type = 'story' AND birth_data_hash = ?`
+  ).bind(userId, birth?.birth_data_hash ?? null).first<{ id: string; ai_interpretation: string | null; updated_at: string }>();
+
+  if (row && row.ai_interpretation) {
+    const etag = createETag((birth?.birth_data_hash || '') + '-story', row.updated_at);
+    const ifNoneMatch = c.req.header('if-none-match');
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return c.newResponse(null, { status: 304 });
+    }
+    c.res.headers.set('ETag', etag);
+    return c.json({ story: row.ai_interpretation, fromCache: true });
+  }
+
+  return c.json({ error: 'No story yet. POST /story/generate first', code: 'NO_STORY' }, 404);
+});
+
+// Generate synthesis story. Registered BEFORE /:type/interpret.
+charts.post('/story/generate', authMiddleware, async (c) => {
+  const { userId } = c.get('user');
+  const ip = c.req.header('cf-connecting-ip') || 'unknown';
+
+  if (!checkAiRateLimit(ip)) {
+    return c.json({ error: 'Too many requests', code: 'RATE_LIMIT' }, 429);
+  }
+
+  const birth = await getUserBirthData(c.env.DB, userId);
+  if (!birth?.birth_year || !birth?.birth_month || !birth?.birth_day) {
+    return c.json({ error: 'Birth data required', code: 'NO_BIRTH_DATA' }, 400);
+  }
+  if (!birth.gender) {
+    return c.json({ error: 'Gender required', code: 'NO_GENDER' }, 400);
+  }
+
+  // Per-user cache short-circuit: never regenerate an existing story for this birth hash.
+  const existing = await c.env.DB.prepare(
+    `SELECT ai_interpretation FROM interpretations
+     WHERE user_id = ? AND divination_type = 'story' AND birth_data_hash = ?`
+  ).bind(userId, birth.birth_data_hash).first<{ ai_interpretation: string | null }>();
+  if (existing?.ai_interpretation) {
+    return c.json({ story: existing.ai_interpretation, fromCache: true });
+  }
+
+  // Compute both charts and merge
+  const hour = birth.birth_hour ?? 12;
+  const ziwei = ziWeiCalculator.calculate({
+    year: birth.birth_year,
+    month: birth.birth_month,
+    day: birth.birth_day,
+    hour,
+    gender: birth.gender as 'male' | 'female'
+  });
+  const western = westernCalculator.calculate({
+    year: birth.birth_year,
+    month: birth.birth_month,
+    day: birth.birth_day,
+    hour,
+    minute: birth.birth_minute ?? undefined,
+    latitude: birth.latitude ?? undefined,
+    longitude: birth.longitude ?? undefined
+  });
+  const merged = { ziwei, western };
+
+  if (!c.env.IFLOW_API_KEY && !c.env.GROQ_API_KEY && !c.env.CEREBRAS_API_KEY) {
+    return c.json({ error: 'AI service not configured' }, 503);
+  }
+
+  // Call AI via mutex
+  const mutexId = c.env.AI_MUTEX.idFromName('global');
+  const mutex = c.env.AI_MUTEX.get(mutexId);
+
+  const response = await mutex.fetch('https://ai-mutex/interpret', {
+    method: 'POST',
+    body: JSON.stringify({
+      keys: { iflow: c.env.IFLOW_API_KEY, groq: c.env.GROQ_API_KEY, cerebras: c.env.CEREBRAS_API_KEY },
+      interpretRequest: { chartType: 'story', chartData: merged, language: 'zh' }
+    })
+  });
+
+  if (!response.ok) {
+    if (response.status === 503) {
+      return c.json({ error: 'AI service temporarily unavailable, please try again', code: 'AI_UNAVAILABLE' }, 503);
+    }
+    const err = await response.json() as { error?: string };
+    return c.json(err, response.status as 400 | 500);
+  }
+
+  const result = await response.json() as { interpretation: string; provider: string; model: string };
+  if (!result.interpretation) {
+    return c.json({ error: 'AI returned an empty story, please try again', code: 'EMPTY_STORY' }, 502);
+  }
+
+  // Upsert story
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    `INSERT INTO interpretations (id, user_id, divination_type, chart_data, ai_interpretation, birth_data_hash)
+     VALUES (?, ?, 'story', ?, ?, ?)
+     ON CONFLICT(user_id, divination_type) DO UPDATE SET
+       chart_data = excluded.chart_data,
+       ai_interpretation = excluded.ai_interpretation,
+       birth_data_hash = excluded.birth_data_hash,
+       updated_at = datetime('now')`
+  ).bind(id, userId, JSON.stringify(merged), result.interpretation, birth.birth_data_hash).run();
+
+  return c.json({
+    story: result.interpretation,
+    provider: result.provider,
+    model: result.model,
+    fromCache: false
+  });
+});
+
 // Get or calculate chart for a divination type
 charts.get('/:type', authMiddleware, setCacheHeaders({ maxAge: 3600, shared: false }), async (c) => {
   const { userId } = c.get('user');

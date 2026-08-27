@@ -21,7 +21,7 @@ export interface User {
 export interface Interpretation {
   id: string;
   user_id: string;
-  divination_type: 'ziwei' | 'western';
+  divination_type: 'ziwei' | 'western' | 'story';
   chart_data: Record<string, unknown>;
   ai_interpretation?: string;
   birth_data_hash: string;

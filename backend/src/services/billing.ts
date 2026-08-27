@@ -35,8 +35,3 @@ export function checkUserAccess(user: { subscription_tier: string; trial_ends_at
 
   return { tier, isTrialing, trialEndsAt, hasAccess };
 }
-
-export function isPremiumFeature(feature: string): boolean {
-  const premiumFeatures = ['ai_interpret', 'detailed_analysis', 'export_pdf'];
-  return premiumFeatures.includes(feature);
-}

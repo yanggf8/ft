@@ -109,6 +109,14 @@ class ApiClient {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
+
+  async getStory(noCache = false) {
+    return this.request('/api/charts/story', { noCache });
+  }
+
+  async generateStory() {
+    return this.request('/api/charts/story/generate', { method: 'POST' });
+  }
 }
 
 export const api = new ApiClient();

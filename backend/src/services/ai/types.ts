@@ -3,7 +3,7 @@
  */
 
 export interface InterpretationRequest {
-  chartType: 'ziwei' | 'western';
+  chartType: 'ziwei' | 'western' | 'story';
   chartData: Record<string, unknown>;
   language?: 'zh' | 'en';
   focus?: string;

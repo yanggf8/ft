@@ -17,7 +17,7 @@ ALTER TABLE users ADD COLUMN birth_data_hash TEXT;
 CREATE TABLE IF NOT EXISTS interpretations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    divination_type TEXT NOT NULL CHECK (divination_type IN ('ziwei', 'western', 'bazi')),
+    divination_type TEXT NOT NULL,   -- 'ziwei' | 'western' | 'bazi' | 'story' (no CHECK: flexible per project policy)
     chart_data TEXT NOT NULL,
     ai_interpretation TEXT,
     birth_data_hash TEXT NOT NULL,

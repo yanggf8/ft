@@ -14,6 +14,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/profile" style={{ color: 'white' }}>我的命盤</Link>
               <Link to="/divination/ziwei" style={{ color: 'white' }}>紫微斗數</Link>
               <Link to="/divination/western" style={{ color: 'white' }}>西洋占星</Link>
+              <Link to="/story" style={{ color: 'white' }}>合盤故事</Link>
               <button onClick={logout} style={{ background: 'transparent', border: '1px solid white', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '4px' }}>登出</button>
             </>
           ) : (

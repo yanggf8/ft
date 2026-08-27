@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../index';
+import { validate, loginSchema, registerSchema } from '../middleware/validate';
 
 const auth = new Hono<{ Bindings: Env }>();
 
@@ -30,13 +31,9 @@ auth.use('*', async (c, next) => {
 });
 
 // Register new user
-auth.post('/register', async (c) => {
-  const { email, full_name } = await c.req.json();
-  
-  if (!email) {
-    return c.json({ error: 'Email required' }, 400);
-  }
-  
+auth.post('/register', validate(registerSchema), async (c) => {
+  const { email, full_name } = c.get('validated');
+
   // Check if user exists
   const existing = await c.env.DB.prepare(
     'SELECT id FROM users WHERE email = ?'
@@ -67,13 +64,9 @@ auth.post('/register', async (c) => {
 });
 
 // Login existing user
-auth.post('/login', async (c) => {
-  const { email } = await c.req.json();
-  
-  if (!email) {
-    return c.json({ error: 'Email required' }, 400);
-  }
-  
+auth.post('/login', validate(loginSchema), async (c) => {
+  const { email } = c.get('validated');
+
   const user = await c.env.DB.prepare(
     'SELECT id, email FROM users WHERE email = ?'
   ).bind(email).first<{ id: string; email: string }>();
