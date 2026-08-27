@@ -25,7 +25,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         res.headers_mut()
             .set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")?;
         res.headers_mut()
-            .set("Access-Control-Allow-Headers", "authorization,content-type")?;
+            .set("Access-Control-Allow-Headers", "authorization,content-type,cache-control")?;
         res.headers_mut().set("Access-Control-Max-Age", "86400")?;
         return Ok(res);
     }

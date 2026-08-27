@@ -9,3 +9,13 @@ members = [
   "crates/web",
 ]
 resolver = "2"
+
+# Shared wasm tuning — opt-level=z + LTO keeps the .wasm small. Applies to every
+# wasm crate (ft-web, ft-api, ft-worker); these flags are what made Phase A/B's
+# workers ~340KB gzip.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
