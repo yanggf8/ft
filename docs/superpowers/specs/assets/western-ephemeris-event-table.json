@@ -1,0 +1,14 @@
+{
+  "validation": "Western engine (ft-western) vs JPL HORIZONS DE441, geocentric apparent ecliptic longitude (ObsEcLon, QUANTITIES=31, CENTER=500@399)",
+  "frame": "true-of-date apparent ecliptic (includes aberration + nutation), geocentric",
+  "tolerance": {"sun": 0.05, "moon": 0.05, "ascendant": 0.1},
+  "source": "NASA JPL HORIZONS API (https://ssd.jpl.nasa.gov/api/horizons.api)",
+  "epochs": [
+    {"ut": "2026-01-15 00:00", "jd": 2461390.5, "sun_horizons": 294.8329, "moon_horizons": 252.0977},
+    {"ut": "2026-03-21 06:00", "jd": 2461455.75, "sun_horizons": 0.6308, "moon_horizons": 29.6481},
+    {"ut": "2026-06-21 12:00", "jd": 2461548.0, "sun_horizons": 90.1428, "moon_horizons": 175.2170},
+    {"ut": "2026-09-23 03:00", "jd": 2461641.625, "sun_horizons": 180.1187, "moon_horizons": 317.2268},
+    {"ut": "2026-11-07 18:00", "jd": 2461687.25, "sun_horizons": 225.3401, "moon_horizons": 207.5388},
+    {"ut": "2026-08-27 12:00", "jd": 2461280.0, "sun_horizons": 154.2461, "moon_horizons": 326.2799}
+  ]
+}

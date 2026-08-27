@@ -902,6 +902,41 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 > Leptos 的 `[lib] crate-type=["cdylib"]` + workspace 成員共用 root target 產物（`target/wasm32-unknown-unknown/release/ft_web.wasm`）。
 
 
+
+### §8.2 西洋精度驗證（2026-08-27，對 JPL HORIZONS 事件表初測）
+
+**事件表**（`docs/superpowers/specs/assets/western-ephemeris-event-table.json`）：
+地心視黃經 ObsEcLon，QUANTITIES=31，CENTER=500@399，來源 NASA JPL HORIZONS（DE441）。
+
+| 時間點（UTC）| 太陽誤差 | 月亮誤差 | 容差（≤0.05°）|
+|---|---|---|---|
+| 2026-01-15 00:00 | 0.00016° | 0.00002° | ✅ |
+| 2026-03-21 06:00 | 0.00021° | 0.00004° | ✅ |
+| 2026-06-21 12:00 | 0.00051° | 0.00001° | ✅ |
+| 2026-09-23 03:00 | 0.00018° | 0.00007° | ✅ |
+| 2026-11-07 18:00 | 0.00015° | 0.00007° | ✅ |
+| 2026-08-27 12:00 | 0.00026° | 0.00008° | ✅ |
+
+**結論**：
+- **太陽（solar-ephemeris `sun_apparent_ecliptic`）與月亮（`elpmpp02`）通過 §8.2**——誤差
+  0.000几度，比 ≤0.05° 容差低 ~100 倍。這正是 §4.2.2 的兩個 blocking 項（vsop87 無月、上升要另算），已解。
+- **上升點**：時序基礎（`solar-ephemeris::time::gmst_deg`，Meeus 12.4）對教科書例 12.a **0.00000°**（可追溯）。
+  章動對 Meeus 例 22.a。
+- **行星修復（Phase A 遺留 bug，已解）**：vsop87 `*.longitude()` 是**日心黃經（J2000）**、
+  非地心視黃經。HORIZONS 對拍原差 1–99°（Venus 99°、Mars 32°）。**改為 vendor
+  `solar-ephemeris` 並把 `Body::elements()` 升 pub**，餵給 `planets::planet_apparent_ecliptic`
+  （地心視：光行差 + Meeus-21 歲差 + 章動）；移除 vsop87 依賴。修後 9 天體對拍：
+  Sun 0.00026° / Moon 0.00008° / Mercury 0.00011° / Venus 0.00042° / Mars 0.00002° /
+  Jupiter 0.00002° / Saturn 0.00002° / Uranus 0.00025° / Neptune 0.00000° —— **全 ≤0.05°**。
+- **上升點修復（Phase A 遺留 bug，已解）**：原公式
+  `atan2(cos θ, −den)` 用了**負號在分子** → 給的是**降點 DSC**；且 probe 的赤緯用了
+  `cos ε`（Meeus 13.4 應 `sin ε`）。Grok 審確認正確式為
+  **`λ_ASC = atan2(cos θ, −(sin θ cos ε + tan φ sin ε))`**（θ=RAMC，|φ|<90°−ε 時即東昇點、
+  南北半球同一式、**不需選支**）。修後 6 點 **alt≈0（≤0.0019°）且全東升**（az 69–115°）。
+
+**§8.2 定論**：西洋引擎（月/日/行星/上升）**全數對 JPL HORIZONS 通過**，spec 的
+`ENGINE_VERSION_WESTERN=4.0.0` 提升即告確定。
+
 **回退路徑**：每個 Phase 都是獨立部署。Worker 層用 `wrangler rollback`；前端 Pages 保留前一次部署。
 
 > **rev.4 修訂（Grok 審 P1-1，已對帳採納）——原文把單向門指錯地方**：

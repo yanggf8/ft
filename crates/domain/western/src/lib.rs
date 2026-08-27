@@ -59,42 +59,19 @@ fn body_name(b: Body) -> &'static str {
 }
 
 fn ascendant_lon(lst_deg: f64, lat_deg: f64, eps_deg: f64) -> f64 {
-    // Meeus (Astronomical Algorithms): the two ecliptic-horizon intersections are λ0 and
-    // λ0+180°, given by tan(λ) = -cos(θ) / (sin(θ)cos(ε) + tan(φ)sin(ε)). The ascendant is
-    // the one on the EASTERN (rising) horizon. We evaluate both candidates' local azimuth
-    // and keep the one in the east (az ≈ 90°, i.e. 45°–135°). This is unambiguous across
-    // the whole 1900–2100 span (the §8.2 event table caught the old formula yielding a
-    // descendant / off-horizon value, alt ≈ -42°).
-    let lst = lst_deg.to_radians();
-    let lat = lat_deg.to_radians();
-    let eps = eps_deg.to_radians();
-    let num = -lst.cos();
-    let den = lst.sin() * eps.cos() + lat.tan() * eps.sin();
-    let l0 = num.atan2(den).to_degrees().rem_euclid(360.0);
-    // Try both branches; pick the eastern (rising) one.
-    let a = (l0, azim_deg(l0, lat_deg, eps_deg, lst_deg));
-    let b = ((l0 + 180.0).rem_euclid(360.0), azim_deg(l0 + 180.0, lat_deg, eps_deg, lst_deg));
-    if a.1 >= 45.0 && a.1 <= 135.0 {
-        a.0
-    } else if b.1 >= 45.0 && b.1 <= 135.0 {
-        b.0
-    } else {
-        // Edge case: nearly at the horizon poles. Prefer the one with altitude rising.
-        a.0
-    }
-}
-
-/// Azimuth (0=N, 90=E) of an ecliptic point (β=0) on the local horizon.
-fn azim_deg(lon_deg: f64, lat_deg: f64, eps_deg: f64, lst_deg: f64) -> f64 {
-    let e = eps_deg.to_radians();
+    // Ascendant = ecliptic longitude of the eastern rising point on the horizon.
+    // Meeus / Duffett-Smith: tan λ = −cos θ / (sin θ cos ε + tan φ sin ε), θ = local
+    // apparent sidereal time. The well-formed atan2 form
+    //     λ_ASC = atan2(cos θ, −(sin θ cos ε + tan φ sin ε))
+    // is ALREADY the eastern rising point for every |φ| < 90°−ε (no branch selection).
+    // The opposite curve (λ+180) is the descendant — do not add +180 / azimuth filtering
+    // (a previous attempt did, and mis-picked the descendant for many epochs).
+    // Source for φ<0: the tan φ term just changes sign, same atan2.
+    let theta = lst_deg.to_radians();
     let phi = lat_deg.to_radians();
-    let lon = lon_deg.to_radians();
-    let dec = (e.cos() * lon.sin()).asin();
-    let ra = (lon.sin() * e.cos()).atan2(lon.cos());
-    let ha = lst_deg.to_radians() - ra;
-    let az = (-dec.cos() * ha.sin())
-        .atan2(dec.sin() * phi.cos() - dec.cos() * phi.sin() * ha.cos());
-    az.to_degrees().rem_euclid(360.0)
+    let eps = eps_deg.to_radians();
+    let den = theta.sin() * eps.cos() + phi.tan() * eps.sin();
+    theta.cos().atan2(-den).to_degrees().rem_euclid(360.0)
 }
 
 #[cfg(test)]
