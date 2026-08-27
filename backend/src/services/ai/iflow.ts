@@ -38,6 +38,9 @@ export class IFlowProvider implements AIProvider {
         max_tokens: this.maxTokens,
         temperature: 0.7,
       }),
+      // iFlow is PROVIDERS[0]; without a timeout a hung request holds the AIMutexDO
+      // lock forever and stalls every AI call platform-wide. Matches Groq/Cerebras.
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!res.ok) throw new Error(`iFlow ${res.status}: ${await res.text()}`);

@@ -15,10 +15,17 @@ const PROVIDERS = [
 
 type ProviderName = typeof PROVIDERS[number]['name'];
 
+// Backpressure: 1 request is served at a time and a provider call can take up to 45s,
+// so an unbounded queue turns a traffic spike into multi-minute waits and Worker
+// subrequest timeouts. Shed load at the door instead.
+const MAX_QUEUE_DEPTH = 8;
+const MAX_QUEUE_WAIT_MS = 60000;
+
 interface QueuedRequest {
   resolve: (value: Response) => void;
   reject: (error: Error) => void;
   request: Request;
+  queuedAt: number;
 }
 
 interface ExResource {
@@ -37,8 +44,14 @@ export class AIMutexDO extends DurableObject {
   private queue: QueuedRequest[] = [];
 
   async fetch(request: Request): Promise<Response> {
+    if (this.queue.length >= MAX_QUEUE_DEPTH) {
+      return Response.json(
+        { error: 'AI queue is full, please try again shortly', code: 'AI_QUEUE_FULL', queueDepth: this.queue.length },
+        { status: 503, headers: { 'Retry-After': '30' } }
+      );
+    }
     return new Promise<Response>((resolve, reject) => {
-      this.queue.push({ resolve, reject, request });
+      this.queue.push({ resolve, reject, request, queuedAt: Date.now() });
       this.processQueue();
     });
   }
@@ -47,6 +60,17 @@ export class AIMutexDO extends DurableObject {
     if (this.processing || this.queue.length === 0) return;
     this.processing = true;
     const item = this.queue.shift()!;
+    const waited = Date.now() - item.queuedAt;
+    if (waited > MAX_QUEUE_WAIT_MS) {
+      // Caller has almost certainly given up; do not spend a provider call on it.
+      item.resolve(Response.json(
+        { error: 'AI request timed out while queued', code: 'AI_QUEUE_TIMEOUT', waitedMs: waited },
+        { status: 503, headers: { 'Retry-After': '30' } }
+      ));
+      this.processing = false;
+      if (this.queue.length > 0) this.processQueue();
+      return;
+    }
     try {
       item.resolve(await this.handleRequest(item.request));
     } catch (e) {

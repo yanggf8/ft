@@ -39,6 +39,21 @@ interface UserBirthData {
   birth_data_hash: string | null;
 }
 
+// A story merges the ziwei AND western charts, so it is only current when both
+// engine versions and the chart schema still match. Mirrors the per-type guard on
+// GET /:type and POST /:type/interpret.
+function isStoryChartCurrent(rawChartData: string | null | undefined): boolean {
+  if (!rawChartData) return false;
+  try {
+    const parsed = JSON.parse(rawChartData) as { meta?: Record<string, unknown> };
+    return parsed?.meta?.engineVersionZiwei === ENGINE_VERSION_ZIWEI
+      && parsed?.meta?.engineVersionWestern === ENGINE_VERSION_WESTERN
+      && parsed?.meta?.chartSchemaVersion === CHART_SCHEMA_VERSION;
+  } catch {
+    return false;
+  }
+}
+
 // Get user's birth data
 async function getUserBirthData(db: D1Database, userId: string): Promise<UserBirthData | null> {
   return db.prepare(
@@ -74,9 +89,13 @@ charts.get('/story', authMiddleware, setCacheHeaders({ maxAge: 86400, shared: fa
   // complete birth data), so a cache miss here always means "not generated yet" -> 404.
   const birth = await getUserBirthData(c.env.DB, userId);
   const row = await c.env.DB.prepare(
-    `SELECT id, ai_interpretation, updated_at FROM interpretations
+    `SELECT id, chart_data, ai_interpretation, updated_at FROM interpretations
      WHERE user_id = ? AND divination_type = 'story' AND birth_data_hash = ?`
-  ).bind(userId, birth?.birth_data_hash ?? null).first<{ id: string; ai_interpretation: string | null; updated_at: string }>();
+  ).bind(userId, birth?.birth_data_hash ?? null).first<{ id: string; chart_data: string | null; ai_interpretation: string | null; updated_at: string }>();
+
+  if (row && row.ai_interpretation && !isStoryChartCurrent(row.chart_data)) {
+    return c.json({ error: 'Chart version stale, regeneration required', code: 'RECALC_REQUIRED' }, 409);
+  }
 
   if (row && row.ai_interpretation) {
     const etag = createETag((birth?.birth_data_hash || '') + '-story', row.updated_at);
@@ -109,21 +128,23 @@ charts.post('/story/generate', authMiddleware, async (c) => {
   }
 
   // Per-user cache short-circuit: never regenerate an existing story for this birth hash.
+  // A story built by a superseded engine is not a cache hit — fall through and regenerate.
   const existing = await c.env.DB.prepare(
-    `SELECT ai_interpretation FROM interpretations
+    `SELECT chart_data, ai_interpretation FROM interpretations
      WHERE user_id = ? AND divination_type = 'story' AND birth_data_hash = ?`
-  ).bind(userId, birth.birth_data_hash).first<{ ai_interpretation: string | null }>();
-  if (existing?.ai_interpretation) {
+  ).bind(userId, birth.birth_data_hash).first<{ chart_data: string | null; ai_interpretation: string | null }>();
+  if (existing?.ai_interpretation && isStoryChartCurrent(existing.chart_data)) {
     return c.json({ story: existing.ai_interpretation, fromCache: true });
   }
 
   // Compute both charts and merge
   const hour = birth.birth_hour ?? 12;
-  const ziwei = ziWeiCalculator.calculate({
+  const ziwei = iztroAdapter.calculate({
     year: birth.birth_year,
     month: birth.birth_month,
     day: birth.birth_day,
     hour,
+    minute: birth.birth_minute ?? undefined,
     gender: birth.gender as 'male' | 'female'
   });
   const western = westernCalculator.calculate({
@@ -135,7 +156,15 @@ charts.post('/story/generate', authMiddleware, async (c) => {
     latitude: birth.latitude ?? undefined,
     longitude: birth.longitude ?? undefined
   });
-  const merged = { ziwei, western };
+  const merged = {
+    ziwei,
+    western,
+    meta: {
+      engineVersionZiwei: ENGINE_VERSION_ZIWEI,
+      engineVersionWestern: ENGINE_VERSION_WESTERN,
+      chartSchemaVersion: CHART_SCHEMA_VERSION,
+    },
+  };
 
   if (!c.env.IFLOW_API_KEY && !c.env.GROQ_API_KEY && !c.env.CEREBRAS_API_KEY) {
     return c.json({ error: 'AI service not configured' }, 503);
