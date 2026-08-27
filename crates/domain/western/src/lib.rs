@@ -1,7 +1,11 @@
-//! Western astrology — hybrid: VSOP87 (planets) + ELP-MPP02 (Moon).
+//! Western astrology — solar-ephemeris for all bodies (Sun/Moon via dedicated
+//! functions, planets via the patched `Body::elements()` + `planet_apparent_ecliptic`
+//! geocentric apparent ecliptic). vsop87 is NOT used: its `*.longitude()` is
+//! heliocentric J2000, not geocentric apparent — that was the Phase A bug caught
+//! by the §8.2 event table.
 
 use ft_schema::WesternChartV3;
-use solar_ephemeris::{elpmpp02, planets, time, timescales::AstroTime};
+use solar_ephemeris::{elpmpp02, planets, time, timescales::AstroTime, Body};
 
 pub fn calculate(jd_utc: f64, lat_deg: f64, lon_east_deg: f64) -> WesternChartV3 {
     let astro = AstroTime::from_jd_utc(jd_utc);
@@ -10,54 +14,87 @@ pub fn calculate(jd_utc: f64, lat_deg: f64, lon_east_deg: f64) -> WesternChartV3
     let (dpsi, deps) = time::nutation_deg(t);
     let eps_true = time::mean_obliquity_deg(t) + deps;
 
-    // Sun via solar-ephemeris (public, correct)
-    let sun_lon = {
-        let (lon, _, _) = planets::sun_apparent_ecliptic(jd_tt, dpsi);
-        lon.rem_euclid(360.0)
-    };
-
-    let moon_lon = {
-        let (lon, _lat, _dist) = elpmpp02::moon_apparent_ecliptic(jd_tt, dpsi);
-        lon.rem_euclid(360.0)
-    };
+    // Sun / Moon — geocentric apparent ecliptic, validated against JPL HORIZONS.
+    let sun_lon = planets::sun_apparent_ecliptic(jd_tt, dpsi).0.rem_euclid(360.0);
+    let moon_lon = elpmpp02::moon_apparent_ecliptic(jd_tt, dpsi).0.rem_euclid(360.0);
 
     let gast = time::gast_deg(astro.jd_ut1, dpsi, eps_true);
     let lst = (gast + lon_east_deg).rem_euclid(360.0);
     let asc_lon = ascendant_lon(lst, lat_deg, eps_true);
 
-    // Planets via vsop87 — longitude() returns RADIANS, convert to degrees
-    let to_deg = |rad: f64| (rad * 180.0 / std::f64::consts::PI).rem_euclid(360.0);
-    let planets = vec![
-        ("Sun", sun_lon),
-        ("Moon", moon_lon),
-        (
-            "Mercury",
-            to_deg(vsop87::vsop87d::mercury(jd_tt).longitude()),
-        ),
-        ("Venus", to_deg(vsop87::vsop87d::venus(jd_tt).longitude())),
-        ("Mars", to_deg(vsop87::vsop87d::mars(jd_tt).longitude())),
-        (
-            "Jupiter",
-            to_deg(vsop87::vsop87d::jupiter(jd_tt).longitude()),
-        ),
-        ("Saturn", to_deg(vsop87::vsop87d::saturn(jd_tt).longitude())),
-        ("Uranus", to_deg(vsop87::vsop87d::uranus(jd_tt).longitude())),
-        (
-            "Neptune",
-            to_deg(vsop87::vsop87d::neptune(jd_tt).longitude()),
-        ),
-    ];
+    // Planets — geocentric apparent ecliptic (light-time + aberration + Meeus-21
+    // precession + nutation). `Body::elements()` is the patched-pub accessor; each
+    // planet's `&Planet` feeds planet_apparent_ecliptic.
+    let mut planets: Vec<(&str, f64)> = vec![("Sun", sun_lon), ("Moon", moon_lon)];
+    for body in [
+        Body::Mercury,
+        Body::Venus,
+        Body::Mars,
+        Body::Jupiter,
+        Body::Saturn,
+        Body::Uranus,
+        Body::Neptune,
+    ] {
+        if let Some(el) = body.elements() {
+            let lon = planets::planet_apparent_ecliptic(el, jd_tt, dpsi).0.rem_euclid(360.0);
+            planets.push((body_name(body), lon));
+        }
+    }
 
     WesternChartV3::from_longitudes(planets, asc_lon, jd_utc)
 }
 
+/// The planet display names (mirror the `Body::name()` the upstream crate keeps private).
+fn body_name(b: Body) -> &'static str {
+    match b {
+        Body::Mercury => "Mercury",
+        Body::Venus => "Venus",
+        Body::Mars => "Mars",
+        Body::Jupiter => "Jupiter",
+        Body::Saturn => "Saturn",
+        Body::Uranus => "Uranus",
+        Body::Neptune => "Neptune",
+        _ => "?",
+    }
+}
+
 fn ascendant_lon(lst_deg: f64, lat_deg: f64, eps_deg: f64) -> f64 {
+    // Meeus (Astronomical Algorithms): the two ecliptic-horizon intersections are λ0 and
+    // λ0+180°, given by tan(λ) = -cos(θ) / (sin(θ)cos(ε) + tan(φ)sin(ε)). The ascendant is
+    // the one on the EASTERN (rising) horizon. We evaluate both candidates' local azimuth
+    // and keep the one in the east (az ≈ 90°, i.e. 45°–135°). This is unambiguous across
+    // the whole 1900–2100 span (the §8.2 event table caught the old formula yielding a
+    // descendant / off-horizon value, alt ≈ -42°).
     let lst = lst_deg.to_radians();
     let lat = lat_deg.to_radians();
     let eps = eps_deg.to_radians();
-    let num = lst.cos();
-    let den = -lst.sin() * eps.sin() - lat.tan() * eps.cos();
-    num.atan2(den).to_degrees().rem_euclid(360.0)
+    let num = -lst.cos();
+    let den = lst.sin() * eps.cos() + lat.tan() * eps.sin();
+    let l0 = num.atan2(den).to_degrees().rem_euclid(360.0);
+    // Try both branches; pick the eastern (rising) one.
+    let a = (l0, azim_deg(l0, lat_deg, eps_deg, lst_deg));
+    let b = ((l0 + 180.0).rem_euclid(360.0), azim_deg(l0 + 180.0, lat_deg, eps_deg, lst_deg));
+    if a.1 >= 45.0 && a.1 <= 135.0 {
+        a.0
+    } else if b.1 >= 45.0 && b.1 <= 135.0 {
+        b.0
+    } else {
+        // Edge case: nearly at the horizon poles. Prefer the one with altitude rising.
+        a.0
+    }
+}
+
+/// Azimuth (0=N, 90=E) of an ecliptic point (β=0) on the local horizon.
+fn azim_deg(lon_deg: f64, lat_deg: f64, eps_deg: f64, lst_deg: f64) -> f64 {
+    let e = eps_deg.to_radians();
+    let phi = lat_deg.to_radians();
+    let lon = lon_deg.to_radians();
+    let dec = (e.cos() * lon.sin()).asin();
+    let ra = (lon.sin() * e.cos()).atan2(lon.cos());
+    let ha = lst_deg.to_radians() - ra;
+    let az = (-dec.cos() * ha.sin())
+        .atan2(dec.sin() * phi.cos() - dec.cos() * phi.sin() * ha.cos());
+    az.to_degrees().rem_euclid(360.0)
 }
 
 #[cfg(test)]

@@ -19,3 +19,10 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Local patch of solar-ephemeris: promotes `Body::elements()` to pub so ft-western
+# can feed each planet's &Planet into planet_apparent_ecliptic (geocentric apparent
+# ecliptic longitude). Upstream keeps the accessor private; this is a one-line pub
+# that lets us use the already-validated geocentric path instead of vsop87 heliocentric.
+[patch.crates-io]
+solar-ephemeris = { path = "vendor/solar-ephemeris" }
