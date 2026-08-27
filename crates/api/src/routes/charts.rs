@@ -439,11 +439,9 @@ pub fn register(router: R<'static>) -> R<'static> {
                         return Ok(res);
                     }
                     if !anything_configured(&ctx) {
-                        console_error!("interpret: no AI keys configured");
                         return Ok(error::error("AI service not configured", 503));
                     }
                     let chart_data = parse_chart(interp.chart_data.as_deref());
-                    console_error!("interpret: calling AIMutex for {}", div_type);
                     let ai_resp = match call_ai_mutex(&ctx, &div_type, &chart_data).await {
                         Ok(Some(r)) => r,
                         Ok(None) => return Ok(error::error("AI service temporarily unavailable, please try again", 503)),
@@ -488,7 +486,6 @@ fn anything_configured(ctx: &RouteContext<()>) -> bool {
     let res = ["IFLOW_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY"]
         .iter()
         .any(|name| ctx.env.secret(name).map(|s| !s.to_string().is_empty()).unwrap_or(false));
-    console_error!("anything_configured: {}", res);
     res
 }
 
@@ -508,7 +505,6 @@ async fn call_ai_mutex(ctx: &RouteContext<()>, chart_type: &str, chart_data: &se
         keys_map.insert("cerebras".to_string(), serde_json::Value::String(v));
     }
     let keys = serde_json::Value::Object(keys_map);
-    console_error!("call_ai_mutex keys: {}", keys);
     let body = serde_json::json!({
         "keys": keys,
         "interpretRequest": { "chartType": chart_type, "chartData": chart_data, "language": "zh" },
@@ -521,7 +517,6 @@ async fn call_ai_mutex(ctx: &RouteContext<()>, chart_type: &str, chart_data: &se
         .fetch_with_request(req)
         .await
         .map_err(|_| error::error("ai unavailable", 503))?;
-    console_error!("call_ai_mutex res status {}", res.status_code());
     if res.status_code() == 503 {
         return Ok(None);
     }

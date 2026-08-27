@@ -44,40 +44,6 @@ pub fn router(_env: Env) -> R<'static> {
             Err(e) => Ok(Response::from_json(&serde_json::json!({ "status": "error", "error": e.to_string() })).expect("ok json").with_status(500)),
         }
     })
-    .get_async("/debug/provider-models", |_, ctx: RouteContext<()>| async move {
-        use crate::services::ai::providers::{CEREBRAS_BASE, GROQ_BASE, IFLOW_API_URL};
-        async fn fetch_models(url: &str, key: &str) -> serde_json::Value {
-            let mut headers = worker::Headers::new();
-            let _ = headers.set("Authorization", &format!("Bearer {}", key));
-            let mut init = worker::RequestInit::new();
-            init.with_method(worker::Method::Get).with_headers(headers);
-            let req = match worker::Request::new_with_init(url, &init) {
-                Ok(r) => r,
-                Err(e) => return serde_json::json!({ "error": e.to_string() }),
-            };
-            let res = match worker::Fetch::Request(req).send().await {
-                Ok(r) => r,
-                Err(e) => return serde_json::json!({ "error": e.to_string() }),
-            };
-            let status = res.status_code();
-            let mut res = res;
-            let body: serde_json::Value = res.json().await.unwrap_or(serde_json::json!({ "raw": "parse failed" }));
-            serde_json::json!({ "status": status, "body": body })
-        }
-        let iflow_key = ctx.env.secret("IFLOW_API_KEY").map(|s| s.to_string()).unwrap_or_default();
-        let groq_key = ctx.env.secret("GROQ_API_KEY").map(|s| s.to_string()).unwrap_or_default();
-        let cerebras_key = ctx.env.secret("CEREBRAS_API_KEY").map(|s| s.to_string()).unwrap_or_default();
-        let iflow = if !iflow_key.is_empty() {
-            fetch_models(&format!("{}/models", IFLOW_API_URL.replace("/chat/completions", "")), &iflow_key).await
-        } else { serde_json::json!({ "error": "no key" }) };
-        let groq = if !groq_key.is_empty() {
-            fetch_models(&format!("{}/models", GROQ_BASE), &groq_key).await
-        } else { serde_json::json!({ "error": "no key" }) };
-        let cerebras = if !cerebras_key.is_empty() {
-            fetch_models(&format!("{}/models", CEREBRAS_BASE), &cerebras_key).await
-        } else { serde_json::json!({ "error": "no key" }) };
-        Ok(ok_json(&serde_json::json!({ "iflow": iflow, "groq": groq, "cerebras": cerebras })))
-    })
     .get_async("/", |_, _: RouteContext<()>| async move {
         Ok(ok_json(&serde_json::json!({ "name": "FortuneT V2 API", "version": "1.0.0" })))
     })

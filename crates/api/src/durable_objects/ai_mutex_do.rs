@@ -57,7 +57,6 @@ impl DurableObject for AIMutexDO {
     }
 
     async fn fetch(&self, req: Request) -> Result<Response> {
-        console_error!("AIMutex fetch start");
         // Backpressure: check queue depth before enqueuing (mirrors TS MAX_QUEUE_DEPTH).
         let depth = QUEUE.with(|q| q.borrow().len());
         if depth >= MAX_QUEUE_DEPTH {
@@ -150,15 +149,12 @@ impl AIMutexDO {
     }
 
     async fn handle_request(&self, mut req: Request) -> Result<Response> {
-        console_error!("handle_request start");
         let body: InterpretMsg = match req.json().await {
             Ok(b) => b,
             Err(e) => {
-                console_error!("handle_request json parse failed: {}", e);
                 return Err(Error::from("invalid body"));
             }
         };
-        console_error!("handle_request keys present: {:?}", body.keys.keys().collect::<Vec<_>>());
         let interpret = body.interpretRequest;
         let today = clock::today_utc();
         let mut last_error: Option<(String, String, String)> = None;
@@ -170,19 +166,15 @@ impl AIMutexDO {
             let api_key = match body.keys.get(*name) {
                 Some(Some(v)) if !v.is_empty() => v.clone(),
                 _ => {
-                    console_error!("skip {}: no key", name);
                     continue;
                 }
             };
             let model = model_for(name);
-            console_error!("try {} model {}", name, model);
 
             if self.rpd_blocked(name, &today).await? {
-                console_error!("skip {}: rpd blocked", name);
                 continue;
             }
             if !self.check_rpm(name, *rpm).await? {
-                console_error!("skip {}: rpm blocked", name);
                 continue;
             }
 
