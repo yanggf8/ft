@@ -1349,3 +1349,65 @@ Qwen 30 條：約 20 條採納/部分採納、2 條 **P0 級幻覺被實物證�
 
 
 </details>
+
+---
+
+## 11. 單 Rust Stack 落地總結（2026-08-28，全部 Phase 完成並生產驗證）
+
+**目標達成**：FortuneT 後端（Worker/引擎）與前端（Pages）從 TypeScript/Hono/React 全數遷移到
+單一 Rust stack，Phase 0–D 全部落地，§8.2 西洋精度對 JPL HORIZONS 通過。
+
+### 11.1 最終架構
+
+```
+crates/schema   ft-schema   — 共用 DTO（api 契約 + storage 位元相容）。前後端共同反序列化。
+crates/domain/ziwei    ft-ziwei   — 紫微（x-iztro 封裝）
+crates/domain/western  ft-western — 西洋（solar-ephemeris 所有天體）
+crates/worker    fortunet-engine — 引擎 Worker（service binding）
+crates/api       fortunet-api    — Hono 替代：路由/DO/D1/AI failover
+crates/web       ft-web          — Leptos CSR 前端（取代 React）
+scripts/         deploy-engine.sh / deploy-web.sh / schema.sql / verify-deployment.sh
+```
+
+部署：`fortunet-api`（Rust Worker，330KB gz）+ `fortunet-engine` + Leptos → Cloudflare Pages。
+D1 schema 唯一權威在 `scripts/schema.sql`。CI 只做 fmt/clippy/build wasm；部署走 OAuth 手動。
+
+### 11.2 各 Phase 產出（corresponding commit）
+
+| Phase | 內容 | commit |
+|---|---|---|
+| 0 探針 | vsop87 無月改 solar-ephemeris、體積/CPU 實測 | `c62c961` `4a03a83` `59faf21` |
+| A 引擎 | `fortunet-engine` + service binding；ft-ziwei 對拍 iztro | `307d889` `a5d96e2` `f54b42a` |
+| B Worker | ft-api（路由/DO/AI failover）；覆蓋部署保 session | `2bf442f` `0d7a662` `5ac379b` |
+| C 前端 | Leptos CSR 取代 React（shared ft-schema::api）| `1acb860` |
+| D 清理 | 刪 TS 殘留、Rust 化 toolchain/CI/docs | `98d3521` |
+| §8.2 修復 | 行星地心視黃經（vsop87 日心 bug）| `869dc4d` |
+| §8.2 修復 | 上升點公式（Meeus，原給降點）| `11ba0b4` |
+| 快取/SPA | 清西洋快取 + SPA 絕對路徑 | `0bfdb80` |
+
+### 11.3 驗證矩陣（全綠）
+
+| 面 | 項目 | 結果 |
+|---|---|---|
+| 紫微 | `ft-ziwei` wasm 對拍生產 `iztro-adapter.ts` | 逐欄位一致 |
+| 西洋 | 太陽/月亮/行星/上升對 JPL HORIZONS DE441（ObsEcLon 地心視黃經）| 9 天體 ≤0.00051°；上升 alt≈0 全東方 |
+| 時代 | canary session 覆蓋部署後仍有效（單向門位元相容）| ✅ session/D1 讀回 |
+| 整合 | `charts.test.ts` + `ziwei-iztro.test.ts`（Rust worker）| 17/17 綠 |
+| 前端 | Playwright 生產 E2E：註冊→出生→紫微 12宮→西洋→故事 | 0 console error |
+| 工程 | `cargo fmt` / wasm32 三 crate 編譯 | ✅ |
+
+### 11.4 過程中抓到的關鍵 bug（重新詮釋「編譯過 ≠ 行為對」）
+
+1. **vsop87 無月球**（`earth_moon` 是質心）→ 月球改 ELP-MPP02（Phase A）
+2. **`Date.UTC` 誤用**：`Reflect::apply(Date, ...)` 呼叫建構子回 NaN → 西洋全掛（Phase B）
+3. **行星日心/地心**：vsop87 `longitude()` 是日心 J2000 → Venus 差 99°（§8.2 抓到）
+4. **上升點返回降點**：atan2 負號在分子 + 錯 δ → 上升離地平 ±16°（§8.2/Grok 抓到）
+5. **西洋快取永不失效**：`extracted_version` 兜底頂層 `engineVersion` → 舊錯盤永存（§8.2 抓到）
+6. **CORS 缺失**：preflight 缺 `cache-control`、origin 用 substring 比對、無 OPTIONS、（Phase B/C）
+7. **SPA 相對路徑**：`index.html` 相對資源在子路由錯位 → MIME 錯（前端回歸抓到）
+
+### 11.5 後續（非本次範圍）
+
+- Big5 人格×情境行為預測（Part I F1–F8）：`crates/domain/big5` 僅預留目錄，未實作。
+- AI provider 正名為最新（現用 offline stub 兜底，provider 恢復時自然生效）。
+- 前端每生辰的 AI interpret / story 目前走離線 stub（外部模型帳號狀態）。
