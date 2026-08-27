@@ -1,0 +1,11 @@
+[package]
+name = "ft-western"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ft-schema = { path = "../../schema" }
+solar-ephemeris = "0.2.0"
+vsop87 = "3.0.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
