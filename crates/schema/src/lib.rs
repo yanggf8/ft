@@ -68,3 +68,72 @@ pub struct ZiWeiChartV3 {
     pub four_pillars: ZiWeiFourPillars,
     pub meta: ZiWeiMeta,
 }
+
+// ── Western chart types ──
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WesternPlanet {
+    pub name: String,
+    pub longitude: f64,
+    pub sign: String,
+    pub degree: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WesternChartV3 {
+    pub planets: Vec<WesternPlanet>,
+    pub ascendant: WesternAscendant,
+    pub houses: Vec<WesternHouse>,
+    pub jd_utc: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WesternAscendant {
+    pub longitude: f64,
+    pub sign: String,
+    pub degree: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WesternHouse {
+    pub index: u8,
+    pub sign: String,
+    pub cusp: f64,
+}
+
+impl WesternChartV3 {
+    pub fn from_longitudes(planets_raw: Vec<(&str, f64)>, asc_lon: f64, jd_utc: f64) -> Self {
+        let planets = planets_raw
+            .into_iter()
+            .map(|(name, lon)| {
+                let (sign, degree) = sign_degree(lon);
+                WesternPlanet { name: name.to_string(), longitude: lon, sign, degree }
+            })
+            .collect();
+        let (asc_sign, asc_deg) = sign_degree(asc_lon);
+        let ascendant = WesternAscendant { longitude: asc_lon, sign: asc_sign.clone(), degree: asc_deg };
+        // Whole Sign: house i cusp = asc_sign_start + i*30
+        let asc_sign_idx = sign_index(&asc_sign);
+        let houses = (0..12)
+            .map(|i| {
+                let sign_idx = (asc_sign_idx + i) % 12;
+                let sign = ZODIAC[sign_idx].to_string();
+                let cusp = (asc_sign_idx as f64 * 30.0 + i as f64 * 30.0).rem_euclid(360.0);
+                WesternHouse { index: i as u8 + 1, sign, cusp }
+            })
+            .collect();
+        Self { planets, ascendant, houses, jd_utc }
+    }
+}
+
+const ZODIAC: [&str; 12] = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+
+fn sign_degree(lon: f64) -> (String, f64) {
+    let lon = lon.rem_euclid(360.0);
+    let idx = (lon / 30.0).floor() as usize % 12;
+    (ZODIAC[idx].to_string(), lon - idx as f64 * 30.0)
+}
+
+fn sign_index(sign: &str) -> usize {
+    ZODIAC.iter().position(|s| *s == sign).unwrap_or(0)
+}
