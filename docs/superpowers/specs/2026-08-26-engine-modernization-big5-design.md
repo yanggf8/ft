@@ -787,9 +787,17 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 > 原文寫「改由 Queue 非同步預計算」——本專案 `wrangler.toml` **目前沒有 queue binding**，
 > 這等於新引入 Cloudflare Queues。它是架構變更，不是降級旋鈕，不該寫成輕描淡寫的備案。
 
-**CPU 預算**：Paid 預設 30 s／請求，兩個引擎合計應在 100 ms 量級，餘裕充足。
-真正的風險是 **1 秒的啟動 CPU 上限**——WASM 模組的實例化算在裡面，
-體積越大越接近這條線。§7 Phase 0 的實測要同時量啟動時間。
+**CPU 預算 — Phase 0 實測（2026-08-27，wrangler tail --format json，SJC）**：
+
+| 請求 | wallTime | cpuTime |
+|---|---|---|
+| `GET /health` | 1–5 ms | 0–5 ms |
+| `POST /auth/register` | 82 ms | 0 ms |
+| `GET /charts/ziwei`（iztro 重算，含 D1）| **391–747 ms** | **3–7 ms** |
+
+**結論：`cpuTime` 僅 3–7 ms，遠低於 Free 的 10 ms 上限**。wallTime 的 400–700 ms 主要是 D1 與網路等待，不計入 CPU 預算。
+**Paid 不是紫微的阻擋項**，與 §0.1 原本「紫微遠超 10 ms」的推論相反（已在 §0.1 更正為先量再決定）。
+真正的風險是 **1 秒的啟動 CPU 上限**——WASM 實例化算在裡面，體積越大越接近這條線。
 
 ## 7. 遷移分期與回退
 
@@ -815,6 +823,18 @@ target `wasm32-unknown-unknown`，Rust 1.95.0。
 > TS Worker 透過 service binding 呼叫。好處是它**與 §4.1b 的退路是同一個架構**——
 > 若 `x-iztro` 對拍失敗，紫微留在 TS 側即可，不必改架構。
 > 代價是 Phase A 期間確實是雙 Worker；**若 §4.1b 永久啟用，「單一 stack」的目標即打折，這點必須先向使用者講明**（見 §10 T2）。
+
+### Phase 0 探針結果（2026-08-27）
+
+| # | 探針 | 結果 | 判定 |
+|---|---|---|---|
+| P1 | 現網 `cpuTime`（`wrangler tail --format json`）| `GET /charts/ziwei` wall 391–747 ms / **cpu 3–7 ms**（`GET /health` 0–5 ms）| ✅ **通過** — 遠低於 Free 10 ms，Paid 非阻擋項 |
+| P2 | D1 `alpha` 最小 Worker（`worker` 0.8.5 `d1` feature）| `wasm32` 編譯成功，`SELECT users` / `SELECT interpretations` / `DELETE` 語法正確；`release` **1.2 MB raw / 322 KB gzip** | ✅ **通過** |
+| P3 | 西洋月球候選（`vsop87` 無月球）| `solar-ephemeris` 0.2.0（MIT/Apache-2.0，2026-07-20）內建 **ELP-MPP02** `moon_apparent_ecliptic` + `VSOP2013`，`wasm32` 編譯成功 **472 KB raw / 326 KB gzip** | ✅ **有解** — 不需立即手寫 ELP2000，改用此 crate，待精度驗證 |
+| P4 | `x-iztro` vs `iztro@2.6.0` 對拍（6 組邊界：閏月、晚子時、跨世紀等）| `palaces=12` / `firstPalace` / `majorStars` 亮度 / `sihua` 四化 **逐欄一致** | ✅ **通過** |
+| P5 | 體積合計（`vsop87` 0.50 + `x-iztro` 0.40 + `solar-ephemeris` 0.33 擇一 + `worker` 0.32）| **~1.2–1.5 MB gzip** | ✅ **通過** — 對 Paid 10 MB 與 Free 3 MB 皆有餘裕 |
+
+**Phase 0 五道閘門全過，可進 Phase A。**
 
 **回退路徑**：每個 Phase 都是獨立部署。Worker 層用 `wrangler rollback`；前端 Pages 保留前一次部署。
 
