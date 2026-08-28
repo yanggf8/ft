@@ -45,7 +45,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             };
             // Existing user?
             let e = db::text(&email);
-            match db::first::<UserRow>(&db, "SELECT id FROM users WHERE email = ?1", &[&e]).await {
+            match db::first::<UserRow>(&db, "SELECT id, email FROM users WHERE email = ?1", &[&e]).await {
                 Ok(Some(_)) => return Ok(error::error("User already exists", 409)),
                 Ok(None) => {}
                 Err(_) => return Ok(error::error("db error", 500)),

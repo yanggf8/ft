@@ -130,6 +130,16 @@ pub fn register(router: R<'static>) -> R<'static> {
             if !(1..=31).contains(&bd) {
                 return Ok(error::error("birth_day must be 1-31", 400));
             }
+            let is_leap_year = by % 4 == 0 && (by % 100 != 0 || by % 400 == 0);
+            let days_in_month = match bm {
+                2 if is_leap_year => 29,
+                2 => 28,
+                4 | 6 | 9 | 11 => 30,
+                _ => 31,
+            };
+            if bd > days_in_month {
+                return Ok(error::error("Invalid date", 400));
+            }
             if let Some(h) = body.birth_hour {
                 if !(0..=23).contains(&h) {
                     return Ok(error::error("birth_hour must be 0-23", 400));
