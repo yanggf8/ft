@@ -6,6 +6,7 @@ package-lock.json
 dist/
 .wrangler/
 .cache/
+.playwright-mcp/
 
 # Environment
 .env
