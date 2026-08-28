@@ -23,6 +23,7 @@ pub fn HomePage() -> impl IntoView {
                     <div class="hero-actions">
                         <A href="/divination/ziwei" attr:class="cta">"紫微斗數"</A>
                         <A href="/divination/western" attr:class="cta-alt">"西洋占星"</A>
+                        <A href="/personality" attr:class="cta-alt">"人格測驗"</A>
                         <A href="/profile" attr:class="cta-alt">"我的資料"</A>
                     </div>
                 </Show>
@@ -39,6 +40,10 @@ pub fn HomePage() -> impl IntoView {
                 <div class="feature">
                     <h3>"🤖 AI 解讀"</h3>
                     <p>"智能 AI 提供專業且易懂的命理解讀"</p>
+                </div>
+                <div class="feature">
+                    <h3>"🧠 人格測驗"</h3>
+                    <p>"IPIP-15 十五題，約 90 秒，了解你的行為傾向"</p>
                 </div>
             </div>
         </div>

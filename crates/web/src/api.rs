@@ -203,3 +203,24 @@ pub async fn get_story(no_cache: bool) -> Result<StoryResponse, ApiErr> {
 pub async fn generate_story() -> Result<StoryResponse, ApiErr> {
     post_empty("/api/charts/story/generate").await
 }
+
+// ── Big5 personality (F1) ──
+
+/// `POST /api/personality/quiz`. A 422 `CARELESS_SUSPECTED` is handled by the
+/// caller as the one post-submit path that does not re-fetch the read model.
+pub async fn submit_quiz(body: &QuizSubmission) -> Result<QuizResponse, ApiErr> {
+    send_json(Request::post(&url("/api/personality/quiz")), body).await
+}
+
+pub async fn get_personality(no_cache: bool) -> Result<PersonalityMeResponse, ApiErr> {
+    get_json("/api/personality/me", no_cache).await
+}
+
+/// Bodyless DELETE: some intermediaries reject DELETE request bodies.
+pub async fn delete_personality() -> Result<PersonalityDeleteResponse, ApiErr> {
+    let resp = with_auth(Request::delete(&url("/api/personality/me")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    decode(resp).await
+}
