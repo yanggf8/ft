@@ -178,6 +178,173 @@ pub struct InterpretationsResponse {
     pub interpretations: Vec<serde_json::Value>,
 }
 
+// ── Big5 personality (F1) ──
+
+/// `POST /api/personality/quiz` body。作答：`{skip:false, answers:[15 ints 1–5], durationMs}`；
+/// 主動跳過：`{skip:true}`（answers/durationMs 必須缺省，殘留任一 → 400）。
+/// **skip 是顯式旗標——omitted 欄位不等於 skip**；`skip` 自身須 `#[serde(default)]`
+/// （缺省 false），否則 `{}` 在 serde 就炸成 INVALID_JSON，到不了
+/// SKIP_ANSWERS_CONFLICT（Grok 二審 R2-3）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizSubmission {
+    #[serde(default)]
+    pub skip: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub durationMs: Option<u64>,
+}
+
+/// 五維 0–100 實測。f64 實值（(raw−3)×25/3 非整數；不預先取整，避免捨入誤差
+/// 進入後續門檻比較），UI 顯示時取整。PartialEq 供 wire roundtrip 測試（Grok 二審 R2-4）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OceanScores {
+    pub extraversion: f64,
+    pub agreeableness: f64,
+    pub conscientiousness: f64,
+    pub emotionalStability: f64,
+    pub intellectImagination: f64,
+}
+
+/// 一筆人格側寫。status wire 值：`complete` / `carelessSuspected` / `skippedPriorOnly`
+/// （D1 存 snake_case，路由層轉換）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalityProfile {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oceanMeasured: Option<OceanScores>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answers: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub createdAt: Option<String>,
+}
+
+/// `POST /api/personality/quiz` (200)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizResponse {
+    pub profile: PersonalityProfile,
+}
+
+/// `GET /api/personality/me` (200)。讀模型（Grok 審 #3）：`profile` = 最新一筆
+/// `complete`（有效側寫不因後續 skip/亂答消失）；`status` = 最新一筆的狀態，
+/// 前端據此切四態。無任何資料時兩欄皆 null。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalityMeResponse {
+    #[serde(default)]
+    pub profile: Option<PersonalityProfile>,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+/// `DELETE /api/personality/me` (200)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalityDeleteResponse {
+    pub success: bool,
+}
+
+#[cfg(test)]
+mod big5_wire_tests {
+    use super::*;
+
+    /// 契約鎖定：wire 形狀（camelCase、Option 語意、status 值）不得漂移。
+    #[test]
+    fn quiz_submission_roundtrip_with_skip() {
+        let skip: QuizSubmission = serde_json::from_str(r#"{"skip":true}"#).unwrap();
+        assert!(skip.skip && skip.answers.is_none() && skip.durationMs.is_none());
+        let normal: QuizSubmission = serde_json::from_str(
+            r#"{"skip":false,"answers":[3,4,5,1,2,3,4,5,1,2,3,4,5,1,2],"durationMs":42000}"#,
+        )
+        .unwrap();
+        assert!(!normal.skip);
+        assert_eq!(normal.answers.as_ref().unwrap().len(), 15);
+        assert_eq!(normal.durationMs, Some(42000));
+    }
+
+    /// `{}`（欄位全缺）反序列化成功 → match 落 (false, None) → 400 SKIP_ANSWERS_CONFLICT
+    /// （skip 須 serde default，否則 serde 直接炸 INVALID_JSON——Grok 二審 R2-3）。
+    #[test]
+    fn empty_body_deserializes_with_skip_false() {
+        let empty: QuizSubmission = serde_json::from_str(r#"{}"#).unwrap();
+        assert!(!empty.skip && empty.answers.is_none() && empty.durationMs.is_none());
+        let skip_only: QuizSubmission = serde_json::from_str(r#"{"skip":false}"#).unwrap();
+        assert!(!skip_only.skip && skip_only.answers.is_none());
+    }
+
+    /// `{skip:true}` 序列化後**恰好只有 skip 一個鍵**（baicodex F15——
+    /// Option 無 skip_serializing_if 會輸出 null，與「必須缺省」契約文字不符）。
+    #[test]
+    fn skip_true_serializes_to_single_key() {
+        let j = serde_json::to_value(QuizSubmission {
+            skip: true,
+            answers: None,
+            durationMs: None,
+        })
+        .unwrap();
+        let obj = j.as_object().unwrap();
+        assert_eq!(obj.len(), 1, "skip payload must carry exactly one key");
+        assert_eq!(obj["skip"], true);
+    }
+
+    /// GET 讀模型 wire 鎖（Grok 二審 R2-9）：profile 內 status 與頂層 status 可不同；
+    /// 無資料兩欄皆 null 且 serialize 都要出現（DELETE 後 verify 斷言依賴）。
+    #[test]
+    fn me_response_read_model_lock() {
+        let r: PersonalityMeResponse = serde_json::from_str(
+            r#"{"profile":{"status":"complete","oceanMeasured":{"extraversion":0.0,"agreeableness":0.0,"conscientiousness":0.0,"emotionalStability":0.0,"intellectImagination":0.0}},"status":"skippedPriorOnly"}"#,
+        )
+        .unwrap();
+        assert_eq!(r.profile.as_ref().unwrap().status, "complete");
+        assert_eq!(r.status.as_deref(), Some("skippedPriorOnly"));
+
+        let j = serde_json::to_value(PersonalityMeResponse {
+            profile: None,
+            status: None,
+        })
+        .unwrap();
+        assert!(j.get("profile").and_then(|v| v.as_null()).is_some());
+        assert!(j.get("status").and_then(|v| v.as_null()).is_some());
+    }
+
+    /// OceanScores 欄位名（emotionalStability / intellectImagination）鎖 camelCase（Grok #19）。
+    #[test]
+    fn ocean_scores_wire_lock() {
+        let o = OceanScores {
+            extraversion: 100.0,
+            agreeableness: 75.0,
+            conscientiousness: 50.0,
+            emotionalStability: 75.0,
+            intellectImagination: 0.0,
+        };
+        let j = serde_json::to_value(&o).unwrap();
+        assert_eq!(j["extraversion"], 100.0);
+        assert_eq!(j["emotionalStability"], 75.0);
+        assert_eq!(j["intellectImagination"], 0.0);
+        let back: OceanScores = serde_json::from_value(j).unwrap();
+        assert_eq!(back, o);
+    }
+
+    #[test]
+    fn profile_serializes_camel_wire() {
+        let p = PersonalityProfile {
+            status: "carelessSuspected".into(),
+            oceanMeasured: None,
+            answers: Some(vec![3; 15]),
+            createdAt: Some("2026-08-28T00:00:00.000Z".into()),
+        };
+        let j = serde_json::to_value(&p).unwrap();
+        assert_eq!(j["status"], "carelessSuspected");
+        assert!(j.get("oceanMeasured").is_none()); // skip_serializing_if
+        let back: PersonalityProfile = serde_json::from_value(j).unwrap();
+        assert_eq!(back.status, "carelessSuspected");
+    }
+
+    #[test]
+    fn me_response_profile_null() {
+        let r: PersonalityMeResponse = serde_json::from_str(r#"{"profile":null}"#).unwrap();
+        assert!(r.profile.is_none());
+    }
+}
+
 // ── Errors ──
 
 /// Every non-2xx body from `ft-api` is `{ error, code? }`.

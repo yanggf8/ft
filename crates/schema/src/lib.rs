@@ -3,6 +3,7 @@
 //! Phase A: ZiWei V3 + Western types. Big5 to follow.
 
 pub mod api;
+pub mod items;
 pub mod storage;
 
 use serde::{Deserialize, Serialize};
