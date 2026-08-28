@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-08-29 現況更新（人工 gap 盤點後）
+
+對生產 fortnet-api（v`5beb9de1`）以 curl 盤點（`/tmp/gap-probe.sh`，同 verify-big5.sh 手法）。核心流程皆健康；兩個原本標 critic 的 gap 已在 **commit 6be4fbf** 修復並復測通過：
+
+- **重複註冊 email** → 原回 500（duplicate 檢查 `SELECT id` 缺 `email` 欄位 → 反序列化失敗）；已改 `SELECT id, email` → **現回 409**。
+- **日曆無效生日**（2000-02-30 / 04-31 / 2021-02-29）→ 原本只驗 range、被接受；已加 days-in-month（含閏年）驗證 → **現回 400**。
+
+本次盤點**驗證通過**的項目（原文皆標 critic gap，已非盲區）：auth 401（無/壞 token）＋ GET /users/me、建圖（ziwei `palaces` / western `sunSign`）、GET /api/charts 列表、AI interpret（ZiWei 200、約 4s、帶 provider/model、bogus type→400）、無 birth data→400、year/month 範圍。
+
+**Rate limiting**：確認為 **per-isolate 設計限制**（`limiter()` 是 isolate 本機 `OnceLock` static，Cloudflare 多 isolate 各自計數 → 跨請求不會累計到 10），**非 code bug**；要全球嚴格 10/min 需上 Durable Object（獨立未來項）。
+
+**⚠️ 過時註記**：本文件（2025-12-09）多處端點（`/api/charts/calculate/ziwei`、`/api/charts/interpret`、`X-Session-ID`）與現行 routes（crates/api/src/routes）不符；`scripts/verify-deployment.sh` 亦同。請以現行 crates/api 為準。
+
+<details><summary>原文（2025-12-09 快照，端點未更新）</summary>
+
 ## ✅ What's Covered (3 tests)
 
 1. **ZiWei calculation** - Happy path
@@ -201,3 +216,5 @@ Add **minimum 7 more tests**:
 - **Add comprehensive tests?** 📅 Post-beta (Week 22-25)
 
 **Bottom line**: Current tests are insufficient. Add at least 7 more before beta.
+
+</details>
