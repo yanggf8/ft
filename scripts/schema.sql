@@ -86,3 +86,21 @@ CREATE TABLE IF NOT EXISTS ai_quota (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ai_quota_provider_date ON ai_quota(provider, date);
+
+-- ── Big5 personality (F1) ──
+-- measurement_status: 'complete' | 'careless_suspected' | 'skipped_prior_only'
+CREATE TABLE IF NOT EXISTS personality_profiles (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  ipip_answers TEXT,                 -- JSON [15] int 1–5；skipped 記錄為 null
+  ocean_measured TEXT,               -- JSON 五維 0–100；僅 complete 有值
+  measurement_status TEXT NOT NULL,  -- complete | careless_suspected | skipped_prior_only
+  item_duration_ms INTEGER,          -- 總作答時長 ms（client 量測上送）
+  careless_flags TEXT,               -- JSON {too_fast,straight_lining,inconsistent,dims}；
+                                     -- per-signal/per-dim 校準日誌（Grok 對抗審 #5）
+  created_at TEXT NOT NULL           -- 一律由 app 寫 clock::now_iso()（ISO）；不用 DEFAULT
+                                     -- datetime('now')：空格格式與 ISO 字典序不一致，混用會亂序
+);
+-- 註解（F9/後續切片防誤讀）：complete 與 careless_suspected 記錄都帶 ipip_answers；
+-- skipped_prior_only **兩種都可能**——主動 skip（{skip:true}）為 null、亂答升級
+-- 為帶 answers。狀態一律以 measurement_status 為準，不以 answers 是否為 null 推斷。
