@@ -133,3 +133,79 @@ main { flex: 1; }
 .star { font-size: 0.8rem; padding: 0.15rem 0.35rem; border-radius: 4px; background: #F3F4F6; }
 .star.main { background: #FEF3C7; }
 .star.transformation { background: #FEE2E2; }
+
+/* ── /personality result: OCEAN score tracks (Grok design review) ── */
+.ocean-dim {
+  background: #F9FAFB;
+  border-radius: 8px;
+  padding: 1rem 1.125rem 1.125rem;
+  margin-bottom: 0.75rem;
+}
+.ocean-dim:last-of-type { margin-bottom: 0; }
+.ocean-dim-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; margin-bottom: 0.375rem;
+}
+.ocean-dim-head strong { font-size: 0.9375rem; color: #1F2937; font-weight: 600; }
+.ocean-score {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #4F46E5;
+}
+.ocean-track-wrap { padding: 10px 12px 8px; }
+.ocean-track {
+  position: relative;
+  height: 8px;
+  background: #F3F4F6;
+  border-radius: 999px;
+}
+.ocean-band {
+  position: absolute; top: 0; height: 100%;
+  background: #A5B4FC;
+  border-radius: 999px;
+}
+.ocean-mean {
+  position: absolute;
+  top: -5px; width: 2px; height: 18px;
+  background: #6B7280;
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+.ocean-marker {
+  position: absolute; top: 50%;
+  width: 14px; height: 14px;
+  background: #4F46E5;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #4F46E5;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.ocean-caption {
+  font-size: 0.75rem;
+  color: #6B7280;
+  margin: 0.375rem 0 0;
+}
+.ocean-copy {
+  margin-top: 0.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #4B5563;
+}
+.ocean-foot {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #E5E7EB;
+}
+.ocean-foot strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4B5563;
+}
+.ocean-foot > .muted { font-size: 0.8rem; margin-top: 0.375rem; }
+.ocean-foot details { margin-top: 1rem; }
+.ocean-foot summary { color: #6B7280; font-size: 0.875rem; cursor: pointer; }
+.ocean-foot .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }

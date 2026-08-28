@@ -291,7 +291,7 @@ pub fn PersonalityPage() -> impl IntoView {
                     view! {
                         <div class="card">
                             <h2 style="margin-bottom:0.5rem">"你的行為傾向"</h2>
-                            <p class="muted" style="margin-bottom:1.5rem">"分數呈現五個面向的相對傾向。"</p>
+                            <p class="muted" style="margin-bottom:1.25rem">"分數呈現五個面向的相對傾向。"</p>
 
                             {measured.map(|ocean| {
                                 scores(&ocean).into_iter().enumerate().map(|(index, score)| {
@@ -300,33 +300,37 @@ pub fn PersonalityPage() -> impl IntoView {
                                     let band_left = (NORMS[index].mean - NORMS[index].sd).clamp(0.0, 100.0);
                                     let band_right = (NORMS[index].mean + NORMS[index].sd).clamp(0.0, 100.0);
                                     view! {
-                                        <section style="margin-bottom:1.5rem">
-                                            <div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:0.4rem">
+                                        <section class="ocean-dim">
+                                            <div class="ocean-dim-head">
                                                 <strong>{DIMENSION_NAMES[index]}</strong>
-                                                <span>{format!("{shown:.0}")}</span>
+                                                <span class="ocean-score">{format!("{shown:.0}")}</span>
                                             </div>
-                                            <div style="height:18px;background:#e5e7eb;border-radius:999px;position:relative;overflow:hidden">
-                                                <div style=format!("position:absolute;left:{band_left:.2}%;width:{:.2}%;height:100%;background:#c7d2fe", band_right - band_left)></div>
-                                                <div style=format!("position:absolute;left:0;width:{:.2}%;height:100%;background:#4f46e5;border-radius:999px", score.clamp(0.0, 100.0))></div>
-                                                <div
-                                                    title="臺灣中老年立意取樣常模平均"
-                                                    style=format!("position:absolute;left:{mean:.2}%;top:0;width:2px;height:100%;background:#111827")
-                                                ></div>
+                                            <div class="ocean-track-wrap">
+                                                <div class="ocean-track">
+                                                    <div class="ocean-band" style=format!("left:{band_left:.2}%;width:{:.2}%", band_right - band_left)></div>
+                                                    <div
+                                                        class="ocean-mean"
+                                                        title="臺灣中老年立意取樣常模平均"
+                                                        style=format!("left:{mean:.2}%")
+                                                    ></div>
+                                                    <div class="ocean-marker" style=format!("left:{:.2}%", score.clamp(0.0, 100.0))></div>
+                                                </div>
                                             </div>
-                                            <p class="muted" style="font-size:0.75rem;margin-top:0.25rem">
+                                            <p class="ocean-caption">
                                                 {format!("常模平均 {:.0}；淡色區為平均正負一個標準差", NORMS[index].mean)}
                                             </p>
-                                            <p style="margin-top:0.5rem">{profile_copy(index, score)}</p>
+                                            <p class="ocean-copy">{profile_copy(index, score)}</p>
                                         </section>
                                     }
                                 }).collect_view()
                             })}
 
-                            <p style="margin-top:1rem"><strong>"趨勢參考，非心理診斷、非醫療建議"</strong></p>
-                            <p class="muted" style="font-size:0.8rem;margin-top:0.5rem">{SOURCE}</p>
+                            <div class="ocean-foot">
+                                <strong>"趨勢參考，非心理診斷、非醫療建議"</strong>
+                                <p class="muted">{SOURCE}</p>
 
-                            <details style="margin-top:1.5rem">
-                                <summary style="cursor:pointer">"查看原始 15 題作答"</summary>
+                                <details>
+                                    <summary>"查看原始 15 題作答"</summary>
                                 <ol style="margin:1rem 0 0 1.25rem;display:grid;gap:0.5rem">
                                     {raw_answers.unwrap_or_default().into_iter().enumerate().map(|(index, answer)| {
                                         let item = &ITEMS[index];
@@ -338,11 +342,11 @@ pub fn PersonalityPage() -> impl IntoView {
                                 </ol>
                             </details>
 
-                            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1.5rem">
-                                <button
-                                    class="btn-primary"
-                                    on:click=move |_| reset_quiz(state, answers, error, quiz_started_at)
-                                >
+                                <div class="actions">
+                                    <button
+                                        class="btn-primary"
+                                        on:click=move |_| reset_quiz(state, answers, error, quiz_started_at)
+                                    >
                                     "重測"
                                 </button>
                                 <button
@@ -371,6 +375,7 @@ pub fn PersonalityPage() -> impl IntoView {
                                 >
                                     {move || if deleting.get() { "刪除中..." } else { "刪除人格資料" }}
                                 </button>
+                                </div>
                             </div>
                         </div>
                     }.into_any()
