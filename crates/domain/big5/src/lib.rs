@@ -6,5 +6,5 @@ pub mod careless;
 pub mod norm;
 pub mod scoring;
 
-pub use careless::{any_triggered, detect_careless, CarelessFlags};
+pub use careless::{any_triggered, detect_careless, inconsistent_dims, CarelessFlags};
 pub use scoring::{score, validate, ValidationErr};

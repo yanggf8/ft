@@ -18,9 +18,9 @@ const WINDOW_MS: f64 = 60000.0;
 const SELECT_LATEST: &str = "SELECT ipip_answers, ocean_measured, measurement_status, created_at \
      FROM personality_profiles WHERE user_id = ?1 ORDER BY created_at DESC, rowid DESC LIMIT 1";
 
-/// escalation 判斷用：最新一筆（**不限 status**）的狀態與時間——「最新一筆 ∩ 時間窗」
-/// 在 Rust 端判斷，SQL 不得過濾 status（Grok 二審 R2-1）。
-const SELECT_LATEST_STATUS: &str = "SELECT measurement_status, created_at \
+/// escalation 判斷用：最新一筆（**不限 status**）的狀態——若為 careless_suspected 則本次
+/// 升級 skipped_prior_only（「重測一次仍觸發」＝連續次數閘，不採時間窗，Grok 對抗審 #2）。
+const SELECT_LATEST_STATUS: &str = "SELECT measurement_status \
      FROM personality_profiles WHERE user_id = ?1 ORDER BY created_at DESC, rowid DESC LIMIT 1";
 
 /// D1 status（snake_case）→ wire status（camelCase）。
@@ -34,8 +34,7 @@ fn status_to_wire(s: &str) -> String {
 
 #[derive(serde::Deserialize)]
 struct StatusRow {
-    measurement_status: String,
-    created_at: Option<String>, // escalation 判斷「最新一筆 ∩ 時間窗」用（Grok 二審 R2-1）
+    measurement_status: String, // escalation 判斷「最新一筆是否 careless」用
 }
 
 #[derive(serde::Deserialize)]
@@ -82,7 +81,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             // skip 顯式旗標（Grok 審 #12）：`{skip:true}`＝主動跳過（F7/D5：不產出
             // 掛其名下的分數）；`{skip:false}` 必須帶 answers；`{}`（omitted）或
             // skip 與 answers 並存 → 400，防漏傳 answers 的客戶端被默默記成跳過。
-            let (status, ocean_json, answers_json, duration_ms) =
+            let (status, ocean_json, answers_json, duration_ms, careless_json) =
                 match (body.skip, &body.answers) {
                     (true, None) => {
                         // skip 時 answers/durationMs 皆須缺省——殘留任一 → 400
@@ -94,7 +93,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                                 400,
                             ));
                         }
-                        ("skipped_prior_only".to_string(), None, None, None)
+                        ("skipped_prior_only".to_string(), None, None, None, None)
                     }
                     (true, Some(_)) | (false, None) => {
                         return Ok(error::error_code(
@@ -113,19 +112,23 @@ pub fn register(router: R<'static>) -> R<'static> {
                         }
                         let dur = body.durationMs.unwrap_or(0);
                         let flags = ft_big5::detect_careless(dur, a);
+                        let dims = ft_big5::inconsistent_dims(a);
+                        // per-signal/per-dim 日誌（Grok 對抗審 #5）：三訊號聯集的 1%–15%
+                        // 觸發率無從校準單一旋鈕；落庫各訊號與觸發維，供上線後分條件校準。
+                        let careless_json = serde_json::to_string(&serde_json::json!({
+                            "too_fast": flags.too_fast,
+                            "straight_lining": flags.straight_lining,
+                            "inconsistent": flags.inconsistent,
+                            "dims": dims,
+                        }))
+                        .expect("serialize careless flags");
                         if ft_big5::any_triggered(&flags) {
-                            // 狀態機（K1：每次提交都落庫）：**最新一筆（不限 status）**
-                            // 為 careless_suspected 且其 created_at 在 5 分鐘內 → 本次
-                            // 升級 skipped_prior_only；否則記 careless_suspected。
-                            // 謂詞是「最新一筆 ∩ 時間窗」——不得用 WHERE status 過濾
-                            // 把「最新一筆」語義刪掉（Grok 二審 R2-1：careless → 重測
-                            // complete → 再亂答必須重新從 422 開始）。
-                            let window_start = clock::now_plus_ms(-300_000.0);
-                            // now_plus_ms 失敗回 ""——空字串會讓 t >= "" 恆真、
-                            // 無條件升級 skipped；缺失時保守不升級（baicodex F16.1）
-                            if window_start.is_empty() {
-                                return Ok(error::error_code("clock unavailable", "DB_ERROR", 500));
-                            }
+                            // 狀態機（K1：每次提交都落庫）：**最新一筆（不限 status）**為
+                            // careless_suspected → 本次升級 skipped_prior_only；否則記
+                            // careless_suspected。「重測一次仍觸發」＝**連續次數**閘，
+                            // 不採時間窗——Grok 對抗審 #2：5 分鐘窗會罰慢而誠實的重測、
+                            // 過期 careless 過度升級；latest=complete/skipped/無記錄 → 422
+                            // （careless → complete → careless 重開，R2-1）。
                             let latest: Option<StatusRow> =
                                 match db::first(&db, SELECT_LATEST_STATUS, &[&db::text(&user_id)])
                                     .await
@@ -141,13 +144,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                                     }
                                 };
                             let escalated = latest
-                                .map(|r| {
-                                    r.measurement_status == "careless_suspected"
-                                        && r.created_at
-                                            .as_deref()
-                                            .map(|t| t >= window_start.as_str())
-                                            .unwrap_or(false) // created_at 缺失 → 不升級
-                                })
+                                .map(|r| r.measurement_status == "careless_suspected")
                                 .unwrap_or(false);
                             let s = if escalated {
                                 "skipped_prior_only"
@@ -159,6 +156,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                                 None,
                                 Some(serde_json::to_string(a).expect("serialize answers")),
                                 Some(dur),
+                                Some(careless_json),
                             )
                         } else {
                             let o = ft_big5::score(a);
@@ -167,6 +165,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                                 Some(serde_json::to_string(&o).expect("serialize scores")),
                                 Some(serde_json::to_string(a).expect("serialize answers")),
                                 Some(dur),
+                                Some(careless_json),
                             )
                         }
                     }
@@ -178,14 +177,30 @@ pub fn register(router: R<'static>) -> R<'static> {
             let ocean = db::opt_text(ocean_json.as_deref());
             let st = db::text(&status);
             let dur = db::opt_int(duration_ms.map(|v| v as i64));
+            let cf = db::opt_text(careless_json.as_deref());
             let created = clock::now_iso();
+            // now_iso() 失敗回 ""（.unwrap_or_default）——空 created_at 會讓「最新一筆」排序
+            // 與 subsequent t >= window 比較失真（Grok 對抗審 #4）；fail-closed 不落庫。
+            if created.is_empty() {
+                return Ok(error::error_code("clock unavailable", "DB_ERROR", 500));
+            }
             let created_t = db::text(&created);
             if let Err(e) = db::exec(
                 &db,
                 "INSERT INTO personality_profiles \
                          (id, user_id, ipip_answers, ocean_measured, measurement_status, \
-                          item_duration_ms, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                &[&db::text(&id), &uid, &ans, &ocean, &st, &dur, &created_t],
+                          item_duration_ms, careless_flags, created_at) \
+                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                &[
+                    &db::text(&id),
+                    &uid,
+                    &ans,
+                    &ocean,
+                    &st,
+                    &dur,
+                    &cf,
+                    &created_t,
+                ],
             )
             .await
             {
