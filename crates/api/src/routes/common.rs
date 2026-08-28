@@ -1,5 +1,6 @@
 //! Shared route helpers — response builders, auth guard, ETag, chart metadata.
 
+use std::sync::{Mutex, OnceLock};
 use worker::*;
 
 use super::super::error;
@@ -198,4 +199,44 @@ pub fn is_story_chart_current(raw_chart: Option<&str>) -> bool {
             .and_then(|x| x.as_number())
             .map(|n| n.as_u64() == Some(CHART_SCHEMA_VERSION as u64))
             .unwrap_or(false)
+}
+
+/// In-memory sliding-window rate limiter — isolate-level singleton.
+/// **baicodex F2**：`lib.rs::fetch` 每請求重建 router，`register()` 內
+/// `Arc::new(Mutex::new(…))` 會讓 limiter 變 per-request（計數恆 1、429 死碼，
+/// auth/charts 既存 bug）。改 isolate 單例後三個路由共用同一計數；
+/// `HashMap::new` 非 const → 必須 OnceLock，不能 `static … = Mutex::new(…)`。
+pub struct RateLimiter {
+    entries: std::collections::HashMap<String, (u32, f64)>,
+}
+
+static LIMITER: OnceLock<Mutex<RateLimiter>> = OnceLock::new();
+
+/// Shared limiter handle — callers lock, then `check(...)`.
+pub fn limiter() -> &'static Mutex<RateLimiter> {
+    LIMITER.get_or_init(|| {
+        Mutex::new(RateLimiter {
+            entries: std::collections::HashMap::new(),
+        })
+    })
+}
+
+impl RateLimiter {
+    pub fn check(&mut self, ip: &str, limit: u32, window_ms: f64) -> bool {
+        let now = crate::services::clock::now_ms();
+        match self.entries.get(ip).copied() {
+            Some((count, reset)) if now <= reset => {
+                if count >= limit {
+                    false
+                } else {
+                    self.entries.get_mut(ip).unwrap().0 = count + 1;
+                    true
+                }
+            }
+            _ => {
+                self.entries.insert(ip.to_string(), (1, now + window_ms));
+                true
+            }
+        }
+    }
 }
