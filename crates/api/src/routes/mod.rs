@@ -13,6 +13,7 @@ use crate::error;
 mod auth;
 mod charts;
 mod common;
+mod personality;
 mod users;
 
 type R<'a> = Router<'a, ()>;
@@ -21,8 +22,9 @@ pub fn router(_env: Env) -> R<'static> {
     let a: R<'static> = auth::register(R::new());
     let u: R<'static> = users::register(a);
     let c: R<'static> = charts::register(u);
+    let p: R<'static> = personality::register(c);
 
-    c.get_async("/health", |_, ctx: RouteContext<()>| async move {
+    p.get_async("/health", |_, ctx: RouteContext<()>| async move {
         let env_label = ctx
             .env
             .var("ENVIRONMENT")
