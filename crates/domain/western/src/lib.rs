@@ -15,8 +15,12 @@ pub fn calculate(jd_utc: f64, lat_deg: f64, lon_east_deg: f64) -> WesternChartV3
     let eps_true = time::mean_obliquity_deg(t) + deps;
 
     // Sun / Moon — geocentric apparent ecliptic, validated against JPL HORIZONS.
-    let sun_lon = planets::sun_apparent_ecliptic(jd_tt, dpsi).0.rem_euclid(360.0);
-    let moon_lon = elpmpp02::moon_apparent_ecliptic(jd_tt, dpsi).0.rem_euclid(360.0);
+    let sun_lon = planets::sun_apparent_ecliptic(jd_tt, dpsi)
+        .0
+        .rem_euclid(360.0);
+    let moon_lon = elpmpp02::moon_apparent_ecliptic(jd_tt, dpsi)
+        .0
+        .rem_euclid(360.0);
 
     let gast = time::gast_deg(astro.jd_ut1, dpsi, eps_true);
     let lst = (gast + lon_east_deg).rem_euclid(360.0);
@@ -36,7 +40,9 @@ pub fn calculate(jd_utc: f64, lat_deg: f64, lon_east_deg: f64) -> WesternChartV3
         Body::Neptune,
     ] {
         if let Some(el) = body.elements() {
-            let lon = planets::planet_apparent_ecliptic(el, jd_tt, dpsi).0.rem_euclid(360.0);
+            let lon = planets::planet_apparent_ecliptic(el, jd_tt, dpsi)
+                .0
+                .rem_euclid(360.0);
             planets.push((body_name(body), lon));
         }
     }
