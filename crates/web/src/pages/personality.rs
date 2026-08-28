@@ -224,7 +224,7 @@ pub fn PersonalityPage() -> impl IntoView {
                 }.into_any(),
                 PersonalityState::Quiz { suspected } => view! {
                     <div class="card">
-                        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start;margin-bottom:1rem">
+                        <div class="quiz-head">
                             <div>
                                 <h2>"IPIP-15"</h2>
                                 <p class="muted">"十五題，約 90 秒。請依你平常的情況作答。"</p>
@@ -237,35 +237,49 @@ pub fn PersonalityPage() -> impl IntoView {
                                 "先不測"
                             </button>
                         </div>
-                        <p style="margin-bottom:1.5rem">
+                        <p class="quiz-consent muted">
                             "作答視為同意僅用於本站人格分析；原始作答僅儲存於本站，不對外提供。"
                         </p>
                         <Show when=move || suspected>
                             <p class="error">"這份作答與常見模式差異較大，結果可能不具參考性，請再試一次"</p>
                         </Show>
+                        {move || {
+                            let n = answers.get().iter().filter(|a| a.is_some()).count();
+                            view! {
+                                <p class="quiz-progress"><strong>{format!("{n}")}</strong>" / 15"</p>
+                                <div class="quiz-progress-bar" aria-hidden="true">
+                                    <span style=format!("width:{:.0}%", n as f32 / 15.0 * 100.0)></span>
+                                </div>
+                            }
+                        }}
+                        <div class="quiz-key" aria-hidden="true">
+                            {SCALE_ANCHORS.iter().map(|anchor| view! { <span>{*anchor}</span> }).collect_view()}
+                        </div>
 
-                        <div style="display:grid;gap:1.5rem">
+                        <div>
                             {ITEMS.iter().enumerate().map(|(index, item)| {
                                 view! {
-                                    <fieldset style="border:0;border-bottom:1px solid #e5e7eb;padding:0 0 1.25rem">
-                                        <legend style="font-weight:600;margin-bottom:0.75rem">
-                                            {format!("{}. {}", item.no, item.text)}
+                                    <fieldset class="quiz-item">
+                                        <legend>
+                                            <span class="quiz-no">{item.no}</span>
+                                            {item.text}
                                         </legend>
-                                        <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0.5rem">
+                                        <div class="quiz-choices">
                                             {SCALE_ANCHORS.iter().enumerate().map(|(anchor_index, anchor)| {
                                                 let value = (anchor_index + 1) as u8;
                                                 let input_name = format!("personality-item-{}", item.no);
                                                 view! {
-                                                    <label style="display:flex;flex-direction:column;align-items:center;gap:0.35rem;text-align:center;font-size:0.8rem">
+                                                    <label class="quiz-choice">
                                                         <input
                                                             type="radio"
                                                             name=input_name
                                                             value=value
+                                                            aria-label=format!("{} {}", value, anchor)
                                                             prop:checked=move || answers.get()[index] == Some(value)
                                                             prop:disabled=move || submitting.get()
                                                             on:change=move |_| answers.update(|all| all[index] = Some(value))
                                                         />
-                                                        <span>{format!("{} {}", value, anchor)}</span>
+                                                        <span class="quiz-choice-n" aria-hidden="true">{value}</span>
                                                     </label>
                                                 }
                                             }).collect_view()}
@@ -275,14 +289,15 @@ pub fn PersonalityPage() -> impl IntoView {
                             }).collect_view()}
                         </div>
 
-                        <button
-                            class="btn-primary"
-                            style="width:100%;margin-top:1.5rem"
-                            prop:disabled=move || submitting.get() || answers.get().iter().any(Option::is_none)
-                            on:click=submit_answers
-                        >
-                            {move || if submitting.get() { "送出中..." } else { "查看結果" }}
-                        </button>
+                        <div class="quiz-submit">
+                            <button
+                                class="btn-primary"
+                                prop:disabled=move || submitting.get() || answers.get().iter().any(Option::is_none)
+                                on:click=submit_answers
+                            >
+                                {move || if submitting.get() { "送出中..." } else { "查看結果" }}
+                            </button>
+                        </div>
                     </div>
                 }.into_any(),
                 PersonalityState::Result(profile) => {
