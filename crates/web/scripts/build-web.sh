@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."   # crates/web
 ROOT="$(cd ../.. && pwd)"   # repo root (workspace target 在此)
 
 echo "🔧 wasm32-unknown-unknown release build ..."
-cargo build -p ft-web --target wasm32-unknown-unknown --release
+cargo build --locked -p ft-web --target wasm32-unknown-unknown --release
 
 echo "🔧 wasm-bindgen --target web ..."
 mkdir -p dist

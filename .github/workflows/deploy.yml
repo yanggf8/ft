@@ -21,7 +21,9 @@ jobs:
           components: clippy,rustfmt
       - name: fmt
         run: cargo fmt --all --check
+      - name: test (native)
+        run: cargo test --locked -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api
       - name: clippy (wasm32)
-        run: cargo clippy --target wasm32-unknown-unknown --all-targets
+        run: cargo clippy --locked --target wasm32-unknown-unknown --all-targets
       - name: build wasm crates
-        run: cargo build -p ft-worker -p ft-api -p ft-web --target wasm32-unknown-unknown
+        run: cargo build --locked -p ft-worker -p ft-api -p ft-web --target wasm32-unknown-unknown
