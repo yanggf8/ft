@@ -15,18 +15,36 @@ pub fn is_admin_email(admin_var: &str, session_email: &str) -> bool {
     !admin_var.is_empty() && admin_var.eq_ignore_ascii_case(session_email)
 }
 
-/// 401 without a session, 403 when the session is not the admin.
+/// 401 without a session, 403 when the session is not the admin. `auth_user`
+/// yields the userId, so the email must be resolved before the comparison.
 async fn require_admin(ctx: &RouteContext<()>, req: &Request) -> Result<String, Response> {
-    let user = auth_user(req, ctx).await?;
+    let user_id = auth_user(req, ctx).await?;
+    let db = ctx
+        .env
+        .d1("DB")
+        .map_err(|_| error::error("db unavailable", 500))?;
+    let uid = db::text(&user_id);
+    let row: Option<EmailRow> = db::first(&db, "SELECT email FROM users WHERE id = ?1", &[&uid])
+        .await
+        .map_err(|_| error::error("db error", 500))?;
+    let email = match row {
+        Some(r) => r.email,
+        None => return Err(error::error("Forbidden", 403)),
+    };
     let admin = ctx
         .env
         .var("ADMIN_EMAIL")
         .map(|v| v.to_string())
         .unwrap_or_default();
-    if !is_admin_email(&admin, &user) {
+    if !is_admin_email(&admin, &email) {
         return Err(error::error("Forbidden", 403));
     }
-    Ok(user)
+    Ok(email)
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct EmailRow {
+    email: String,
 }
 
 pub fn register(router: R<'static>) -> R<'static> {

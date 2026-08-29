@@ -101,7 +101,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     .var("ADMIN_EMAIL")
                     .map(|v| v.to_string())
                     .unwrap_or_default();
-                crate::routes::admin_invites::is_admin_email(&admin, &user)
+                crate::routes::admin_invites::is_admin_email(&admin, &row.email)
             };
 
             let mut res = ok_json(

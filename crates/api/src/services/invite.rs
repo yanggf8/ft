@@ -42,10 +42,7 @@ fn bytes_to_code(bytes: &[u8]) -> String {
 pub fn is_usable(row: &InviteRow, now_iso: &str) -> bool {
     row.revoked_at.is_none()
         && row.used_count < row.max_uses
-        && row
-            .expires_at
-            .as_deref()
-            .is_none_or(|e| e > now_iso)
+        && row.expires_at.as_deref().is_none_or(|e| e > now_iso)
 }
 
 #[cfg(test)]
