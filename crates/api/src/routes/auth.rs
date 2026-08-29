@@ -224,8 +224,9 @@ async fn rate_limited(ctx: &RouteContext<()>, keys: &[(String, u32)]) -> bool {
 ///
 /// Both paths perform exactly one SELECT + one INSERT before answering, so the
 /// 202 latency does not distinguish existing from unknown addresses (F2
-/// mitigation; the Resend call for existing addresses is the documented
-/// residual — worker 0.8.5 exposes no `wait_until` on `RouteContext`).
+/// mitigation; the Resend call — sent for existing addresses and for register
+/// requests, which always carry a name — is the documented residual; worker
+/// 0.8.5 exposes no `wait_until` on `RouteContext`).
 ///
 /// Success is always the identical 202 `LINK_SENT_BODY`. Only infrastructure
 /// failures (db, unconfigured email, Resend non-2xx) diverge.
@@ -265,7 +266,8 @@ async fn issue_login_link(
     };
     let expires_at = clock::now_plus_ms(login_token::TOKEN_TTL_MS as f64);
     let pending = match (!exists, new_full_name) {
-        (false, Some(full_name)) => db::opt_text(Some(full_name)),
+        // Fresh register: the name rides the token; verify creates the account.
+        (true, Some(full_name)) => db::opt_text(Some(full_name)),
         _ => db::opt_text(None),
     };
     let h = db::text(&hash);
@@ -282,7 +284,7 @@ async fn issue_login_link(
         return Ok(error::error("db error", 500));
     }
 
-    if exists {
+    if exists || new_full_name.is_some() {
         let origin = ctx
             .env
             .var("WEB_ORIGIN")
@@ -291,7 +293,8 @@ async fn issue_login_link(
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| DEFAULT_WEB_ORIGIN.to_string());
         let link = format!("{}/auth/verify?token={}", origin, plain);
-        if let Err(e) = email::send_login_link(&ctx.env, email_addr, &link).await {
+        let expires_at_ms = clock::now_ms() + login_token::TOKEN_TTL_MS as f64;
+        if let Err(e) = email::send_login_link(&ctx.env, email_addr, &link, expires_at_ms).await {
             // Honest failure — never a fake "sent" (the token just expires
             // unused). The reason goes to the worker log, not the client.
             web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
@@ -325,6 +328,17 @@ fn email_delivery_configured(ctx: &RouteContext<()>) -> bool {
         .var("MAIL_FROM")
         .map(|v| !v.to_string().is_empty())
         .unwrap_or(false);
+    if !(key_ok && from_ok) {
+        // Surface WHICH binding the runtime is missing — this cost a live
+        // debugging session once (secret listed via wrangler but invisible
+        // to the isolate). Never log the secret value itself.
+        let key_present = ctx.env.secret("RESEND_API_KEY").is_ok();
+        let from_present = ctx.env.var("MAIL_FROM").is_ok();
+        web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
+            "email_delivery_configured: key_ok={} (binding_present={}) from_ok={} (binding_present={})",
+            key_ok, key_present, from_ok, from_present
+        )));
+    }
     key_ok && from_ok
 }
 

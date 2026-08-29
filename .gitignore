@@ -12,6 +12,7 @@ dist/
 .env
 .env.local
 .dev.vars
+.secrets.json
 
 # IDE & Editor
 .idea/
@@ -33,3 +34,4 @@ target/
 
 # Rust worker-build output
 crates/worker/build/
+.secrets.env

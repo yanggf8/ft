@@ -37,6 +37,10 @@ service = "fortunet-engine"
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
+# Magic-link sender (audit P0-01). onboarding@resend.dev is Resend's test
+# sender: it only delivers to the Resend account owner's own email. Swap to a
+# verified domain address before opening registration to real users.
+MAIL_FROM = "onboarding@resend.dev"
 
 # Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
 # class_names are already in `new_sqlite_classes` and are NOT re-run.
