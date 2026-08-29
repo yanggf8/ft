@@ -8,6 +8,7 @@
 use ft_schema::api::*;
 use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde::Serialize;
 
 /// Same default as the React client's `VITE_API_URL` fallback.
@@ -149,10 +150,15 @@ async fn post_empty<T: DeserializeOwned>(path: &str) -> Result<T, ApiErr> {
 /// `POST /api/auth/register` — magic-link step 1. The identical 202 body
 /// carries no session; the account only becomes usable once the emailed token
 /// is exchanged through `verify_email`.
-pub async fn register(email: &str, full_name: Option<&str>) -> Result<(), ApiErr> {
+pub async fn register(
+    email: &str,
+    full_name: Option<&str>,
+    invite: Option<&str>,
+) -> Result<(), ApiErr> {
     let body = RegisterRequest {
         email: email.to_string(),
         full_name: full_name.filter(|s| !s.is_empty()).map(|s| s.to_string()),
+        invite: invite.filter(|s| !s.is_empty()).map(|s| s.to_string()),
     };
     send_ignoring_body(Request::post(&url("/api/auth/register")), &body).await
 }
@@ -176,6 +182,92 @@ pub async fn verify_email(token: &str) -> Result<SessionResponse, ApiErr> {
     let res: SessionResponse = send_json(Request::post(&url("/api/auth/verify")), &body).await?;
     set_session(Some(&res.sessionId));
     Ok(res)
+}
+
+/// `GET /api/invites/:code` — public preflight for the register page. A
+/// network/transport failure reads as "invalid" (the register submit will get
+/// the authoritative answer from the backend anyway).
+pub async fn check_invite(code: &str) -> Result<InviteCheck, ApiErr> {
+    let resp = Request::get(&url(&format!(
+        "/api/invites/{}",
+        code.trim().to_ascii_uppercase()
+    )))
+    .send()
+    .await
+    .map_err(|e| ApiErr::Network(e.to_string()))?;
+    decode(resp).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InviteCheck {
+    pub valid: bool,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminInvite {
+    #[serde(rename = "code")]
+    pub code: String,
+    pub label: String,
+    #[serde(rename = "maxUses")]
+    pub max_uses: i64,
+    #[serde(rename = "usedCount")]
+    pub used_count: i64,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+    #[serde(rename = "revokedAt")]
+    pub revoked_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InviteCreated {
+    pub code: String,
+    pub url: String,
+    pub label: String,
+    #[serde(rename = "maxUses")]
+    pub max_uses: i64,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+}
+
+/// `GET /api/admin/invites` — admin only; a 403 surfaces as ApiErr::Api.
+pub async fn list_invites() -> Result<Vec<AdminInvite>, ApiErr> {
+    let resp = with_auth(Request::get(&url("/api/admin/invites")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    #[derive(Deserialize)]
+    struct Wrapped {
+        invites: Vec<AdminInvite>,
+    }
+    let w: Wrapped = decode(resp).await?;
+    Ok(w.invites)
+}
+
+pub async fn create_invite(
+    label: &str,
+    max_uses: i64,
+    expires_at: Option<&str>,
+) -> Result<InviteCreated, ApiErr> {
+    let body = serde_json::json!({
+        "label": label,
+        "maxUses": max_uses,
+        "expiresAt": expires_at.filter(|s| !s.is_empty()),
+    });
+    let res: InviteCreated = send_json(Request::post(&url("/api/admin/invites")), &body).await?;
+    Ok(res)
+}
+
+pub async fn revoke_invite(code: &str) -> Result<(), ApiErr> {
+    let _: serde_json::Value = send_json(
+        Request::post(&url(&format!("/api/admin/invites/{}/revoke", code))),
+        &serde_json::json!({}),
+    )
+    .await?;
+    Ok(())
 }
 
 /// POST whose 202 `{ok, message}` body carries nothing the caller needs — only

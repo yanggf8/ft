@@ -14,7 +14,9 @@ use leptos_router::path;
 
 use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
-use crate::pages::{DivinationPage, HomePage, LoginPage, PersonalityPage, ProfilePage, StoryPage};
+use crate::pages::{
+    AdminPage, DivinationPage, HomePage, LoginPage, PersonalityPage, ProfilePage, StoryPage,
+};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -28,11 +30,15 @@ pub fn App() -> impl IntoView {
                 <Routes fallback=|| view! { <div class="center-note">"找不到頁面"</div> }>
                     <Route path=path!("/") view=HomePage/>
                     <Route path=path!("/login") view=LoginPage/>
+                    // Same page as /login: the admin invite URL says /register
+                    // (built backend-side), which reads better in an invite.
+                    <Route path=path!("/register") view=LoginPage/>
                     <Route path=path!("/auth/verify") view=VerifyPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>
                     <Route path=path!("/divination/:type") view=|| view! { <Protected><DivinationPage/></Protected> }/>
                     <Route path=path!("/story") view=|| view! { <Protected><StoryPage/></Protected> }/>
+                    <Route path=path!("/admin") view=|| view! { <Protected><AdminPage/></Protected> }/>
                 </Routes>
             </Layout>
         </Router>
@@ -116,10 +122,16 @@ fn VerifyPage() -> impl IntoView {
 
 /// Read `token` out of `window.location.search`. Leptos CSR: the query string
 /// only exists in the browser. The backend mints hex tokens, so a plain split
-/// needs no percent-decoding. Read through `js_sys::Reflect` because
-/// `web_sys::Location` would require a `Location` feature this crate's
-/// `web-sys` dependency does not enable.
+/// needs no percent-decoding.
 fn verify_token_from_url() -> Option<String> {
+    query_param("token")
+}
+
+/// One query parameter from `window.location.search`, generic over names so
+/// the invite prefill (`?invite=`) shares the same parsing. Read through
+/// `js_sys::Reflect` because `web_sys::Location` would require a `Location`
+/// feature this crate's `web-sys` dependency does not enable.
+pub(crate) fn query_param(name: &str) -> Option<String> {
     let win = web_sys::window()?;
     let loc = js_sys::Reflect::get(win.as_ref(), &"location".into()).ok()?;
     let search = js_sys::Reflect::get(&loc, &"search".into())
@@ -128,7 +140,7 @@ fn verify_token_from_url() -> Option<String> {
     let query = search.strip_prefix('?')?;
     query.split('&').find_map(|pair| {
         let (k, v) = pair.split_once('=')?;
-        (k == "token" && !v.is_empty()).then(|| v.to_string())
+        (k == name && !v.is_empty()).then(|| v.to_string())
     })
 }
 

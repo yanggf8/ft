@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     latitude REAL,
     longitude REAL,
     birth_data_hash TEXT,            -- for cache invalidation
+    invited_by TEXT,                 -- invite code that created this account
     
     -- Subscription
     subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'premium', 'professional')),
@@ -117,7 +118,29 @@ CREATE TABLE IF NOT EXISTS login_tokens (
     -- Register flow: the requested full_name rides on the token row; the
     -- users row is created by /api/auth/verify only after ownership is proven.
     pending_full_name TEXT,
+    -- Two-phase invite (spec 2026-08-30): the register request's validated
+    -- invite code rides here; verify consumes it when creating the account.
+    pending_invite_code TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email);
+
+-- ── Beta invite links (spec: docs/superpowers/specs/2026-08-30-invite-links-design.md) ──
+-- expires_at / revoked_at are app-written ISO strings; compare ISO to ISO only.
+CREATE TABLE IF NOT EXISTS invites (
+    code TEXT PRIMARY KEY,           -- 10 glyphs, crypto random, no 0/O/1/I/L/U
+    label TEXT NOT NULL,             -- owner's note, e.g. "Messenger 群 A"
+    max_uses INTEGER NOT NULL,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,                 -- NULL = never expires
+    revoked_at TEXT,                 -- NULL = active
+    created_by TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- One-time migrations for EXISTING databases (SQLite has no ADD COLUMN IF NOT
+-- EXISTS; run each once via `wrangler d1 execute --command`). Fresh installs
+-- get these from the CREATE TABLE definitions above:
+--   ALTER TABLE login_tokens ADD COLUMN pending_invite_code TEXT;
+--   ALTER TABLE users ADD COLUMN invited_by TEXT;

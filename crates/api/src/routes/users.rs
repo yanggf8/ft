@@ -95,6 +95,14 @@ pub fn register(router: R<'static>) -> R<'static> {
             let trial_ends_at = row.trial_ends_at.clone();
             let billing_info = billing::check_user_access(&tier, trial_ends_at.as_deref());
             let has_birth_data = row.birth_year.is_some() && row.birth_month.is_some() && row.birth_day.is_some();
+            let is_admin = {
+                let admin = ctx
+                    .env
+                    .var("ADMIN_EMAIL")
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                crate::routes::admin_invites::is_admin_email(&admin, &user)
+            };
 
             let mut res = ok_json(
                 &serde_json::json!({
@@ -103,6 +111,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     "birth_hour": row.birth_hour, "birth_minute": row.birth_minute, "gender": row.gender,
                     "timezone": row.timezone, "subscription_tier": tier, "trial_ends_at": trial_ends_at,
                     "created_at": row.created_at, "billing": billing_info, "hasBirthData": has_birth_data,
+                    "isAdmin": is_admin,
                 }),
                 200,
             );

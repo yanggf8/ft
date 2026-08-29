@@ -41,6 +41,9 @@ ENVIRONMENT = "development"
 # sender: it only delivers to the Resend account owner's own email. Swap to a
 # verified domain address before opening registration to real users.
 MAIL_FROM = "onboarding@resend.dev"
+# Invite-system admin (spec 2026-08-30). The session email matching this value
+# (case-insensitive) may manage invites; unset = nobody (fail-closed).
+ADMIN_EMAIL = "yanggf@msn.com"
 
 # Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
 # class_names are already in `new_sqlite_classes` and are NOT re-run.

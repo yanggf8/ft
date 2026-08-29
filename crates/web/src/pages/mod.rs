@@ -1,3 +1,4 @@
+mod admin;
 mod divination;
 mod home;
 mod login;
@@ -5,6 +6,7 @@ mod personality;
 mod profile;
 mod story;
 
+pub use admin::AdminPage;
 pub use divination::DivinationPage;
 pub use home::HomePage;
 pub use login::LoginPage;

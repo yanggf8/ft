@@ -22,6 +22,11 @@ pub fn Layout(children: Children) -> impl IntoView {
                         <A href="/divination/ziwei">"紫微斗數"</A>
                         <A href="/divination/western">"西洋占星"</A>
                         <A href="/story">"合盤故事"</A>
+                        <Show when=move || {
+                            auth.user.get().as_ref().map(|u| u.is_admin).unwrap_or(false)
+                        }>
+                            <A href="/admin">"邀請管理"</A>
+                        </Show>
                         <button class="nav-logout" on:click=move |_| auth.logout()>"登出"</button>
                     </Show>
                 </div>

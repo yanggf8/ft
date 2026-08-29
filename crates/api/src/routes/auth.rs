@@ -53,7 +53,22 @@ pub fn register(router: R<'static>) -> R<'static> {
             {
                 return Ok(error::error("Too many requests", 429));
             }
-            issue_login_link(&ctx, &email_addr, body.full_name.as_deref()).await
+            // Beta gate (spec 2026-08-30): a register must present a code, and
+            // it is validated BEFORE the uniform 202 — invites are not
+            // accounts, the anti-enumeration uniformity does not apply here.
+            let invite_code = if crate::services::invite::INVITE_REQUIRED {
+                match body.invite.as_deref() {
+                    Some(c) if !c.trim().is_empty() && c.len() <= 16 => {
+                        Some(c.trim().to_ascii_uppercase())
+                    }
+                    _ => return Ok(error::error("邀請碼必填", 400)),
+                }
+            } else {
+                body.invite
+                    .as_deref()
+                    .map(|c| c.trim().to_ascii_uppercase())
+            };
+            issue_login_link(&ctx, &email_addr, body.full_name.as_deref(), invite_code).await
         })
         .post_async("/api/auth/login", |mut req, ctx| async move {
             let body: LoginBody = match req.json().await {
@@ -78,7 +93,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             }
             // Login never creates an account: an unknown address gets the same
             // 202 and NO email (A-03).
-            issue_login_link(&ctx, &email_addr, None).await
+            issue_login_link(&ctx, &email_addr, None, None).await
         })
         .post_async("/api/auth/verify", |mut req, ctx| async move {
             let ip = client_ip(&req);
@@ -131,7 +146,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             // The consumed row carries the address the link was minted for.
             let row = match db::first::<TokenRow>(
                 &db,
-                "SELECT email, pending_full_name FROM login_tokens WHERE token_hash = ?1",
+                "SELECT email, pending_full_name, pending_invite_code FROM login_tokens WHERE token_hash = ?1",
                 &[&h],
             )
             .await
@@ -155,17 +170,61 @@ pub fn register(router: R<'static>) -> R<'static> {
                 // unknown-address link — fail closed.
                 Ok(None) => match row.pending_full_name.as_deref() {
                     Some(full_name) => {
+                        // Consume the invite atomically — the register-time
+                        // check can go stale while the user sat on the link.
+                        let invite_code = match row.pending_invite_code.as_deref() {
+                            Some(c) => c.to_string(),
+                            None if crate::services::invite::INVITE_REQUIRED => {
+                                return Ok(error::error("缺少邀請碼", 409));
+                            }
+                            None => String::new(),
+                        };
+                        let consumed_invite = !invite_code.is_empty();
+                        if consumed_invite {
+                            let now = clock::now_iso();
+                            let c = db::text(&invite_code);
+                            let n = db::text(&now);
+                            let stmt = match db
+                                .prepare(
+                                    "UPDATE invites SET used_count = used_count + 1 \
+                                     WHERE code = ?1 AND used_count < max_uses \
+                                     AND (expires_at IS NULL OR expires_at > ?2) \
+                                     AND revoked_at IS NULL",
+                                )
+                                .bind_refs([&c, &n].into_iter())
+                            {
+                                Ok(s) => s,
+                                Err(_) => return Ok(error::error("db error", 500)),
+                            };
+                            let consumed = match stmt.run().await {
+                                Ok(r) => r
+                                    .meta()
+                                    .ok()
+                                    .flatten()
+                                    .and_then(|m| m.changes)
+                                    .unwrap_or(0),
+                                Err(_) => return Ok(error::error("db error", 500)),
+                            };
+                            if consumed == 0 {
+                                return Ok(error::error("邀請名額已用完", 409));
+                            }
+                        }
                         let user_id = uuid::random_uuid();
                         let trial_ends_at = billing::get_trial_end_date();
                         let uid = db::text(&user_id);
                         let em = db::text(&row.email);
                         let name = db::opt_text(Some(full_name));
                         let trial = db::text(&trial_ends_at);
+                        let ib = db::opt_text(if consumed_invite {
+                            Some(invite_code.as_str())
+                        } else {
+                            None
+                        });
                         if let Err(_) = db::exec(
                             &db,
-                            "INSERT INTO users (id, email, full_name, trial_ends_at) \
-                             VALUES (?1, ?2, ?3, ?4)",
-                            &[&uid, &em, &name, &trial],
+                            "INSERT INTO users (id, email, full_name, trial_ends_at, invited_by) \
+                             VALUES (?1, ?2, ?3, ?4, ?5)",
+                            &[&uid, &em, &name, &trial, &ib],
                         )
                         .await
                         {
@@ -234,6 +293,7 @@ async fn issue_login_link(
     ctx: &RouteContext<()>,
     email_addr: &str,
     new_full_name: Option<&str>,
+    invite_code: Option<String>,
 ) -> Result<Response> {
     if !email_delivery_configured(ctx) {
         return Ok(error::error("email delivery not configured", 503));
@@ -255,6 +315,31 @@ async fn issue_login_link(
         Err(_) => return Ok(error::error("db error", 500)),
     };
 
+    // Two-phase invite (spec 2026-08-30): validate now, consume at verify — a
+    // register that never verifies must not burn a slot. Invalid codes fail
+    // loud: invites are not accounts, the uniform-202 anti-enumeration does
+    // not apply to them.
+    let invite_code = match invite_code {
+        Some(code) => {
+            let c = db::text(&code);
+            let row: Option<crate::services::invite::InviteRow> = match db::first(
+                &db,
+                "SELECT used_count, max_uses, expires_at, revoked_at FROM invites WHERE code = ?1",
+                &[&c],
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(_) => return Ok(error::error("db error", 500)),
+            };
+            match row {
+                Some(r) if crate::services::invite::is_usable(&r, &clock::now_iso()) => Some(code),
+                _ => return Ok(error::error("邀請碼無效或已失效", 400)),
+            }
+        }
+        None => None,
+    };
+
     // Mint the token — only the hash is persisted. A register for an unknown
     // address carries the requested name; verify creates the account only
     // after the link proves ownership. Unknown-address logins mint an orphan
@@ -270,14 +355,15 @@ async fn issue_login_link(
         (true, Some(full_name)) => db::opt_text(Some(full_name)),
         _ => db::opt_text(None),
     };
+    let ic = db::opt_text(invite_code.as_deref());
     let h = db::text(&hash);
     let em = db::text(email_addr);
     let exp = db::text(&expires_at);
     if let Err(_) = db::exec(
         &db,
-        "INSERT INTO login_tokens (token_hash, email, expires_at, pending_full_name) \
-         VALUES (?1, ?2, ?3, ?4)",
-        &[&h, &em, &exp, &pending],
+        "INSERT INTO login_tokens (token_hash, email, expires_at, pending_full_name, pending_invite_code) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        &[&h, &em, &exp, &pending, &ic],
     )
     .await
     {
@@ -376,6 +462,8 @@ struct RegisterBody {
     email: Option<String>,
     #[serde(default)]
     full_name: Option<String>,
+    #[serde(default)]
+    invite: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -400,6 +488,7 @@ struct UserRow {
 struct TokenRow {
     email: String,
     pending_full_name: Option<String>,
+    pending_invite_code: Option<String>,
 }
 
 /// Stricter email check — mirrors z.email(): non-empty, <=255, contains exactly one '@'

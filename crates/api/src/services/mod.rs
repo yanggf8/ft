@@ -10,4 +10,5 @@ pub mod db;
 pub mod email;
 pub mod engine;
 pub mod engine_version;
+pub mod invite;
 pub mod login_token;

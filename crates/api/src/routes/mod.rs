@@ -9,6 +9,7 @@ use worker::*;
 
 use super::services::{clock, db};
 
+mod admin_invites;
 mod auth;
 mod charts;
 mod common;
@@ -22,8 +23,9 @@ pub fn router(_env: Env) -> R<'static> {
     let u: R<'static> = users::register(a);
     let c: R<'static> = charts::register(u);
     let p: R<'static> = personality::register(c);
+    let ai: R<'static> = admin_invites::register(p);
 
-    p.get_async("/health", |_, ctx: RouteContext<()>| async move {
+    ai.get_async("/health", |_, ctx: RouteContext<()>| async move {
         let env_label = ctx
             .env
             .var("ENVIRONMENT")

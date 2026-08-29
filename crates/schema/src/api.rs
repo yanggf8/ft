@@ -17,6 +17,9 @@ pub struct RegisterRequest {
     pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub full_name: Option<String>,
+    /// Beta invite code (spec 2026-08-30); required while INVITE_REQUIRED is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invite: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +80,9 @@ pub struct UserProfile {
     pub created_at: Option<String>,
     pub billing: Billing,
     pub hasBirthData: bool,
+    /// True when the session email matches the worker's ADMIN_EMAIL var.
+    #[serde(rename = "isAdmin", default)]
+    pub is_admin: bool,
 }
 
 impl UserProfile {
