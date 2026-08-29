@@ -8,7 +8,6 @@
 use worker::*;
 
 use super::services::{clock, db};
-use crate::error;
 
 mod auth;
 mod charts;
@@ -30,39 +29,31 @@ pub fn router(_env: Env) -> R<'static> {
             .var("ENVIRONMENT")
             .map(|v| v.to_string())
             .unwrap_or_else(|_| "development".to_string());
-        Ok(ok_json(&serde_json::json!({
+        ok_json(&serde_json::json!({
             "status": "ok",
             "timestamp": clock::now_iso(),
             "environment": env_label,
-        })))
+        }))
     })
     .get_async("/health/db", |_, ctx: RouteContext<()>| async move {
         let db = match ctx.env.d1("DB") {
             Ok(db) => db,
             Err(_) => {
-                return Ok(Response::from_json(
-                    &serde_json::json!({ "status": "error", "error": "db not ready" }),
-                )
-                .expect("ok json")
-                .with_status(500))
+                return ok_json(&serde_json::json!({ "status": "error", "error": "db not ready" }))
+                    .map(|r| r.with_status(500))
             }
         };
         match db::first::<serde_json::Value>(&db, "SELECT 1 as ok", &[]).await {
-            Ok(v) => Ok(ok_json(&serde_json::json!({ "status": "ok", "db": v }))),
-            Err(e) => Ok(Response::from_json(
-                &serde_json::json!({ "status": "error", "error": e.to_string() }),
-            )
-            .expect("ok json")
-            .with_status(500)),
+            Ok(v) => ok_json(&serde_json::json!({ "status": "ok", "db": v })),
+            Err(e) => ok_json(&serde_json::json!({ "status": "error", "error": e.to_string() }))
+                .map(|r| r.with_status(500)),
         }
     })
     .get_async("/", |_, _: RouteContext<()>| async move {
-        Ok(ok_json(
-            &serde_json::json!({ "name": "FortuneT V2 API", "version": "1.0.0" }),
-        ))
+        ok_json(&serde_json::json!({ "name": "FortuneT V2 API", "version": "1.0.0" }))
     })
 }
 
-fn ok_json(v: &serde_json::Value) -> Response {
-    Response::from_json(v).expect("ok json")
+fn ok_json(v: &serde_json::Value) -> worker::Result<Response> {
+    Response::from_json(v)
 }

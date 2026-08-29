@@ -82,13 +82,13 @@ impl DurableObject for AIMutexDO {
             Ok(res) => res,
             Err(_) => {
                 // Sender dropped before responding — should not happen, treat as queue timeout.
-                Ok(Response::from_json(&serde_json::json!({
+                // P2-01: propagate instead of `unwrap` (panic = "abort").
+                Response::from_json(&serde_json::json!({
                     "error": "AI request timed out while queued",
                     "code": "AI_QUEUE_TIMEOUT",
                     "waitedMs": clock::now_ms() - queued_at,
                 }))
-                .unwrap()
-                .with_status(503))
+                .map(|r| r.with_status(503))
             }
         }
     }
@@ -243,20 +243,24 @@ impl AIMutexDO {
         let now = clock::now_ms();
         let key = rpm_key(provider);
         let rec: Option<MinuteRecord> = self.state.storage().get(&key).await?;
-        if rec.is_none() || now > rec.as_ref().unwrap().reset {
-            self.state
-                .storage()
-                .put(
-                    &key,
-                    &MinuteRecord {
-                        count: 1.0,
-                        reset: now + 60000.0,
-                    },
-                )
-                .await?;
-            return Ok(true);
-        }
-        let rec = rec.unwrap();
+        // P2-01: structural Option handling — absent/expired window opens a fresh one,
+        // so the previously short-circuit-guarded `unwrap` disappears.
+        let rec = match rec {
+            Some(r) if now <= r.reset => r,
+            _ => {
+                self.state
+                    .storage()
+                    .put(
+                        &key,
+                        &MinuteRecord {
+                            count: 1.0,
+                            reset: now + 60000.0,
+                        },
+                    )
+                    .await?;
+                return Ok(true);
+            }
+        };
         if rec.count >= limit as f64 {
             return Ok(false);
         }

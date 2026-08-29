@@ -1,6 +1,5 @@
 //! Shared route helpers — response builders, auth guard, ETag, chart metadata.
 
-use std::sync::{Mutex, OnceLock};
 use worker::*;
 
 use super::super::error;
@@ -8,8 +7,14 @@ use super::super::services::engine_version::{
     CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI,
 };
 
+/// P2-01: serialization of a `serde_json::Value` cannot fail, so `from_json` only
+/// errors in impossible states — fall back to a minimal static JSON rather than
+/// panicking under `panic = "abort"`.
 pub fn ok_json(v: &serde_json::Value, status: u16) -> Response {
-    Response::from_json(v).expect("ok json").with_status(status)
+    match Response::from_json(v) {
+        Ok(res) => res.with_status(status),
+        Err(_) => error::raw_json(status, error::FALLBACK_JSON),
+    }
 }
 
 pub fn client_ip(req: &Request) -> String {
@@ -58,6 +63,12 @@ pub async fn auth_user(req: &Request, ctx: &RouteContext<()>) -> Result<String, 
         Ok(s) => s,
         Err(_) => return Err(error::error("Authentication failed", 401)),
     };
+    // A-02 revocation epoch: sessions created before the magic-link deploy have
+    // no ISO `createdAt` stamp -> treat as invalid (normal 401, no distinction).
+    match session.createdAt.as_deref() {
+        Some(c) if !c.is_empty() => {}
+        _ => return Err(error::error("Invalid or expired session", 401)),
+    }
     Ok(session.userId)
 }
 
@@ -65,6 +76,9 @@ pub async fn auth_user(req: &Request, ctx: &RouteContext<()>) -> Result<String, 
 #[allow(non_snake_case)]
 struct SessionInfo {
     userId: String,
+    /// ISO creation stamp written by SessionDO since the magic-link deploy.
+    #[serde(default)]
+    createdAt: Option<String>,
 }
 
 /// Weak ETag string (mirrors createETag in cache.ts).
@@ -201,42 +215,60 @@ pub fn is_story_chart_current(raw_chart: Option<&str>) -> bool {
             .unwrap_or(false)
 }
 
-/// In-memory sliding-window rate limiter — isolate-level singleton.
-/// **baicodex F2**：`lib.rs::fetch` 每請求重建 router，`register()` 內
-/// `Arc::new(Mutex::new(…))` 會讓 limiter 變 per-request（計數恆 1、429 死碼，
-/// auth/charts 既存 bug）。改 isolate 單例後三個路由共用同一計數；
-/// `HashMap::new` 非 const → 必須 OnceLock，不能 `static … = Mutex::new(…)`。
-pub struct RateLimiter {
-    entries: std::collections::HashMap<String, (u32, f64)>,
-}
+/// RateLimitDO instance count — shards the keyspace so limiter traffic does not
+/// funnel through a single global DO (P2-02).
+const RATE_LIMIT_SHARDS: u32 = 8;
 
-static LIMITER: OnceLock<Mutex<RateLimiter>> = OnceLock::new();
-
-/// Shared limiter handle — callers lock, then `check(...)`.
-pub fn limiter() -> &'static Mutex<RateLimiter> {
-    LIMITER.get_or_init(|| {
-        Mutex::new(RateLimiter {
-            entries: std::collections::HashMap::new(),
-        })
-    })
-}
-
-impl RateLimiter {
-    pub fn check(&mut self, ip: &str, limit: u32, window_ms: f64) -> bool {
-        let now = crate::services::clock::now_ms();
-        match self.entries.get(ip).copied() {
-            Some((count, reset)) if now <= reset => {
-                if count >= limit {
-                    false
-                } else {
-                    self.entries.get_mut(ip).unwrap().0 = count + 1;
-                    true
-                }
-            }
-            _ => {
-                self.entries.insert(ip.to_string(), (1, now + window_ms));
-                true
-            }
-        }
+/// P2-02: rate limiting lives in `RateLimitDO` (cross-isolate, durable), replacing
+/// the old isolate-local `OnceLock` limiter whose counters reset on every cold
+/// start and whose budget was per-isolate, so "N per window per IP" never held
+/// globally. `key` is caller namespaced (`login:ip:…`, `login:email:…`,
+/// `verify:ip:…`, `personality:ip:…`, `ai:…`) so routes get independent buckets.
+/// The DO instance is `rl:{fnv1a(key) % RATE_LIMIT_SHARDS}` — deterministic, so a
+/// given key always lands on the same shard and its counter is consistent.
+///
+/// Fail-open: any DO roundtrip failure returns `true` (allowed). Availability
+/// first — a transient limiter outage only widens the window for the duration,
+/// it never takes login/AI endpoints down with it.
+pub async fn rate_limit(ctx: &RouteContext<()>, key: &str, limit: u32, window_ms: f64) -> bool {
+    let shard = fnv1a_64(key.as_bytes()) % u64::from(RATE_LIMIT_SHARDS);
+    let do_name = format!("rl:{}", shard);
+    let ns = match ctx.env.durable_object("RATE_LIMIT") {
+        Ok(n) => n,
+        Err(_) => return true,
+    };
+    let stub = match ns.id_from_name(&do_name).and_then(|id| id.get_stub()) {
+        Ok(s) => s,
+        Err(_) => return true,
+    };
+    let body = serde_json::json!({ "key": key, "limit": limit, "windowMs": window_ms });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
+    let req = match Request::new_with_init("http://do/check", &init) {
+        Ok(r) => r,
+        Err(_) => return true,
+    };
+    let mut res = match stub.fetch_with_request(req).await {
+        Ok(r) => r,
+        Err(_) => return true,
+    };
+    if res.status_code() != 200 {
+        return true;
     }
+    match res.json::<serde_json::Value>().await {
+        Ok(v) => v.get("allowed").and_then(|a| a.as_bool()).unwrap_or(true),
+        Err(_) => true,
+    }
+}
+
+/// Deterministic tiny hash (FNV-1a 64) for DO sharding — stable across isolates
+/// and releases, unlike `DefaultHasher` whose algorithm is unspecified.
+fn fnv1a_64(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        hash ^= u64::from(b);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }

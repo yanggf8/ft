@@ -1,40 +1,64 @@
-//! UUIDv4 generation. The TS code used `crypto.randomUUID()`; this is the same
-//! primitive via `web_sys` (`globalThis.crypto.randomUUID()`).
+//! Cryptographic randomness. The TS code used `crypto.randomUUID()`; this is
+//! the same primitive via `web_sys` (`globalThis.crypto.randomUUID()`).
+//!
+//! Fail-closed policy (audit A-01): when `globalThis.crypto` is unavailable we
+//! never degrade to a weak PRNG. Anything security-relevant (session ids,
+//! magic-link tokens) must come from `getRandomValues`/`randomUUID` or not be
+//! minted at all — the old `Math::random()` fallback was removed.
 
 use wasm_bindgen::JsCast;
 
-/// Generate a random UUIDv4 string (mirrors `crypto.randomUUID()`).
-/// workerd exposes `globalThis.crypto`; there is no `window`, so we read crypto
-/// off the global object rather than `web_sys::window()`.
-pub fn random_uuid() -> String {
+/// `globalThis.crypto`, or `None` when the runtime hides it. workerd always
+/// exposes `crypto`; there is no `window`, so we read it off the global object
+/// rather than `web_sys::window()`. A `None` here means "fail closed".
+fn global_crypto() -> Option<web_sys::Crypto> {
     let global = js_sys::global();
-    let crypto = js_sys::Reflect::get(&global, &"crypto".into())
+    js_sys::Reflect::get(&global, &"crypto".into())
         .ok()
-        .and_then(|v| v.dyn_into::<web_sys::Crypto>().ok());
-    match crypto {
-        Some(c) => c.random_uuid(),
-        None => fallback_uuid(),
-    }
+        .and_then(|v| v.dyn_into::<web_sys::Crypto>().ok())
 }
 
-/// Minimal fallback if `globalThis.crypto` is unavailable. Not cryptographically
-/// strong, but only reached if the platform hides `crypto` (unusual in Workers).
-fn fallback_uuid() -> String {
-    use js_sys::Math;
-    let bytes: Vec<u8> = (0..16)
-        .map(|_| ((Math::random() * 256.0) as u64 % 256) as u8)
-        .collect();
-    let mut s = String::with_capacity(36);
-    for (i, b) in bytes.iter().enumerate() {
-        if i == 4 || i == 6 || i == 8 || i == 10 {
-            s.push('-');
-        }
-        let b = match i {
-            6 => (b & 0x0f) | 0x40, // version 4
-            8 => (b & 0x3f) | 0x80, // variant 10
-            _ => *b,
-        };
-        s.push_str(&format!("{:02x}", b));
+/// Cryptographically strong random bytes via `crypto.getRandomValues`.
+/// `None` = crypto unavailable (caller must abort the operation).
+// TODO(P0-01 routes slice): drop this allow once routes/ calls secure_*.
+#[allow(dead_code)]
+pub fn secure_bytes(bytes: usize) -> Option<Vec<u8>> {
+    let crypto = global_crypto()?;
+    // getRandomValues caps the buffer at 65536 bytes; callers here stay far
+    // below that, but guard anyway so an oversized request fails closed
+    // instead of throwing a JS exception mid-request.
+    if bytes == 0 || bytes > 65536 {
+        return None;
     }
-    s
+    let mut buf = vec![0u8; bytes];
+    crypto.get_random_values_with_u8_array(&mut buf).ok()?;
+    Some(buf)
+}
+
+/// Hex-encoded random token: `bytes` random bytes -> `2 * bytes` lowercase hex
+/// chars. Use for anything security-relevant (magic-link tokens). `None` =
+/// crypto unavailable; callers must fail closed (reject the login) rather than
+/// fall back.
+#[allow(dead_code)]
+pub fn secure_token_hex(bytes: usize) -> Option<String> {
+    let b = secure_bytes(bytes)?;
+    Some(b.iter().map(|x| format!("{:02x}", x)).collect())
+}
+
+/// Generate a random UUIDv4 string (mirrors `crypto.randomUUID()`).
+///
+/// Signature is kept stable (`() -> String`) because callers in routes/
+/// (personality.rs, auth.rs, charts.rs) still call it directly. Fail-closed:
+/// **panics** if `globalThis.crypto` is unavailable. That is deliberate — a
+/// weak id is an attacker-predictable session id, which is worse than a loud
+/// 500. workerd always exposes `crypto`, so the panic is unreachable in
+/// practice; the routes agent may migrate callers onto `secure_token_hex`
+/// (`Option`-returning) later.
+pub fn random_uuid() -> String {
+    match global_crypto() {
+        Some(c) => c.random_uuid(),
+        None => panic!(
+            "globalThis.crypto unavailable: refusing to mint a weak id (fail-closed, audit A-01)"
+        ),
+    }
 }

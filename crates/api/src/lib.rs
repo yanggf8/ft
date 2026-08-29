@@ -4,7 +4,8 @@
 //!
 //! Layout mirrors backend/src:
 //!   routes/          — auth, users, charts
-//!   durable_objects/ — SessionDO, AIMutexDO (same storage keys as the JS versions)
+//!   durable_objects/ — SessionDO, AIMutexDO, RateLimitDO (first two reuse the
+//!                      same storage keys as the JS versions)
 //!   services/        — billing, birth_hash, engine (service-binding client), ai
 
 mod durable_objects;
@@ -14,14 +15,21 @@ mod services;
 
 use worker::*;
 
-pub use durable_objects::{AIMutexDO, SessionDO};
+pub use durable_objects::{AIMutexDO, RateLimitDO, SessionDO};
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    // Extra exact origins (comma-separated) for pages.dev preview deployments.
+    // A missing var yields an empty list — the built-in allowlist still applies.
+    let extra_origins = env
+        .var("ALLOWED_ORIGINS")
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+
     // OPTIONS preflight — return 204 immediately with CORS + security headers.
     if req.method() == Method::Options {
         let mut res = Response::empty()?.with_status(204);
-        decorate(&mut res, &req)?;
+        decorate(&mut res, &req, &extra_origins)?;
         res.headers_mut().set(
             "Access-Control-Allow-Methods",
             "GET,POST,PUT,DELETE,OPTIONS",
@@ -54,13 +62,14 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             res = error::error("Not found", 404);
         }
     }
-    decorate(&mut res, &req)?;
+    decorate(&mut res, &req, &extra_origins)?;
     Ok(res)
 }
 
 /// Adds x-request-id, security headers, and dynamic CORS headers.
 /// Mirrors backend/src/middleware/security.ts + backend/src/index.ts CORS config.
-fn decorate(res: &mut Response, req: &Request) -> Result<()> {
+/// `extra_origins` is the raw comma-separated ALLOWED_ORIGINS env value.
+fn decorate(res: &mut Response, req: &Request, extra_origins: &str) -> Result<()> {
     // x-request-id — mirrors TS crypto.randomUUID().slice(0,8)
     res.headers_mut().set("x-request-id", &gen_request_id())?;
 
@@ -92,22 +101,27 @@ fn decorate(res: &mut Response, req: &Request) -> Result<()> {
     };
     res.headers_mut().set("Vary", &merged_vary)?;
 
-    if let Some(allowed) = resolve_origin(req) {
+    if let Some(allowed) = resolve_origin(req, extra_origins) {
         res.headers_mut()
             .set("Access-Control-Allow-Origin", &allowed)?;
-        res.headers_mut()
-            .set("Access-Control-Allow-Credentials", "true")?;
     }
-    // When resolve_origin returns None, no Allow-Origin / Allow-Credentials header is set (null).
+    // When resolve_origin returns None, no Allow-Origin header is set (null).
+    // No Access-Control-Allow-Credentials: sessions ride in localStorage + Bearer,
+    // never cookies, so the header would be pure risk (findings P2-03 / A-04).
 
     Ok(())
 }
 
-/// Resolves the allowed origin. Mirrors the TS `cors()` origin callback: only
-/// localhost / 127.0.0.1 and `*.pages.dev` / `*.workers.dev` are allowed, matched
-/// on the exact hostname (NOT substring), and no Origin header at all -> None so
-/// no `Access-Control-Allow-*` is emitted (never `*` alongside credentials).
-fn resolve_origin(req: &Request) -> Option<String> {
+/// Resolves the allowed origin against an explicit allowlist (finding P2-03):
+///   - exactly `https://fortunet.pages.dev` (production), or
+///   - localhost dev: scheme http or https, host localhost / 127.0.0.1 / [::1],
+///     any port, or
+///   - an exact origin listed in the ALLOWED_ORIGINS env var (comma-separated,
+///     used for pages.dev preview deployments).
+/// Matched on scheme + hostname + port via web_sys::Url — never substring.
+/// No Origin header at all -> None so no `Access-Control-Allow-Origin` is
+/// emitted. Browsers and caches still disambiguate via the Vary: Origin set above.
+fn resolve_origin(req: &Request, extra_origins: &str) -> Option<String> {
     let origin = req
         .headers()
         .get("Origin")
@@ -115,23 +129,50 @@ fn resolve_origin(req: &Request) -> Option<String> {
         .flatten()
         .filter(|v| !v.is_empty())?;
     // Parse as a full URL and compare the hostname exactly, so
-    // `https://evil.com/path?next=localhost` or `https://notlocalhost.attacker.com`
-    // are rejected even though they contain the literal "localhost"/"127.0.0.1".
+    // `https://evil.com/path?next=localhost` or `https://evil.fortunet.pages.dev`
+    // are rejected even though they contain the literal "localhost"/"fortunet".
     let url = match web_sys::Url::new(&origin) {
         Ok(u) => u,
         Err(_) => return None,
     };
-    let host = url.hostname();
-    let allowed = host == "localhost"
-        || host == "127.0.0.1"
-        || host == "[::1]"
-        || host.ends_with(".pages.dev")
-        || host.ends_with(".workers.dev");
-    if allowed {
+    if is_allowed_origin(&url, extra_origins) {
         Some(origin)
     } else {
         None
     }
+}
+
+/// Allowlist test over an already-parsed origin. Allocation-light: scans
+/// `extra_origins` in place with `split(',')`, no intermediate Vec.
+fn is_allowed_origin(url: &web_sys::Url, extra_origins: &str) -> bool {
+    let raw_protocol = url.protocol();
+    let scheme = raw_protocol.trim_end_matches(':');
+    let host = url.hostname();
+    let port = url.port(); // empty string when default / absent
+
+    // localhost dev — any port, http or https.
+    if (scheme == "http" || scheme == "https")
+        && (host == "localhost" || host == "127.0.0.1" || host == "[::1]")
+    {
+        return true;
+    }
+
+    // Production — exact origin only (https, default port, exact host).
+    if scheme == "https" && host == "fortunet.pages.dev" && port.is_empty() {
+        return true;
+    }
+
+    // Extra exact origins from ALLOWED_ORIGINS, compared the same way.
+    extra_origins.split(',').any(|entry| {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            return false;
+        }
+        match web_sys::Url::new(entry) {
+            Ok(u) => u.protocol() == url.protocol() && u.hostname() == host && u.port() == port,
+            Err(_) => false,
+        }
+    })
 }
 
 fn gen_request_id() -> String {

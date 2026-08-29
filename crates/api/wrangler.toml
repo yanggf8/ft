@@ -19,6 +19,11 @@ class_name = "SessionDO"
 name = "AI_MUTEX"
 class_name = "AIMutexDO"
 
+# P2-02 — cross-isolate rate limiting (sharded rl:0..rl:7 instance names).
+[[durable_objects.bindings]]
+name = "RATE_LIMIT"
+class_name = "RateLimitDO"
+
 # R2 Storage
 [[r2_buckets]]
 binding = "STORAGE"
@@ -42,3 +47,9 @@ new_sqlite_classes = ["SessionDO"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["AIMutexDO"]
+
+# P2-02 — RateLimitDO joins in a NEW tag; v1/v2 stay untouched so the existing
+# SessionDO/AIMutexDO classes are never re-migrated.
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["RateLimitDO"]

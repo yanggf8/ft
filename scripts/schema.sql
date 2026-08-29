@@ -104,3 +104,20 @@ CREATE TABLE IF NOT EXISTS personality_profiles (
 -- 註解（F9/後續切片防誤讀）：complete 與 careless_suspected 記錄都帶 ipip_answers；
 -- skipped_prior_only **兩種都可能**——主動 skip（{skip:true}）為 null、亂答升級
 -- 為帶 answers。狀態一律以 measurement_status 為準，不以 answers 是否為 null 推斷。
+
+-- ── Magic-link login tokens (P0-01) ──
+-- 只存 token 的 SHA-256（hex），明碼 token 只存在 email 連結裡。
+-- expires_at / created_at 一律由 app 寫 ISO（services/login_token.rs）；
+-- 過期判斷用 expires_at > :now_iso，勿與 datetime('now') 的空格格式混比。
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token_hash TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    -- Register flow: the requested full_name rides on the token row; the
+    -- users row is created by /api/auth/verify only after ownership is proven.
+    pending_full_name TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email);

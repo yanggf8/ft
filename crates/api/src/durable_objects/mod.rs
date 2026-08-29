@@ -4,7 +4,9 @@
 //! session / AI-metric storage bit-compatible (see `ft_schema::storage`).
 
 mod ai_mutex_do;
+mod rate_limit_do;
 mod session_do;
 
 pub use ai_mutex_do::AIMutexDO;
+pub use rate_limit_do::RateLimitDO;
 pub use session_do::SessionDO;

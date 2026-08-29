@@ -4,12 +4,10 @@
 //! Chart calculations come from the engine Worker (FT_ENGINE service binding); D1
 //! holds the per-(user,type) cache; AIMutexDO serializes AI.
 
-use std::sync::{Arc, Mutex};
 use worker::*;
 
 use super::super::error;
 use super::super::services::ai::ProviderResult;
-use super::super::services::clock;
 use super::super::services::db;
 use super::super::services::engine::{self, EngineBirth};
 use super::super::services::engine_version::{
@@ -18,36 +16,12 @@ use super::super::services::engine_version::{
 use super::super::services::uuid;
 use super::common::{
     apply_cache_headers, auth_user, client_ip, create_etag, embed_meta, extracted_version,
-    is_story_chart_current, ok_json, parse_chart,
+    is_story_chart_current, ok_json, parse_chart, rate_limit,
 };
 use super::R;
 
 const AI_RATE_LIMIT: u32 = 10;
 const AI_WINDOW_MS: f64 = 60000.0;
-
-#[derive(Default)]
-struct AiRateLimiter {
-    entries: std::collections::HashMap<String, (u32, f64)>,
-}
-impl AiRateLimiter {
-    fn check(&mut self, ip: &str) -> bool {
-        let now = clock::now_ms();
-        match self.entries.get(ip).copied() {
-            Some((count, reset)) if now <= reset => {
-                if count >= AI_RATE_LIMIT {
-                    false
-                } else {
-                    self.entries.get_mut(ip).unwrap().0 = count + 1;
-                    true
-                }
-            }
-            _ => {
-                self.entries.insert(ip.to_string(), (1, now + AI_WINDOW_MS));
-                true
-            }
-        }
-    }
-}
 
 #[derive(Debug, serde::Deserialize)]
 struct UserBirthRow {
@@ -74,9 +48,6 @@ struct InterpRow {
 }
 
 pub fn register(router: R<'static>) -> R<'static> {
-    let ai_limiter = Arc::new(Mutex::new(AiRateLimiter::default()));
-    let ai_limiter2 = ai_limiter.clone();
-
     router
         .get_async("/api/charts", |req, ctx| async move {
             let user = match auth_user(&req, &ctx).await {
@@ -142,7 +113,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 let etag = create_etag(format!("{}-story", hash_of), row.updated_at.as_deref());
                 if let Some(inm) = req.headers().get("if-none-match").ok().flatten() {
                     if inm == etag {
-                        let mut res = Response::empty().unwrap().with_status(304);
+                        let mut res = Response::empty()?.with_status(304);
                         let _ = res.headers_mut().set("ETag", &etag);
                         apply_cache_headers(&mut res, 86400, true);
                         return Ok(res);
@@ -156,15 +127,23 @@ pub fn register(router: R<'static>) -> R<'static> {
             Ok(error::error_code("No story yet. POST /story/generate first", "NO_STORY", 404))
         })
         .post_async("/api/charts/story/generate", {
-            let limiter = ai_limiter.clone();
             move |req, ctx| {
-                let limiter = limiter.clone();
                 async move {
                     let user = match auth_user(&req, &ctx).await {
                         Ok(u) => u,
                         Err(r) => return Ok(r),
                     };
-                    if !limiter.lock().unwrap().check(&client_ip(&req)) {
+                    // P2-02：AI limiter 收編進 RateLimitDO（key "ai:{ip}"，limit 不變）。
+                    // 舊 per-register Arc 在 lib.rs 每請求重建 router 時形同 per-request
+                    //（baicodex F2 同款 bug），DO 版跨 isolate 且計數持久。
+                    if !rate_limit(
+                        &ctx,
+                        &format!("ai:{}", client_ip(&req)),
+                        AI_RATE_LIMIT,
+                        AI_WINDOW_MS,
+                    )
+                    .await
+                    {
                         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
                     }
                     let db = match ctx.env.d1("DB") {
@@ -307,7 +286,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             );
             if let Some(inm) = req.headers().get("if-none-match").ok().flatten() {
                 if inm == etag {
-                    let mut res = Response::empty().unwrap().with_status(304);
+                    let mut res = Response::empty()?.with_status(304);
                     let _ = res.headers_mut().set("ETag", &etag);
                     apply_cache_headers(&mut res, 3600, false);
                     return Ok(res);
@@ -389,15 +368,23 @@ pub fn register(router: R<'static>) -> R<'static> {
             Ok(res)
         })
         .post_async("/api/charts/:type/interpret", {
-            let limiter = ai_limiter2.clone();
             move |req, ctx| {
-                let limiter = limiter.clone();
                 async move {
                     let user = match auth_user(&req, &ctx).await {
                         Ok(u) => u,
                         Err(r) => return Ok(r),
                     };
-                    if !limiter.lock().unwrap().check(&client_ip(&req)) {
+                    // P2-02：AI limiter 收編進 RateLimitDO（key "ai:{ip}"，limit 不變）。
+                    // 舊 per-register Arc 在 lib.rs 每請求重建 router 時形同 per-request
+                    //（baicodex F2 同款 bug），DO 版跨 isolate 且計數持久。
+                    if !rate_limit(
+                        &ctx,
+                        &format!("ai:{}", client_ip(&req)),
+                        AI_RATE_LIMIT,
+                        AI_WINDOW_MS,
+                    )
+                    .await
+                    {
                         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
                     }
                     let div_type = match ctx.param("type") {
@@ -432,7 +419,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         let etag = create_etag(format!("{}-ai", interp.birth_data_hash.clone().unwrap_or_default()), interp.updated_at.as_deref());
                         if let Some(inm) = req.headers().get("if-none-match").ok().flatten() {
                             if inm == etag {
-                                let mut res = Response::empty().unwrap().with_status(304);
+                                let mut res = Response::empty()?.with_status(304);
                                 let _ = res.headers_mut().set("ETag", &etag);
                                 apply_cache_headers(&mut res, 86400, true);
                                 return Ok(res);

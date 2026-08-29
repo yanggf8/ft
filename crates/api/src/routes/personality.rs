@@ -9,7 +9,7 @@ use ft_schema::api::{
 
 use super::super::error;
 use super::super::services::{clock, db, uuid};
-use super::common::{apply_cache_headers, auth_user, client_ip, limiter, ok_json};
+use super::common::{apply_cache_headers, auth_user, client_ip, ok_json, rate_limit};
 use super::R;
 
 const RATE_LIMIT: u32 = 10;
@@ -54,14 +54,26 @@ fn row_to_profile(r: ProfileRow) -> Option<PersonalityProfile> {
     })
 }
 
+/// P2-01: serialize locally owned plain-data DTOs. These cannot fail to serialize,
+/// so fall back to JSON `null` instead of `expect` (global `panic = "abort"` would
+/// kill the isolate on a bug that only ever costs one malformed response).
+fn to_json<T: serde::Serialize>(v: &T) -> serde_json::Value {
+    serde_json::to_value(v).unwrap_or(serde_json::Value::Null)
+}
+
 pub fn register(router: R<'static>) -> R<'static> {
     router
         .post_async("/api/personality/quiz", |mut req, ctx| async move {
-            // isolate 層單例 limiter（baicodex F2）——每請求不再重建
-            if !limiter()
-                .lock()
-                .unwrap()
-                .check(&client_ip(&req), RATE_LIMIT, WINDOW_MS)
+            // P2-02：limiter 移入 RateLimitDO（跨 isolate 持久、冷啟動不再歸零）。
+            // key 加 `personality:ip:` 命名空間，與 auth 各自獨立 bucket——舊版共用
+            // 同一 isolate 計數，打測驗端點會吃掉 auth 的限流額度。
+            if !rate_limit(
+                &ctx,
+                &format!("personality:ip:{}", client_ip(&req)),
+                RATE_LIMIT,
+                WINDOW_MS,
+            )
+            .await
             {
                 return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
             }
@@ -115,13 +127,14 @@ pub fn register(router: R<'static>) -> R<'static> {
                         let dims = ft_big5::inconsistent_dims(a);
                         // per-signal/per-dim 日誌（Grok 對抗審 #5）：三訊號聯集的 1%–15%
                         // 觸發率無從校準單一旋鈕；落庫各訊號與觸發維，供上線後分條件校準。
-                        let careless_json = serde_json::to_string(&serde_json::json!({
+                        // `Value::to_string` is infallible (serde_json::Value: Display)。
+                        let careless_json = serde_json::json!({
                             "too_fast": flags.too_fast,
                             "straight_lining": flags.straight_lining,
                             "inconsistent": flags.inconsistent,
                             "dims": dims,
-                        }))
-                        .expect("serialize careless flags");
+                        })
+                        .to_string();
                         if ft_big5::any_triggered(&flags) {
                             // 狀態機（K1：每次提交都落庫）：**最新一筆（不限 status）**為
                             // careless_suspected → 本次升級 skipped_prior_only；否則記
@@ -154,7 +167,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                             (
                                 s.to_string(),
                                 None,
-                                Some(serde_json::to_string(a).expect("serialize answers")),
+                                Some(to_json(a).to_string()),
                                 Some(dur),
                                 Some(careless_json),
                             )
@@ -162,8 +175,8 @@ pub fn register(router: R<'static>) -> R<'static> {
                             let o = ft_big5::score(a);
                             (
                                 "complete".to_string(),
-                                Some(serde_json::to_string(&o).expect("serialize scores")),
-                                Some(serde_json::to_string(a).expect("serialize answers")),
+                                Some(to_json(&o).to_string()),
+                                Some(to_json(a).to_string()),
                                 Some(dur),
                                 Some(careless_json),
                             )
@@ -226,10 +239,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 answers: body.answers,
                 createdAt: Some(created),
             };
-            Ok(ok_json(
-                &serde_json::to_value(QuizResponse { profile }).expect("serialize quiz response"),
-                200,
-            ))
+            Ok(ok_json(&to_json(&QuizResponse { profile }), 200))
         })
         .get_async("/api/personality/me", |req, ctx| async move {
             let user_id = match auth_user(&req, &ctx).await {
@@ -275,10 +285,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 profile: complete.and_then(row_to_profile),
                 status: latest.map(|r| status_to_wire(&r.measurement_status)),
             };
-            let mut res = ok_json(
-                &serde_json::to_value(resp).expect("serialize me response"),
-                200,
-            );
+            let mut res = ok_json(&to_json(&resp), 200);
             // per-user GET 的 Cache-Control/Vary 一致性（對齊 charts/users；baicodex F14）
             apply_cache_headers(&mut res, 0, true);
             Ok(res)
@@ -306,8 +313,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 ));
             }
             Ok(ok_json(
-                &serde_json::to_value(PersonalityDeleteResponse { success: true })
-                    .expect("serialize delete response"),
+                &to_json(&PersonalityDeleteResponse { success: true }),
                 200,
             ))
         })

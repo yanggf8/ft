@@ -2,7 +2,8 @@
 //!
 //! Session handling matches the React client exactly: the session id lives in
 //! `localStorage` under `sessionId` and rides on every request as
-//! `Authorization: Bearer <id>`.
+//! `Authorization: Bearer <id>`. Auth is magic-link: login/register only send
+//! the email; a session is minted solely by `verify_email`.
 
 use ft_schema::api::*;
 use gloo_net::http::Request;
@@ -145,23 +146,54 @@ async fn post_empty<T: DeserializeOwned>(path: &str) -> Result<T, ApiErr> {
 
 // ── endpoints ──
 
-pub async fn register(email: &str, full_name: Option<&str>) -> Result<SessionResponse, ApiErr> {
+/// `POST /api/auth/register` — magic-link step 1. The identical 202 body
+/// carries no session; the account only becomes usable once the emailed token
+/// is exchanged through `verify_email`.
+pub async fn register(email: &str, full_name: Option<&str>) -> Result<(), ApiErr> {
     let body = RegisterRequest {
         email: email.to_string(),
         full_name: full_name.filter(|s| !s.is_empty()).map(|s| s.to_string()),
     };
-    let res: SessionResponse = send_json(Request::post(&url("/api/auth/register")), &body).await?;
+    send_ignoring_body(Request::post(&url("/api/auth/register")), &body).await
+}
+
+/// `POST /api/auth/login` — magic-link step 1, same 202 contract as register.
+/// An unknown address gets the identical 202 but no email is ever sent.
+pub async fn login(email: &str) -> Result<(), ApiErr> {
+    let body = LoginRequest {
+        email: email.to_string(),
+    };
+    send_ignoring_body(Request::post(&url("/api/auth/login")), &body).await
+}
+
+/// `POST /api/auth/verify` — exchange the emailed token for the session. This
+/// is the only auth call that mints a session; it is stored exactly the way
+/// the old direct login stored it (localStorage `sessionId`).
+pub async fn verify_email(token: &str) -> Result<SessionResponse, ApiErr> {
+    let body = VerifyRequest {
+        token: token.to_string(),
+    };
+    let res: SessionResponse = send_json(Request::post(&url("/api/auth/verify")), &body).await?;
     set_session(Some(&res.sessionId));
     Ok(res)
 }
 
-pub async fn login(email: &str) -> Result<SessionResponse, ApiErr> {
-    let body = LoginRequest {
-        email: email.to_string(),
-    };
-    let res: SessionResponse = send_json(Request::post(&url("/api/auth/login")), &body).await?;
-    set_session(Some(&res.sessionId));
-    Ok(res)
+/// POST whose 202 `{ok, message}` body carries nothing the caller needs — only
+/// the status does. Kept separate so the magic-link step-1 calls say that.
+async fn send_ignoring_body<B: Serialize>(
+    builder: gloo_net::http::RequestBuilder,
+    body: &B,
+) -> Result<(), ApiErr> {
+    let _: serde_json::Value = send_json(builder, body).await?;
+    Ok(())
+}
+
+/// Wire body of `POST /api/auth/verify`. Declared here rather than in
+/// `ft-schema` because this crate cannot edit the schema crate's contract for
+/// a request the Worker defines its own parser for.
+#[derive(Debug, Serialize)]
+struct VerifyRequest {
+    token: String,
 }
 
 /// Clears the local session even when the server call fails — same forgiving

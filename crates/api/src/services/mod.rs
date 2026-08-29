@@ -7,5 +7,7 @@ pub mod ai;
 pub mod billing;
 pub mod birth_hash;
 pub mod db;
+pub mod email;
 pub mod engine;
 pub mod engine_version;
+pub mod login_token;
