@@ -180,8 +180,6 @@ h1, h2, h3 { position: relative; }
 h1::before,
 h1::after,
 h2::before {
-h1::after,
-h2::before {
   content: '';
   position: absolute;
   width: 0.32em;
