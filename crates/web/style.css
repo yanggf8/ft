@@ -22,10 +22,10 @@
   --metal-line: rgba(200, 208, 220, 0.22);
   --metal-edge: linear-gradient(
     135deg,
-    rgba(248, 250, 252, 0.32),
-    rgba(154, 163, 178, 0.1) 35%,
-    rgba(232, 236, 242, 0.24) 60%,
-    rgba(154, 163, 178, 0.09)
+    rgba(255, 255, 255, 0.55),
+    rgba(154, 163, 178, 0.18) 35%,
+    rgba(240, 244, 250, 0.4) 60%,
+    rgba(154, 163, 178, 0.15)
   );
 }
 
@@ -160,18 +160,42 @@ h1, h2, h3, h4, h5, h6,
   color: var(--heading);
   background: linear-gradient(
     105deg,
-    #c8d0dc 0%, #f8fafc 18%, #9aa3b2 38%,
-    #eef2f7 55%, #a8b2c2 72%, #f5f7fa 88%, #c8d0dc 100%
+    #7e8798 0%, #ffffff 14%, #697180 30%,
+    #f2f6fc 48%, #737d8e 64%, #ffffff 82%, #b6c0cf 100%
   );
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: metal-sheen 8s ease-in-out infinite;
+  animation: metal-sheen 4.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(214, 224, 240, 0.35));
 }
+/* jewellery sparkles: pure-CSS four-point stars, no font dependency */
+h1, h2, h3 { position: relative; }
+h1::before,
+h1::after,
+h2::before {
+  content: '';
+  position: absolute;
+  width: 0.32em;
+  height: 0.32em;
+  background: #ffffff;
+  clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+  animation: sparkle 2.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+h1::before { top: -4%; right: 10%; }
+h1::after { bottom: 10%; left: 4%; width: 0.22em; height: 0.22em; animation-delay: 1.4s; }
+h2::before { top: -8%; right: 6%; width: 0.22em; height: 0.22em; animation-delay: 0.7s; }
 @keyframes metal-sheen {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(90deg); }
 }
 
 /* ═══ reduced motion: freeze to a static sky (spec §4) ═══ */
@@ -185,6 +209,12 @@ h1, h2, h3, h4, h5, h6,
   .nav-brand {
     animation: none;
     background-position: 30% 50%;
+  }
+  h1::before,
+  h1::after,
+  h2::before {
+    animation: none;
+    opacity: 0.55;
   }
 }
 
@@ -269,6 +299,15 @@ main { flex: 1; }
   padding: 1.5rem; border-radius: 8px;
   margin-bottom: 1.5rem;
 }
+.card,
+.feature {
+  transition: filter 0.4s ease;
+}
+.card:hover,
+.feature:hover {
+  filter: brightness(1.12);
+}
+
 .page { padding: 1.5rem; max-width: 800px; margin: 0 auto; }
 .page-narrow { padding: 1.5rem; max-width: 600px; margin: 0 auto; }
 .center-note { padding: 2rem; text-align: center; }

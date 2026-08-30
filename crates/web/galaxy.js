@@ -146,7 +146,7 @@
     grad.addColorStop(0, 'rgba(245,247,250,' + (0.9 * Math.max(ease, 0)).toFixed(3) + ')');
     grad.addColorStop(1, 'rgba(245,247,250,0)');
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(tx, ty);
