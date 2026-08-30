@@ -151,24 +151,29 @@ body {
 @keyframes twinkleB { from { opacity: 0.8; } to { opacity: 0.3; } }
 
 /* serif headings (spec §2) — Latin/digits via Playfair, CJK via Noto Serif TC.
-   Metallic-silver fill with a slow travelling highlight (user-requested);
-   falls back to solid --heading where background-clip: text is unsupported
-   (color set after background so unsupported browsers keep a readable color). */
+   Mirror chrome (user-requested): a STATIC vertical reflection gradient —
+   sky highlight, a sharp horizon break, then the ground reflection — like
+   polished chrome plating. No sweeping animation; a mirror does not marquee.
+   Falls back to solid --heading where background-clip: text is unsupported. */
 h1, h2, h3, h4, h5, h6,
 .nav-brand {
   font-family: 'Playfair Display', 'Noto Serif TC', serif;
   color: var(--heading);
   background: linear-gradient(
-    105deg,
-    #7e8798 0%, #ffffff 14%, #697180 30%,
-    #f2f6fc 48%, #737d8e 64%, #ffffff 82%, #b6c0cf 100%
+    180deg,
+    #fdfeff 0%,
+    #d5dde7 22%,
+    #8f99ab 38%,
+    #3f4756 49%,
+    #f4f7fb 52%,
+    #aab4c4 66%,
+    #525b6b 84%,
+    #c3ccd9 100%
   );
-  background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: metal-sheen 4.5s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(214, 224, 240, 0.35));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(214, 224, 240, 0.28));
 }
 /* jewellery sparkles: pure-CSS four-point stars, no font dependency */
 h1, h2, h3 { position: relative; }
@@ -189,10 +194,6 @@ h2::before {
 h1::before { top: -4%; right: 10%; }
 h1::after { bottom: 10%; left: 4%; width: 0.22em; height: 0.22em; animation-delay: 1.4s; }
 h2::before { top: -8%; right: 6%; width: 0.22em; height: 0.22em; animation-delay: 0.7s; }
-@keyframes metal-sheen {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
 @keyframes sparkle {
   0%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
   50% { opacity: 1; transform: scale(1) rotate(90deg); }
@@ -204,11 +205,6 @@ h2::before { top: -8%; right: 6%; width: 0.22em; height: 0.22em; animation-delay
   .sky-stars-b {
     animation: none;
     opacity: 0.7;
-  }
-  h1, h2, h3, h4, h5, h6,
-  .nav-brand {
-    animation: none;
-    background-position: 30% 50%;
   }
   h1::before,
   h1::after,
