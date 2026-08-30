@@ -17,8 +17,11 @@ a lightweight canvas particle layer on top of a pure-CSS star field.
 - Whole-site dark starfield background (fixed, behind all pages).
 - Milky-Way band: particles concentrated on an inclined band, denser at the
   band core, sparse at the edges; band-aligned haze in CSS underneath.
-- Silver as the dominant color family; a single blue-violet accent reserved
-  for interaction (CTA, links, focus, selection).
+- Silver as the dominant color family. Interaction (CTA, links, focus,
+  selection) is carried by chrome LUMINANCE — edge → brighter edge →
+  inverted chrome plate → focus ring — not by hue. Post-launch revision
+  (user direction): the blue-violet accent was removed entirely; `--rose`
+  is the site's only hue (transformation stars + errors).
 - Serif Chinese headings (Noto Serif TC) with Playfair Display for Latin.
 - Zero Rust/wasm changes: the reskin is pure CSS + one small vanilla JS file.
 
@@ -36,8 +39,8 @@ a lightweight canvas particle layer on top of a pure-CSS star field.
 
 Borrowed from hesocial's tailwind.config.js palette: `midnight-black
 #0C0C0C` and `platinum #E5E4E2`. Its `gold #D4AF37` and `deep-blue #1B2951`
-are rejected (deep-blue is too bright; only a trace of blue-violet survives
-in the nebula haze).
+are rejected (deep-blue is too bright; the blue-violet accent family was
+removed entirely post-launch — see Goals).
 
 ```css
 :root {
@@ -52,10 +55,13 @@ in the nebula haze).
   --silver-faint:#8A919C;   /* muted text (brightened: see contrast note) */
   --starlight:   #F5F7FA;   /* highlights: focus ring, hover glow */
 
-  /* blue-violet accent (interaction only) */
-  --nebula:        #8B93F8; /* links, CTA fill, focus, selected */
-  --nebula-strong: #A5ACFA; /* hover */
-  --nebula-deep:   #312E81; /* selected background */
+  /* chrome interaction ladder (blue-violet removed post-launch;
+     states are luminance-only: edge -> hover -> inverted plate -> focus) */
+  --metal-hi:      #F8FAFC; /* hover/focus highlight           15.2:1 */
+  --metal-mid:     #C8D0DC; /* interactive text base           10.1:1 */
+  --metal-lo:      #9AA3B2; /* control edges                    6.4:1 */
+  --metal-deep:    #6F7787; /* horizon band / dark edge floor   3.62:1 */
+  --ink-on-chrome: #10141F; /* text on a chrome plate           >=6.2:1 */
 
   /* semantic — one shared warning token by design: palace-grid
      transformation stars and form errors are both "warning" semantics.
@@ -76,6 +82,8 @@ glass (`rgba(255,255,255,.05)` over the gradient, composite ≈ `#1C202A`).
 Computed WCAG ratios on that composite ground (relative-luminance formula,
 verified): `--text` 12.5:1, `--silver-dim` 7.5:1, `--silver-faint` 5.1:1,
 `--nebula` 5.9:1, `--rose` 6.1:1. All pass AA for normal text (4.5:1).
+(Post-launch the nebula trio was replaced by the chrome ladder in §1 —
+re-verified: metal-deep 3.62:1, link #CFD6E0 11.1:1, muted 5.1:1.)
 (The first draft's `#7C828E` measured 4.22:1 on glass — that is why
 `--silver-faint` is now `#8A919C`.) Any token change during implementation
 must re-run this check against the glass composite, not bare deep-space.
@@ -118,9 +126,9 @@ is positioned and therefore still sits above the canvas.)
    painted on `body`, plus two ultra-faint radial glows to prevent gradient
    banding.
 2. **CSS nebula haze** (`.sky-nebula`, z -4) — a large rectangle rotated
-   -18deg (the Milky-Way axis), filled with an elongated radial gradient:
-   white at 2-5% alpha at the band core fading out, plus a faint
-   blue-violet tint (`rgba(76,81,140,0.06)`).
+   -18deg (the Milky-Way axis), filled with elongated radial gradients:
+   silver-white at the band core fading out (the blue-violet tint was
+   removed with the hue purge).
 3. **CSS static star field, 2 layers** — multi-`box-shadow` star painting on
    two dot layers, 1px and 2px, 30 stars each = 60 total. Coordinates are
    generated, not hand-written: a throwaway generator script
@@ -205,19 +213,23 @@ Token mapping, section by section:
 - `.footer`: transparent dark, `--silver-faint`.
 - `.card`, `.feature`: glass surface (`--glass-bg`, blur 20px,
   `--glass-border`), silver headings.
-- `.btn-primary`, `.cta`: `--nebula` fill with `--void` text; hover lifts to
-  `--nebula-strong` + subtle `--starlight` glow shadow.
-- `.cta-alt`, `.btn-link`, `.back-link`, `a`: `--nebula`.
+- `.btn-primary`, `.cta`: chrome-plate CTA (light plate + dark ink,
+  inverted) with bullet-nose radius, top reflection line; hover brightens.
+- `.cta-alt`: outlined chrome (metal-lo edge, lifts to metal-hi).
+- `.btn-link`, `.back-link`, `a`: silver #CFD6E0 with chrome underline;
+  hover lifts to --metal-hi + soft glow.
 - Forms (`.field`, `.form-input`, `input/select`): dark glass fields,
   `--glass-border`, focus ring 2px `--starlight` (replaces indigo outline).
 - `.palace-grid`: palace cells become dark glass; `.palace.life` gets a
-  `--nebula` border + `--nebula-deep` tint; `.star.main` silver pill;
+  chrome border + inner glow (informational highlight, not inverted);
+  `.star.main` silver pill;
   `.star.transformation` `--rose` text on dark glass (see §1 note).
-- `.ocean-*` scores/tracks: track `rgba(255,255,255,0.08)`, band
-  `--nebula` at reduced alpha, marker `--starlight` with `--nebula` ring,
-  score digits `--nebula`.
-- `.quiz-*`: items dark glass; selected choice `--nebula` fill + `--void`
-  text; focus-visible 2px `--starlight`; sticky submit bar
+- `.ocean-*` scores/tracks: track `rgba(255,255,255,0.08)`, band a
+  silver length-gradient, marker `--starlight` with `--metal-mid` ring,
+  score digits in light chrome (clip:text).
+- `.quiz-*`: items dark glass; selected choice = INVERTED chrome plate
+  (light plate + dark ink — inversion is reserved for selection only);
+  focus-visible 2px `--starlight`; sticky submit bar
   `--glass-bg-strong`.
 - `.error` → `--rose`; `.muted` → `--silver-faint`.
 - Optional polish: dark `::-webkit-scrollbar` styling.
