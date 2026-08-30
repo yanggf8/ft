@@ -180,6 +180,8 @@ h1, h2, h3 { position: relative; }
 h1::before,
 h1::after,
 h2::before {
+h1::after,
+h2::before {
   content: '';
   position: absolute;
   width: 0.32em;
@@ -197,6 +199,18 @@ h2::before { top: -8%; right: 6%; width: 0.22em; height: 0.22em; animation-delay
 @keyframes sparkle {
   0%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
   50% { opacity: 1; transform: scale(1) rotate(90deg); }
+}
+
+/* small headings can't carry the full mirror's dark horizon band (it melts
+   into the card glass at 1.25rem) — light silver only, AA-safe throughout */
+h3, h4, h5, h6 {
+  background: linear-gradient(
+    180deg,
+    #fdfeff 0%,
+    #ccd4df 40%,
+    #939da9 70%,
+    #b9c2cf 100%
+  );
 }
 
 /* ═══ reduced motion: freeze to a static sky (spec §4) ═══ */
