@@ -216,6 +216,9 @@ h2::before { top: -8%; right: 6%; width: 0.22em; height: 0.22em; animation-delay
     animation: none;
     opacity: 0.55;
   }
+  .feature-grid .feature:first-child:hover::before {
+    animation: none;
+  }
 }
 
 * {
@@ -313,12 +316,24 @@ main { flex: 1; }
 .center-note { padding: 2rem; text-align: center; }
 .error { color: var(--rose); margin-bottom: 1rem; font-size: 0.875rem; }
 .muted { color: var(--silver-faint); }
+/* primary CTA: nebula fill + spectral edge (Codex advisory — blue-violet
+   stays the sole interaction signal; the cold light lives only on the rim) */
+.cta,
 .btn-primary {
-  background: var(--nebula); color: var(--void); padding: 0.75rem 1.5rem;
-  border-radius: 6px; border: none; cursor: pointer; font-size: 1rem;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#8b93f8, #6f78e8) padding-box,
+    linear-gradient(110deg, #8b93f8, #d8f4ff, #b295ff) border-box;
+}
+.btn-primary {
+  color: var(--void); padding: 0.75rem 1.5rem;
+  border-radius: 6px; cursor: pointer; font-size: 1rem;
   font-weight: 500;
 }
-.btn-primary:hover { background: var(--nebula-strong); box-shadow: 0 0 12px rgba(165, 172, 250, 0.35); }
+.btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 18px rgba(139, 147, 248, 0.28);
+}
 .btn-block { width: 100%; padding: 1rem 1.5rem; border-radius: 8px; border: none; font-size: 1rem; }
 .btn-link, .back-link { background: none; border: none; color: var(--nebula); cursor: pointer; }
 .back-link { margin-bottom: 1rem; }
@@ -331,10 +346,11 @@ main { flex: 1; }
 .hero-sub { font-size: 1.25rem; color: var(--silver-dim); margin-bottom: 2rem; }
 .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 .cta {
-  background: var(--nebula); color: var(--void); padding: 0.75rem 2rem;
+  color: var(--void); padding: 0.75rem 2rem;
   border-radius: 8px; text-decoration: none; font-weight: 500;
+  box-shadow: 0 0 12px rgba(139, 147, 248, 0.18);
 }
-.cta:hover { background: var(--nebula-strong); box-shadow: 0 0 12px rgba(165, 172, 250, 0.35); }
+.cta:hover { filter: brightness(1.08); box-shadow: 0 0 18px rgba(139, 147, 248, 0.3); }
 .cta-alt {
   background: var(--glass-bg); color: var(--nebula); padding: 0.75rem 2rem;
   border-radius: 8px; text-decoration: none; font-weight: 500;
@@ -355,6 +371,43 @@ main { flex: 1; }
 }
 .feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--heading); }
 .feature p { color: var(--silver-dim); }
+
+/* Y2K-iridescent edge, restricted to the ONE featured card (Codex advisory):
+   conic ring built from silver-white + nebula + pale cyan/lavender only —
+   no gold, no full spectrum. Hover drifts the hue 18deg, desktop-only. */
+.feature-grid .feature:first-child {
+  position: relative;
+  isolation: isolate;
+}
+.feature-grid .feature:first-child::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: 8px;
+  pointer-events: none;
+  background: conic-gradient(
+    from 210deg,
+    #8a93a5,
+    #8b93f8,
+    #b8e7ff,
+    #f0f2ff,
+    #b295ff,
+    #8a93a5
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+@media (hover: hover) and (min-width: 768px) {
+  .feature-grid .feature:first-child:hover::before {
+    animation: border-spectrum 3s linear infinite;
+  }
+}
+@keyframes border-spectrum {
+  to { filter: hue-rotate(18deg); }
+}
 
 /* ── forms ── */
 .auth-page { padding: 2rem; max-width: 400px; margin: 3rem auto; }
@@ -448,7 +501,17 @@ main { flex: 1; }
 .ocean-foot {
   margin-top: 1.5rem;
   padding-top: 1.25rem;
-  border-top: 1px solid var(--metal-line);
+  border-top: 0;
+}
+/* chrome divider: short spectral rule between the result body and actions */
+.ocean-foot::before {
+  content: '';
+  display: block;
+  width: 4rem;
+  height: 1px;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, transparent, #8b93f8, #f0f2ff, #8b93f8, transparent);
+  opacity: 0.7;
 }
 .ocean-foot strong {
   display: block;
