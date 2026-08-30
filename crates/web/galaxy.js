@@ -16,9 +16,9 @@
   var BAND_RAD = (-18 * Math.PI) / 180;
   var COS = Math.cos(BAND_RAD), SIN = Math.sin(BAND_RAD);
   var ABS_COS = Math.abs(COS), ABS_SIN = Math.abs(SIN);
-  var SIGMA_FRAC = 0.12;      // band width, fraction of viewport diagonal
+  var SIGMA_FRAC = 0.09;      // band width, fraction of viewport diagonal
   var AREA_PER_STAR = 14400;  // px^2 per band particle
-  var COUNT_MIN = 24, COUNT_MAX = 150;
+  var COUNT_MIN = 24, COUNT_MAX = 180;
   var SCATTER = 30;           // uniform stars outside the band
   var DPR_CAP = 2;
 
@@ -74,8 +74,8 @@
       ax: rand(-axMax, axMax),   // along-band coordinate (float, always)
       ay: gauss() * sigma,       // perpendicular Gaussian offset
       vx: (Math.random() < 0.5 ? -1 : 1) * rand(2, 6), // px/s along band
-      r: rand(0.4, 1.6),
-      a0: rand(0.3, 0.9),
+      r: rand(0.8, 2.4),
+      a0: rand(0.5, 1.0),
       phase: rand(0, Math.PI * 2),
       tw: rand(2, 6)             // twinkle period, seconds
     };
