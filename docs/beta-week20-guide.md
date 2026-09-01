@@ -85,11 +85,11 @@
 2. Click "Logs" tab
 3. Filter by "error"
 
-### Check user stats (D1)
+### Check user stats (Turso)
 ```bash
-# Via wrangler
-wrangler d1 execute fortunet-db --remote --command "SELECT COUNT(*) FROM users"
-wrangler d1 execute fortunet-db --remote --command "SELECT COUNT(*) FROM chart_records"
+# Via Turso
+turso db shell fortunet "SELECT COUNT(*) FROM users"
+turso db shell fortunet "SELECT COUNT(*) FROM interpretations"
 ```
 
 ### Rollback if needed

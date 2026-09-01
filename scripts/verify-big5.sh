@@ -90,7 +90,7 @@ echo "$E" | grep -q 'SKIP_ANSWERS_CONFLICT' || fail "empty body code" "$E"
 pass "validation -> 400 (VALIDATION_FAILED / SKIP_ANSWERS_CONFLICT)"
 
 # 8. 主動跳過 -> skippedPriorOnly；讀模型：profile 仍為最新 complete（Grok #3）
-#    D5：主動 skip 的本筆也不得帶分數；GET retry（D1 read-after-write 跨 isolate——baicodex F16.5）
+#    D5：主動 skip 的本筆也不得帶分數；GET retry（Turso Hrana read-after-write——baicodex F16.5）
 S=$(curl -s -X POST "$API_URL/api/personality/quiz" -H "$AUTH" -H "$CT" \
   -d '{"skip":true}')
 echo "$S" | grep -q 'skippedPriorOnly' || fail "explicit skip" "$S"

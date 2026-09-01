@@ -36,7 +36,7 @@
 ### Infrastructure ✅
 - **Frontend**: React + TypeScript + Vite (179KB / 57KB gzipped)
 - **Backend**: Cloudflare Workers + Hono
-- **Database**: D1 (SQLite)
+- **Database**: Turso (libSQL, Hrana over Fetch)
 - **Cache**: Durable Objects (Session + AI Mutex)
 - **AI**: iFlow GLM-4.6, Groq Kimi-K2, Cerebras Llama-3.3-70b
 
@@ -123,7 +123,7 @@ Phase 6:  Go-Live             Week 21     ← READY (Beta Testing)
 
 - **Frontend**: React 18, TypeScript 5, Vite 5
 - **Backend**: Cloudflare Workers, Hono 4
-- **Database**: D1 (SQLite)
+- **Database**: Turso (libSQL, Hrana over Fetch)
 - **Cache**: Durable Objects
 - **Storage**: R2
 - **AI**: iFlow / Groq / Cerebras (free tiers)

@@ -8,7 +8,7 @@
 # requires an authenticated session, which a smoke test cannot script.
 #
 # Test 7 (rate limiting) is opt-in: it hammers POST /api/auth/login past its
-# per-minute limit, which writes dead login-token rows to prod D1 and rate-limits
+# per-minute limit, which writes dead login-token rows to prod Turso and rate-limits
 # the caller's own IP for the 60 s window. Set RUN_RATE_LIMIT_TEST=1 to include it.
 
 set -e

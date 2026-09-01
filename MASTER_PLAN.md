@@ -1,6 +1,6 @@
 # 🚀 FortuneT V2 - Master Migration Plan (Consolidated)
 
-**Version**: 3.0 (Revised December 2025)
+**Version**: 3.0 (Revised December 2025) — *Historical: D1 references below are the original plan; production is now Turso (libSQL) — see `CLAUDE.md`.*
 **Timeline**: 24 weeks core + 8 weeks storytelling (32 weeks total)
 **Status**: Phase 5 Complete - Ready for Beta Testing
 

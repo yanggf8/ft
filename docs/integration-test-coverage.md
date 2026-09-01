@@ -51,7 +51,7 @@
 - [ ] Trial period tracking
 
 ### Chart Storage & Retrieval
-- [ ] Saving charts to D1
+- [ ] Saving charts to Turso
 - [ ] Retrieving user's charts
 - [ ] Chart history
 - [ ] Chart deletion

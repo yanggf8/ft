@@ -472,7 +472,7 @@ const MONETIZATION_STRATEGY = {
 ### Technical Documentation
 1. **SYNTHESIS_RULES.md** - Logic for combining Eastern/Western traits
 2. **PROMPT_LIBRARY.md** - Version-controlled AI prompts with examples
-3. **STORY_SCHEMA.md** - D1 database structure for Story Nodes
+3. **STORY_SCHEMA.md** - Turso database structure for Story Nodes
 4. **API_ENDPOINTS.md** - Synthesis API documentation
 
 ### Process Documentation

@@ -28,8 +28,8 @@ unset CLOUDFLARE_API_TOKEN && npx wrangler deployments list
 # Manage secrets
 unset CLOUDFLARE_API_TOKEN && npx wrangler secret put IFLOW_API_KEY
 
-# D1 commands
-unset CLOUDFLARE_API_TOKEN && npx wrangler d1 execute fortunet-db --remote --command "SELECT COUNT(*) FROM users"
+# Turso commands
+unset CLOUDFLARE_API_TOKEN && turso db shell fortunet "SELECT COUNT(*) FROM users"
 
 # Pages deploy
 unset CLOUDFLARE_API_TOKEN && npx wrangler pages deploy dist
@@ -106,7 +106,7 @@ GET  /api/charts                # List user's cached interpretations
 | Component | Status | URL/ID |
 |-----------|--------|--------|
 | **Workers API** | ✅ Live | https://fortunet-api.yanggf.workers.dev |
-| **D1 Database** | ✅ Ready | `88d074eb-7331-402b-bc76-1ac3cb0588da` |
+| **Turso Database** | ✅ Ready | `libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io` |
 | **R2 Storage** | ✅ Ready | `fortunet-storage` |
 | **Session DO** | ✅ Working | DO storage (key-value) |
 | **AI Mutex DO** | ✅ Working | DO storage, 3-provider failover |
@@ -156,7 +156,7 @@ fortune-teller-v2/
 │   │       ├── users.ts        # /me, PUT /me/birth
 │   │       └── charts.ts       # GET /:type, POST /:type/interpret
 │   ├── scripts/
-│   │   ├── schema.sql          # D1 schema (birth-data centric)
+│   │   ├── schema.sql          # Turso schema (birth-data centric)
 │   │   └── migrate-v2.sql      # v1→v2 migration
 │   ├── wrangler.toml           # Cloudflare config
 │   └── package.json
@@ -266,15 +266,15 @@ npx wrangler secret put GROQ_API_KEY
 npx wrangler secret put CEREBRAS_API_KEY
 
 # Database
-npm run db:init               # Apply schema to remote D1
-npm run db:init:local         # Apply schema to local D1
+turso db shell fortunet < scripts/schema.sql  # Apply schema to Turso
+turso db shell fortunet < scripts/schema.sql  # 或本地 turso dev
 ```
 
 **⚠️ Deployment Rule**: Always `unset CLOUDFLARE_API_TOKEN` before deploying. Wrangler should use OAuth authentication, not API tokens, to avoid permission issues.
 
 ### CI/CD Setup (GitHub)
 Required secrets:
-- `CLOUDFLARE_API_TOKEN` - API token with Workers/D1/R2 permissions
+- `CLOUDFLARE_API_TOKEN` - API token with Workers/R2 permissions
 - `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
 
 ---
@@ -300,14 +300,14 @@ Required secrets:
 
 **Current Usage** (Phase 2):
 - Workers: ~10 requests/day (testing)
-- D1: 0.09 MB / 5 GB limit
+- Turso: 0.09 MB (libSQL) 
 - DO: Minimal (session + AI mutex)
 - R2: 0 MB / 10 GB limit
 - AI: Free tiers (iFlow/Groq/Cerebras)
 
 **Free Tier Limits**:
 - Workers: 100K requests/day
-- D1: 5GB storage, 25M reads/day
+- Turso: libSQL (no D1 free-tier DB cap)
 - DO: 400K requests/day
 - R2: 10GB storage
 
