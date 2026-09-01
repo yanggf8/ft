@@ -93,8 +93,16 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                         {email}
                                                     </div>
                                                     <Show when=move || {
-                                                        auth.user.get().as_ref().map(|u| u.billing.tier.clone()).unwrap_or_default() != "free"
-                                                            || auth.user.get().as_ref().map(|u| u.billing.isTrialing).unwrap_or(false)
+                                                        auth.user.get().as_ref().map(|u| u.is_admin).unwrap_or(false)
+                                                    }>
+                                                        <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:#fef3c7;color:#92400e">
+                                                            "管理員"
+                                                        </span>
+                                                    </Show>
+                                                    <Show when=move || {
+                                                        !auth.user.get().as_ref().map(|u| u.is_admin).unwrap_or(false)
+                                                            && (auth.user.get().as_ref().map(|u| u.billing.tier.clone()).unwrap_or_default() != "free"
+                                                            || auth.user.get().as_ref().map(|u| u.billing.isTrialing).unwrap_or(false))
                                                     }>
                                                         <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:#eef2ff;color:#4f46e5">
                                                             {move || {
