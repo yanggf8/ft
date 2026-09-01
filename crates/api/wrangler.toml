@@ -36,6 +36,12 @@ ENVIRONMENT = "development"
 # with `gwebcdb-mint turso --tier write --db fortunet --export` — a group token
 # covers every database in the group.
 TURSO_URL = "libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io"
+# Google OAuth — CLIENT_ID is public (var), CLIENT_SECRET is secret.
+# Client: 892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com
+# Redirect URIs: https://fortunet-api.yanggf.workers.dev/api/auth/google/callback
+#                https://api.ahexagram.com/api/auth/google/callback
+GOOGLE_CLIENT_ID = "892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com"
+WEB_ORIGIN = "https://fortunet.pages.dev"
 # Magic-link sender (audit P0-01). onboarding@resend.dev is Resend's test
 # sender: it only delivers to the Resend account owner's own email. Swap to a
 # verified domain address before opening registration to real users.

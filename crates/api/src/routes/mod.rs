@@ -13,6 +13,7 @@ mod admin_invites;
 mod auth;
 mod charts;
 mod common;
+mod oauth;
 mod personality;
 mod users;
 
@@ -20,7 +21,8 @@ type R<'a> = Router<'a, ()>;
 
 pub fn router(_env: Env) -> R<'static> {
     let a: R<'static> = auth::register(R::new());
-    let u: R<'static> = users::register(a);
+    let o: R<'static> = oauth::register(a);
+    let u: R<'static> = users::register(o);
     let c: R<'static> = charts::register(u);
     let p: R<'static> = personality::register(c);
     let ai: R<'static> = admin_invites::register(p);

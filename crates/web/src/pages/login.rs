@@ -9,6 +9,15 @@ use crate::api;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
+    // OAuth callback: ?sessionId= from Google flow — store and go home.
+    if let Some(sid) = crate::query_param("sessionId") {
+        if !sid.is_empty() {
+            crate::api::set_session(Some(&sid));
+            if let Some(win) = web_sys::window() {
+                let _ = win.location().set_href("/");
+            }
+        }
+    }
     let is_register = RwSignal::new(false);
     let email = RwSignal::new(String::new());
     let full_name = RwSignal::new(String::new());
@@ -167,6 +176,24 @@ pub fn LoginPage() -> impl IntoView {
                                 }}
                             </button>
                         </form>
+                        <div style="margin:1.25rem 0;display:flex;align-items:center;gap:0.75rem">
+                            <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
+                            <span style="font-size:0.75rem;color:#9ca3af">或</span>
+                            <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
+                        </div>
+                        <button
+                            class="btn-primary"
+                            style="width:100%;background:#fff;color:#111827;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;gap:0.5rem"
+                            on:click=move |_| {
+                                let url = format!("{}/api/auth/google", crate::api::API_URL);
+                                if let Some(win) = web_sys::window() {
+                                    let _ = win.location().set_href(&url);
+                                }
+                            }
+                        >
+                            <span>"G"</span>
+                            "使用 Google 登入"
+                        </button>
                         <div style="margin-top:1.5rem;text-align:center">
                             <button
                                 class="btn-link"
