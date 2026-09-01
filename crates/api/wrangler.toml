@@ -48,7 +48,7 @@ WEB_ORIGIN = "https://fortunet.pages.dev"
 MAIL_FROM = "onboarding@resend.dev"
 # Invite-system admin (spec 2026-08-30). The session email matching this value
 # (case-insensitive) may manage invites; unset = nobody (fail-closed).
-ADMIN_EMAIL = "yanggf@msn.com"
+ADMIN_EMAIL = "yanggf@msn.com,yang.goufang@gmail.com"
 
 # CORS extra exact origins (comparisons are scheme+host+port, never substring).
 # Pages preview deployments get hashed origins like

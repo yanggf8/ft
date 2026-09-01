@@ -12,7 +12,14 @@ use super::R;
 
 /// Admin decision, pure for testing: unset var = nobody, else case-insensitive.
 pub fn is_admin_email(admin_var: &str, session_email: &str) -> bool {
-    !admin_var.is_empty() && admin_var.eq_ignore_ascii_case(session_email)
+    if session_email.is_empty() {
+        return false;
+    }
+    admin_var
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .any(|admin| admin.eq_ignore_ascii_case(session_email))
 }
 
 /// 401 without a session, 403 when the session is not the admin. `auth_user`
