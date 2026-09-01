@@ -28,13 +28,18 @@ async fn require_admin(ctx: &RouteContext<()>, req: &Request) -> Result<String, 
     let user_id = auth_user(req, ctx).await?;
     let db = db::Turso::from_env(&ctx.env).map_err(|_| error::error("db unavailable", 500))?;
     let uid = db::text(&user_id);
-    let row: Option<EmailRow> = db::first(&db, "SELECT email FROM users WHERE id = ?1", &[&uid])
+    let row: Option<EmailRow> = db::first(&db, "SELECT email, role FROM users WHERE id = ?1", &[&uid])
         .await
         .map_err(|_| error::error("db error", 500))?;
-    let email = match row {
-        Some(r) => r.email,
+    let (email, role) = match row {
+        Some(r) => (r.email, r.role.unwrap_or_default()),
         None => return Err(error::error("Forbidden", 403)),
     };
+    // hesocial-style role check + FT env-var allowlist (bootstrap for first admin)
+    let is_role_admin = role == "admin" || role == "super_admin";
+    if is_role_admin {
+        return Ok(email);
+    }
     let admin = ctx
         .env
         .var("ADMIN_EMAIL")
@@ -49,6 +54,8 @@ async fn require_admin(ctx: &RouteContext<()>, req: &Request) -> Result<String, 
 #[derive(Debug, serde::Deserialize)]
 struct EmailRow {
     email: String,
+    #[serde(default)]
+    role: Option<String>,
 }
 
 pub fn register(router: R<'static>) -> R<'static> {

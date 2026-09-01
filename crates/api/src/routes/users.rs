@@ -24,6 +24,8 @@ struct UserRow {
     subscription_tier: Option<String>,
     trial_ends_at: Option<String>,
     created_at: Option<String>,
+    #[serde(default)]
+    role: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -80,7 +82,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             let u = db::text(&user);
             let row: Option<UserRow> = match db::first(
                 &db,
-                "SELECT id, email, full_name, avatar_url, birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, subscription_tier, trial_ends_at, created_at FROM users WHERE id = ?1",
+                "SELECT id, email, full_name, avatar_url, birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, subscription_tier, trial_ends_at, created_at, role FROM users WHERE id = ?1",
                 &[&u],
             ).await {
                 Ok(r) => r,
@@ -96,12 +98,26 @@ pub fn register(router: R<'static>) -> R<'static> {
             let billing_info = billing::check_user_access(&tier, trial_ends_at.as_deref());
             let has_birth_data = row.birth_year.is_some() && row.birth_month.is_some() && row.birth_day.is_some();
             let is_admin = {
-                let admin = ctx
-                    .env
-                    .var("ADMIN_EMAIL")
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
-                crate::routes::admin_invites::is_admin_email(&admin, &row.email)
+                // hesocial-style: DB role takes precedence, env-var is bootstrap fallback
+                if let Some(role) = row.role.as_deref() {
+                    if role == "admin" || role == "super_admin" {
+                        true
+                    } else {
+                        let admin = ctx
+                            .env
+                            .var("ADMIN_EMAIL")
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        crate::routes::admin_invites::is_admin_email(&admin, &row.email)
+                    }
+                } else {
+                    let admin = ctx
+                        .env
+                        .var("ADMIN_EMAIL")
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    crate::routes::admin_invites::is_admin_email(&admin, &row.email)
+                }
             };
 
             let mut res = ok_json(
