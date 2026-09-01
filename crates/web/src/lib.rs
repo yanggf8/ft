@@ -4,6 +4,7 @@
 pub mod api;
 pub mod auth;
 pub mod components;
+pub mod generation;
 pub mod pages;
 
 use leptos::prelude::*;

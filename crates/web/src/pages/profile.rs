@@ -94,7 +94,19 @@ fn BirthCard(
                     let has = auth.user.get().map(|u| u.hasBirthData).unwrap_or(false);
                     if has {
                         let text: String = auth.user.get().and_then(|u| u.birth_summary()).unwrap_or_default();
-                        view! { <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p> }.into_any()
+                        let year = auth.user.get().and_then(|u| u.birth_year).unwrap_or(0);
+                        let gen = crate::generation::generation_story(year);
+                        view! {
+                            <div style="display:grid;gap:0.75rem">
+                                <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p>
+                                {gen.map(|(title, desc)| view! {
+                                    <div style="background:linear-gradient(135deg,rgba(167,139,250,0.12),rgba(244,114,182,0.10));border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:0.85rem 1rem">
+                                        <div style="font-weight:700;font-size:0.9rem;color:#6d28d9;margin-bottom:0.25rem">{title}</div>
+                                        <p style="font-size:0.85rem;line-height:1.6;color:var(--silver-dim);margin:0">{desc}</p>
+                                    </div>
+                                }.into_any()).unwrap_or_else(|| view! { <span></span> }.into_any())}
+                            </div>
+                        }.into_any()
                     } else {
                         view! { <p class="muted">"請先填寫出生資料以開始算命"</p> }.into_any()
                     }
@@ -111,7 +123,7 @@ fn BirthCard(
 
 #[component]
 fn PersonalityCard() -> impl IntoView {
-    let data = RwSignal::new(None::<crate::api::PersonalityMeResponse>);
+    let data = RwSignal::new(None::<ft_schema::api::PersonalityMeResponse>);
     let loading = RwSignal::new(true);
 
     {
