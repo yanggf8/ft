@@ -67,7 +67,7 @@ pub fn DivinationPage() -> impl IntoView {
                 Err(e) => {
                     if e.needs_birth_data() {
                         // surface a friendly message; Profile CTA below
-                        err.set("請先到「我的命盤」填寫出生資料".to_string());
+                        err.set("請先到「我的命格」填寫出生資料".to_string());
                     } else {
                         err.set(e.to_string());
                     }
@@ -188,9 +188,10 @@ fn raw_pretty(raw: Option<serde_json::Value>) -> String {
 #[component]
 fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
     let meta = chart.meta.clone();
+    let four = chart.four_pillars.clone();
     view! {
         <div style="display:grid;gap:1rem">
-            <div class="chart-meta">
+            <div class="chart-meta" style="display:grid;gap:0.35rem">
                 <span>
                     {move || {
                         let l = chart.birth_info.lunar.clone();
@@ -199,11 +200,15 @@ fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
                     }}
                 </span>
                 <span><strong>"五行局:"</strong>{move || chart.five_element.clone()}</span>
+                <span style="font-size:0.9rem;color:var(--silver-dim)">
+                    {format!("{} {}  {} {}  {} {}  {} {}", four.year.stem, four.year.branch, four.month.stem, four.month.branch, four.day.stem, four.day.branch, four.hour.stem, four.hour.branch)}
+                    <span style="margin-left:0.5rem;color:var(--silver-faint)">"八字"</span>
+                </span>
                 <span>
                     <strong>"大限:"</strong>
                     {move || chart.major_limits.iter().map(|m| format!("{}-{} {}{}", m.start_age, m.end_age, m.stem, m.branch)).collect::<Vec<_>>().join(" · ")}
                 </span>
-                <span style="color:#6b7280">
+                <span style="color:#6b7280;font-size:0.75rem">
                     {move || format!("#{} · {}", meta.chart_schema_version, meta.engine_version_ziwei)}
                 </span>
             </div>
@@ -218,17 +223,77 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
     let moon = chart.moon_sign.clone();
     let asc = chart.ascendant.clone();
     view! {
-        <div style="display:grid;gap:0.5rem">
-            <p><strong>"太陽星座:"</strong> {format!("{} ({})", sun.name, sun.symbol)}</p>
-            <p><strong>"月亮星座:"</strong> {format!("{} ({})", moon.name, moon.symbol)} " (真實)"</p>
-            <p><strong>"上升:"</strong> {format!("{} {:.1}°", asc.sign, asc.degree)}</p>
-            <div><strong>"行星:"</strong></div>
-            <div class="palace-stars">
-                {chart.planets.into_iter().map(|p| {
-                    let label = format!("{} {} {:.1}°", p.name, p.sign, p.degree);
-                    view! { <span class="star main">{label}</span> }
-                }).collect_view()}
+        <div style="display:grid;gap:1rem">
+            <div style="text-align:center;padding:0.75rem 1rem;background:linear-gradient(135deg,#fdf2f8,#f0f9ff);border-radius:12px;border:1px solid #fce7f3">
+                <div style="font-size:1.1rem;font-weight:700;color:#be185d">"‧₊˚✧ 西洋星盤 ✧˚₊‧"</div>
+                <div style="font-size:0.75rem;color:#9ca3af;margin-top:2px">"太陽 · 月亮 · 上升 · 行星"</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.5rem">
+                <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:0.6rem;text-align:center">
+                    <div style="font-size:0.7rem;color:#a16207;letter-spacing:0.05em">"太陽星座"</div>
+                    <div style="font-size:1.3rem;margin:2px 0">{sun.symbol.clone()}</div>
+                    <div style="font-size:0.85rem;font-weight:600;color:#92400e">{format!("{} {}", sun.name, sun.symbol)}</div>
+                </div>
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:0.6rem;text-align:center">
+                    <div style="font-size:0.7rem;color:#1e40af;letter-spacing:0.05em">"月亮星座 (真實)"</div>
+                    <div style="font-size:1.3rem;margin:2px 0">{moon.symbol.clone()}</div>
+                    <div style="font-size:0.85rem;font-weight:600;color:#1e3a8a">{format!("{} {}", moon.name, moon.symbol)}</div>
+                </div>
+                <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:0.6rem;text-align:center">
+                    <div style="font-size:0.7rem;color:#6d28d9;letter-spacing:0.05em">"上升星座"</div>
+                    <div style="font-size:1.3rem;margin:2px 0">{asc_sign_symbol(&asc.sign)}</div>
+                    <div style="font-size:0.85rem;font-weight:600;color:#4c1d95">{format!("{} {:.1}°", asc.sign, asc.degree)}</div>
+                </div>
+            </div>
+            <div>
+                <div style="font-weight:600;margin-bottom:0.5rem;color:#374151">"行星落座 ♡"</div>
+                <div class="palace-stars" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.4rem">
+                    {chart.planets.into_iter().map(|p| {
+                        let sym = planet_symbol(&p.name);
+                        let sign_sym = sign_symbol(&p.sign);
+                        let label = format!("{} {} {} {:.1}°", sym, p.name, sign_sym, p.degree);
+                        view! { <span class="star main" style="background:#fff;border:1px solid #fce7f3;border-radius:8px;padding:0.4rem 0.6rem;font-size:0.8rem;display:flex;align-items:center;gap:0.3rem;justify-content:center"><span style="font-size:1rem">{sym}</span>{format!("{} {} {:.1}°", p.name, sign_sym, p.degree)}</span> }
+                    }).collect_view()}
+                </div>
             </div>
         </div>
     }
+}
+
+fn planet_symbol(name: &str) -> &'static str {
+    match name.to_lowercase().as_str() {
+        "sun" => "☉",
+        "moon" => "☽",
+        "mercury" => "☿",
+        "venus" => "♀",
+        "mars" => "♂",
+        "jupiter" => "♃",
+        "saturn" => "♄",
+        "uranus" => "♅",
+        "neptune" => "♆",
+        "pluto" => "♇",
+        _ => "‧",
+    }
+}
+
+fn sign_symbol(sign: &str) -> &'static str {
+    match sign.to_lowercase().as_str() {
+        "aries" => "♈",
+        "taurus" => "♉",
+        "gemini" => "♊",
+        "cancer" => "♋",
+        "leo" => "♌",
+        "virgo" => "♍",
+        "libra" => "♎",
+        "scorpio" => "♏",
+        "sagittarius" => "♐",
+        "capricorn" => "♑",
+        "aquarius" => "♒",
+        "pisces" => "♓",
+        _ => "",
+    }
+}
+
+fn asc_sign_symbol(sign: &str) -> String {
+    sign_symbol(sign).to_string()
 }

@@ -22,7 +22,7 @@ pub fn Layout(children: Children) -> impl IntoView {
                         when=move || auth.is_authed()
                         fallback=|| view! { <A href="/login">"登入"</A> }
                     >
-                        <A href="/profile">"我的命盤"</A>
+                        <A href="/profile">"我的命格"</A>
                         <A href="/divination/ziwei">"紫微斗數"</A>
                         <A href="/divination/western">"西洋占星"</A>
                         <A href="/story">"合盤故事"</A>
