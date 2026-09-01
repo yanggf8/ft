@@ -73,7 +73,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(resp) => return Ok(resp),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -167,7 +167,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 longitude: body.longitude,
             });
 
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -221,7 +221,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     return Ok(error::error("Validation failed: avatar_url must be a valid URL", 400));
                 }
             }
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };

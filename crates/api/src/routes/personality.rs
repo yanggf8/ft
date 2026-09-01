@@ -85,7 +85,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error_code("Invalid JSON", "INVALID_JSON", 400)),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };
@@ -246,7 +246,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(e) => return Ok(e),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };
@@ -295,7 +295,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(e) => return Ok(e),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };

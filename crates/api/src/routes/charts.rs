@@ -54,7 +54,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(r) => return Ok(r),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -83,7 +83,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(r) => return Ok(r),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -146,7 +146,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     {
                         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
                     }
-                    let db = match ctx.env.d1("DB") {
+                    let db = match db::Turso::from_env(&ctx.env) {
                         Ok(d) => d,
                         Err(_) => return Ok(error::error("db unavailable", 500)),
                     };
@@ -255,7 +255,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Some(v) if v == "ziwei" || v == "western" => v.to_string(),
                 _ => return Ok(error::error("Invalid type. Use: ziwei, western", 400)),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -391,7 +391,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         Some(v) if v == "ziwei" || v == "western" => v.to_string(),
                         _ => return Ok(error::error("Invalid type", 400)),
                     };
-                    let db = match ctx.env.d1("DB") {
+                    let db = match db::Turso::from_env(&ctx.env) {
                         Ok(d) => d,
                         Err(_) => return Ok(error::error("db unavailable", 500)),
                     };
@@ -464,7 +464,7 @@ struct StoryRow {
     updated_at: Option<String>,
 }
 
-async fn get_birth_data(db: &worker::D1Database, user: &str) -> Result<UserBirthRow, Response> {
+async fn get_birth_data(db: &db::Turso, user: &str) -> Result<UserBirthRow, Response> {
     let u = db::text(user);
     let row: Option<UserBirthRow> = db::first(
         db,

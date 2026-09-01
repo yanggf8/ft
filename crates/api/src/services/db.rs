@@ -1,79 +1,418 @@
-//! D1 bind helpers — make the worker D1 `bind_refs` ergonomic and centralize the
-//! prepare → bind → await chain so routes don't repeat it. Backed by `worker::D1Type`.
+//! Turso (libSQL) access over the Hrana HTTP v2 pipeline, plus the bind helpers
+//! the routes are written against. The helper surface — `text`/`int`/`opt_*`
+//! feeding `first`/`all`/`exec` — is unchanged from when this was backed by D1,
+//! so moving off the `DB` binding did not touch the route code.
+//!
+//! `libsql`'s own `cloudflare` feature would have replaced this file, but it is
+//! unusable here: 0.9.30 pins `worker ^0.6.7` while this crate is on 0.8, and
+//! two incompatible `worker` crates cannot share one wasm binding layer. Hrana
+//! over HTTP is small enough to own, and going through `worker::Fetch` keeps the
+//! dependency set as it was.
+//!
+//! Two protocol details shape the code below:
+//!
+//! 1. Values are tagged (`{"type":"integer","value":"1"}`) and integers travel
+//!    as *strings*, so they survive JSON's 53-bit float limit. [`decode_value`]
+//!    untags them back to plain JSON, letting the existing `Deserialize` row
+//!    structs work unchanged.
+//! 2. `last_insert_rowid` is likewise a string, and `affected_row_count` is what
+//!    D1 called `meta().changes`.
 
-use worker::{D1Database, D1Type, Result};
+use serde_json::{json, Map, Number, Value};
+use worker::wasm_bindgen::JsValue;
+use worker::{Env, Error, Fetch, Headers, Method, Request, RequestInit, Result};
+
+/// `[vars]` entry holding the database URL: `libsql://…` as `turso db show`
+/// prints it, or `http://…` for a local `turso dev`.
+pub const URL_VAR: &str = "TURSO_URL";
+/// Secret holding the group auth token. One group token covers every database
+/// in the group. Absent for a local `turso dev`, which wants no auth.
+pub const AUTH_TOKEN_VAR: &str = "TURSO_AUTH_TOKEN";
+
+fn err(message: impl Into<String>) -> Error {
+    Error::RustError(message.into())
+}
+
+/// A bound SQL parameter. Mirrors the `D1Type` this replaced, including the
+/// borrow, so `let t = db::text(&s); … &[&t]` at the call sites still compiles.
+///
+/// The full set of SQLite storage classes is kept even where no route binds one
+/// yet — the constructors below are the module's API, not its call graph. As an
+/// external type, `D1Type` was never dead-code analysed; this one is.
+#[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
+pub enum Param<'a> {
+    Null,
+    Text(&'a str),
+    Integer(i32),
+    Real(f64),
+    Boolean(bool),
+}
 
 /// Null SQL parameter.
-pub fn null() -> D1Type<'static> {
-    D1Type::Null
+pub fn null() -> Param<'static> {
+    Param::Null
 }
 
 /// Text SQL parameter.
-pub fn text(s: &str) -> D1Type<'_> {
-    D1Type::Text(s)
+pub fn text(s: &str) -> Param<'_> {
+    Param::Text(s)
 }
 
 /// Integer SQL param.
-pub fn int(i: i32) -> D1Type<'static> {
-    D1Type::Integer(i)
+pub fn int(i: i32) -> Param<'static> {
+    Param::Integer(i)
 }
 
 /// Real (float) SQL param.
-pub fn real(f: f64) -> D1Type<'static> {
-    D1Type::Real(f)
+pub fn real(f: f64) -> Param<'static> {
+    Param::Real(f)
 }
 
 /// Boolean SQL param.
-pub fn bool(b: bool) -> D1Type<'static> {
-    D1Type::Boolean(b)
+pub fn bool(b: bool) -> Param<'static> {
+    Param::Boolean(b)
 }
 
 /// `Option<String>` → text or NULL.
-pub fn opt_text(s: Option<&str>) -> D1Type<'_> {
+pub fn opt_text(s: Option<&str>) -> Param<'_> {
     match s {
-        Some(v) => D1Type::Text(v),
-        None => D1Type::Null,
+        Some(v) => Param::Text(v),
+        None => Param::Null,
     }
 }
 
-/// `Option<i64>` → integer or NULL (cast to i32; D1 stores as a 32-bit/float).
-pub fn opt_int(v: Option<i64>) -> D1Type<'static> {
+/// `Option<i64>` → integer or NULL (cast to i32, as the D1-era helper did).
+pub fn opt_int(v: Option<i64>) -> Param<'static> {
     match v {
-        Some(v) => D1Type::Integer(v as i32),
-        None => D1Type::Null,
+        Some(v) => Param::Integer(v as i32),
+        None => Param::Null,
     }
 }
 
 /// `Option<f64>` → real or NULL.
-pub fn opt_real(v: Option<f64>) -> D1Type<'static> {
+pub fn opt_real(v: Option<f64>) -> Param<'static> {
     match v {
-        Some(v) => D1Type::Real(v),
-        None => D1Type::Null,
+        Some(v) => Param::Real(v),
+        None => Param::Null,
+    }
+}
+
+/// Handle to one libSQL database. Cheap to clone: every call is a fresh,
+/// stateless pipeline request, so there is no connection to pool.
+#[derive(Clone)]
+pub struct Turso {
+    endpoint: String,
+    auth: Option<String>,
+}
+
+impl Turso {
+    /// Reads `TURSO_URL` (a var) and `TURSO_AUTH_TOKEN` (a secret) off the
+    /// worker env. Replaces what used to be `env.d1("DB")`.
+    pub fn from_env(env: &Env) -> Result<Self> {
+        let url = env
+            .var(URL_VAR)
+            .map_err(|_| err(format!("{URL_VAR} is not set")))?
+            .to_string();
+        let auth = env
+            .secret(AUTH_TOKEN_VAR)
+            .ok()
+            .map(|secret| secret.to_string())
+            .filter(|token| !token.is_empty());
+        Self::new(&url, auth)
+    }
+
+    pub fn new(url: &str, auth: Option<String>) -> Result<Self> {
+        Ok(Self {
+            endpoint: format!("{}/v2/pipeline", http_base(url)?),
+            auth,
+        })
+    }
+
+    /// POST one `execute` + `close` pipeline and return the statement result.
+    async fn execute(&self, sql: &str, binds: &[&Param<'_>]) -> Result<StmtResult> {
+        let args: Vec<Value> = binds.iter().map(|param| encode_value(param)).collect();
+        let body = json!({
+            "requests": [
+                { "type": "execute", "stmt": { "sql": sql, "args": args } },
+                { "type": "close" },
+            ]
+        })
+        .to_string();
+
+        let headers = Headers::new();
+        headers.set("Content-Type", "application/json")?;
+        if let Some(token) = &self.auth {
+            headers.set("Authorization", &format!("Bearer {token}"))?;
+        }
+
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(JsValue::from_str(&body)));
+        let request = Request::new_with_init(&self.endpoint, &init)?;
+
+        let mut response = Fetch::Request(request).send().await?;
+        let status = response.status_code();
+        if status != 200 {
+            let detail = response.text().await.unwrap_or_default();
+            return Err(err(format!("turso HTTP {status}: {detail}")));
+        }
+
+        let payload = response.json::<Value>().await?;
+        let step = payload
+            .get("results")
+            .and_then(Value::as_array)
+            .and_then(|results| results.first())
+            .ok_or_else(|| err("turso returned no result"))?;
+        // A failed statement comes back as a `{"type":"error"}` step with HTTP
+        // 200, so this is the only place a bad query surfaces.
+        if step.get("type").and_then(Value::as_str) != Some("ok") {
+            let message = step
+                .get("error")
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str)
+                .unwrap_or("unknown error");
+            return Err(err(format!("turso: {message}")));
+        }
+        let result = step
+            .get("response")
+            .and_then(|response| response.get("result"))
+            .ok_or_else(|| err("turso result missing"))?;
+        StmtResult::decode(result)
+    }
+}
+
+/// Hrana's `StmtResult`, decoded into plain JSON rows plus the write counters.
+struct StmtResult {
+    rows: Vec<Value>,
+    changes: usize,
+}
+
+impl StmtResult {
+    /// Zips the `cols` names onto each row's positional, tagged cells.
+    fn decode(result: &Value) -> Result<Self> {
+        let names: Vec<String> = result
+            .get("cols")
+            .and_then(Value::as_array)
+            .ok_or_else(|| err("turso result has no cols"))?
+            .iter()
+            .map(|col| {
+                col.get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+
+        let mut rows = Vec::new();
+        for row in result
+            .get("rows")
+            .and_then(Value::as_array)
+            .ok_or_else(|| err("turso result has no rows"))?
+        {
+            let cells = row
+                .as_array()
+                .ok_or_else(|| err("turso row is not a list"))?;
+            let mut object = Map::new();
+            for (name, cell) in names.iter().zip(cells) {
+                object.insert(name.clone(), decode_value(cell));
+            }
+            rows.push(Value::Object(object));
+        }
+
+        Ok(Self {
+            rows,
+            changes: result
+                .get("affected_row_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize,
+        })
     }
 }
 
 /// Run a prepared SELECT that returns the first row as `T`. `bind` is a slice of
-/// `&D1Type` (0..N params). `None` when no rows.
-pub async fn first<T>(db: &D1Database, sql: &str, bind: &[&D1Type<'_>]) -> Result<Option<T>>
+/// `&Param` (0..N params). `None` when no rows.
+pub async fn first<T>(db: &Turso, sql: &str, bind: &[&Param<'_>]) -> Result<Option<T>>
 where
     T: for<'a> serde::Deserialize<'a>,
 {
-    let stmt = db.prepare(sql).bind_refs(bind.iter().copied())?;
-    stmt.first::<T>(None).await
+    let result = db.execute(sql, bind).await?;
+    match result.rows.into_iter().next() {
+        Some(row) => serde_json::from_value(row)
+            .map(Some)
+            .map_err(|e| err(format!("row did not deserialize: {e}"))),
+        None => Ok(None),
+    }
 }
 
 /// Run a prepared SELECT that returns all rows as `T`.
-pub async fn all<T>(db: &D1Database, sql: &str, bind: &[&D1Type<'_>]) -> Result<Vec<T>>
+pub async fn all<T>(db: &Turso, sql: &str, bind: &[&Param<'_>]) -> Result<Vec<T>>
 where
     T: for<'a> serde::Deserialize<'a>,
 {
-    let stmt = db.prepare(sql).bind_refs(bind.iter().copied())?;
-    let result = stmt.all().await?;
-    result.results::<T>()
+    let result = db.execute(sql, bind).await?;
+    serde_json::from_value(Value::Array(result.rows))
+        .map_err(|e| err(format!("rows did not deserialize: {e}")))
 }
 
-/// Run a write (INSERT / UPDATE / DELETE) and return the metadata result.
-pub async fn exec(db: &D1Database, sql: &str, bind: &[&D1Type<'_>]) -> Result<()> {
-    let stmt = db.prepare(sql).bind_refs(bind.iter().copied())?;
-    stmt.run().await.map(|_| ())
+/// Run a write (INSERT / UPDATE / DELETE), discarding the result.
+pub async fn exec(db: &Turso, sql: &str, bind: &[&Param<'_>]) -> Result<()> {
+    db.execute(sql, bind).await.map(|_| ())
+}
+
+/// Run a write and report the affected row count — what D1 exposed as
+/// `meta().changes`. Used by the single-use token and invite consume paths,
+/// where 0 rows affected is the "already used" signal rather than an error.
+pub async fn exec_changes(db: &Turso, sql: &str, bind: &[&Param<'_>]) -> Result<usize> {
+    db.execute(sql, bind).await.map(|result| result.changes)
+}
+
+/// Bind value → Hrana's tagged form. Integers go as strings, which is what the
+/// protocol requires.
+fn encode_value(param: &Param<'_>) -> Value {
+    match param {
+        Param::Null => json!({ "type": "null" }),
+        Param::Text(value) => json!({ "type": "text", "value": value }),
+        Param::Integer(value) => json!({ "type": "integer", "value": value.to_string() }),
+        // SQLite has no boolean type; D1 bound JS `true` as 1, so match that.
+        Param::Boolean(value) => {
+            json!({ "type": "integer", "value": i64::from(*value).to_string() })
+        }
+        Param::Real(value) => json!({ "type": "float", "value": value }),
+    }
+}
+
+/// Hrana's tagged form → plain JSON, so the row structs deserialize as they did
+/// off D1.
+fn decode_value(value: &Value) -> Value {
+    match value.get("type").and_then(Value::as_str) {
+        Some("integer") => value
+            .get("value")
+            .and_then(as_i64)
+            .map_or(Value::Null, |integer| Value::Number(Number::from(integer))),
+        Some("float") => value
+            .get("value")
+            .and_then(Value::as_f64)
+            .and_then(Number::from_f64)
+            .map_or(Value::Null, Value::Number),
+        Some("text") => value
+            .get("value")
+            .and_then(Value::as_str)
+            .map_or(Value::Null, |text| Value::String(text.to_owned())),
+        // Blobs arrive base64 under their own key; no column here reads one.
+        Some("blob") => value
+            .get("base64")
+            .and_then(Value::as_str)
+            .map_or(Value::Null, |text| Value::String(text.to_owned())),
+        _ => Value::Null,
+    }
+}
+
+/// Hrana writes 64-bit integers as strings to survive JSON; accept both.
+fn as_i64(value: &Value) -> Option<i64> {
+    match value {
+        Value::Number(number) => number.as_i64(),
+        Value::String(text) => text.parse().ok(),
+        _ => None,
+    }
+}
+
+/// `libsql://` is the SDK scheme for what is an HTTPS endpoint; a local
+/// `turso dev` is plain `http://`.
+fn http_base(url: &str) -> Result<String> {
+    let trimmed = url.trim().trim_end_matches('/');
+    if let Some(host) = trimmed.strip_prefix("libsql://") {
+        return Ok(format!("https://{host}"));
+    }
+    if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+        return Ok(trimmed.to_owned());
+    }
+    Err(err(format!("unrecognised {URL_VAR}: {url}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_base_maps_libsql_scheme_to_https() {
+        assert_eq!(
+            http_base("libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io").unwrap(),
+            "https://fortunet-yanggf8.aws-ap-northeast-1.turso.io"
+        );
+    }
+
+    #[test]
+    fn http_base_keeps_local_turso_dev_on_http() {
+        assert_eq!(
+            http_base("http://127.0.0.1:8080/").unwrap(),
+            "http://127.0.0.1:8080"
+        );
+    }
+
+    #[test]
+    fn http_base_rejects_a_bare_host() {
+        assert!(http_base("fortunet.turso.io").is_err());
+    }
+
+    #[test]
+    fn integers_encode_as_strings() {
+        assert_eq!(
+            encode_value(&Param::Integer(42)),
+            json!({ "type": "integer", "value": "42" })
+        );
+    }
+
+    #[test]
+    fn booleans_encode_as_sqlite_integers() {
+        assert_eq!(
+            encode_value(&Param::Boolean(true)),
+            json!({ "type": "integer", "value": "1" })
+        );
+    }
+
+    #[test]
+    fn null_params_encode_as_null() {
+        assert_eq!(encode_value(&Param::Null), json!({ "type": "null" }));
+    }
+
+    #[test]
+    fn string_integers_decode_back_to_numbers() {
+        let decoded = decode_value(&json!({ "type": "integer", "value": "9007199254740993" }));
+        assert_eq!(
+            decoded,
+            Value::Number(Number::from(9_007_199_254_740_993i64))
+        );
+    }
+
+    #[test]
+    fn null_cells_decode_to_json_null() {
+        assert_eq!(decode_value(&json!({ "type": "null" })), Value::Null);
+    }
+
+    #[test]
+    fn rows_decode_with_column_names_zipped_on() {
+        let result = StmtResult::decode(&json!({
+            "cols": [{ "name": "id" }, { "name": "birth_year" }],
+            "rows": [[
+                { "type": "text", "value": "u1" },
+                { "type": "integer", "value": "1990" },
+            ]],
+            "affected_row_count": 0,
+        }))
+        .unwrap();
+        assert_eq!(result.rows, vec![json!({ "id": "u1", "birth_year": 1990 })]);
+    }
+
+    #[test]
+    fn affected_row_count_becomes_changes() {
+        let result = StmtResult::decode(&json!({
+            "cols": [],
+            "rows": [],
+            "affected_row_count": 3,
+        }))
+        .unwrap();
+        assert_eq!(result.changes, 3);
+    }
 }

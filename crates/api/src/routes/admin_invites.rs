@@ -19,10 +19,7 @@ pub fn is_admin_email(admin_var: &str, session_email: &str) -> bool {
 /// yields the userId, so the email must be resolved before the comparison.
 async fn require_admin(ctx: &RouteContext<()>, req: &Request) -> Result<String, Response> {
     let user_id = auth_user(req, ctx).await?;
-    let db = ctx
-        .env
-        .d1("DB")
-        .map_err(|_| error::error("db unavailable", 500))?;
+    let db = db::Turso::from_env(&ctx.env).map_err(|_| error::error("db unavailable", 500))?;
     let uid = db::text(&user_id);
     let row: Option<EmailRow> = db::first(&db, "SELECT email FROM users WHERE id = ?1", &[&uid])
         .await
@@ -59,7 +56,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     200,
                 ));
             }
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -105,7 +102,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     return Ok(error::error("Validation failed", 400));
                 }
             }
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -159,7 +156,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             if let Err(r) = require_admin(&ctx, &req).await {
                 return Ok(r);
             }
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -196,7 +193,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 return Ok(r);
             }
             let code = ctx.param("code").cloned().unwrap_or_default();
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };

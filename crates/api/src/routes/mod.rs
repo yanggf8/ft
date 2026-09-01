@@ -38,7 +38,7 @@ pub fn router(_env: Env) -> R<'static> {
         }))
     })
     .get_async("/health/db", |_, ctx: RouteContext<()>| async move {
-        let db = match ctx.env.d1("DB") {
+        let db = match db::Turso::from_env(&ctx.env) {
             Ok(db) => db,
             Err(_) => {
                 return ok_json(&serde_json::json!({ "status": "error", "error": "db not ready" }))

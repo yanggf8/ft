@@ -43,11 +43,17 @@ cd crates/api && worker-build --release && wrangler deploy   # requires OAuth, n
 # build only: cd crates/web && ./scripts/build-web.sh   (cargo build + wasm-bindgen, no trunk)
 ```
 
-### Database (D1)
+### Database (Turso / libSQL)
+
+**No project here uses Cloudflare D1** — its free-tier database cap is a hard
+blocker, so everything is on Turso. `TURSO_URL` is a `[vars]` entry;
+`TURSO_AUTH_TOKEN` is a secret.
 
 ```bash
-# schema.sql is the single source of truth for the D1 shape.
-# Apply via wrangler: cd crates/api && wrangler d1 execute fortunet-db --file ../../scripts/schema.sql
+# schema.sql is the single source of truth for the database shape.
+turso db shell fortunet < scripts/schema.sql
+# Mint a token (one group token covers every DB in the group):
+gwebcdb-mint turso --tier write --db fortunet --export
 ```
 
 ### Helper Scripts
@@ -66,7 +72,7 @@ cd crates/api && worker-build --release && wrangler deploy   # requires OAuth, n
 - `crates/domain/ziwei` — ZiWei engine (wraps `x-iztro`).
 - `crates/domain/western` — Western engine (hybrid: `solar-ephemeris` Moon + `vsop87` planets).
 - `crates/worker` — `fortunet-engine` Worker, exposed via service binding (`FT_ENGINE`).
-- `crates/api` — `fortunet-api` Worker: routes, durable objects, D1, AI failover.
+- `crates/api` — `fortunet-api` Worker: routes, durable objects, Turso, AI failover.
 - `crates/web` — Leptos CSR frontend (replaces the old React app).
 
 ### Backend Worker (crates/api/src)
@@ -82,9 +88,10 @@ cd crates/api && worker-build --release && wrangler deploy   # requires OAuth, n
     providers fail.
 - **Services** (`services/`): `billing` (30-day trial), `birth_hash` (bit-for-bit JS-compatible),
   `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers),
-  `clock`, `uuid`, `db` (ergonomic D1 helpers).
-- **D1** — `users` + `interpretations` tables live. `subscriptions`/`usage_tracking`/`ai_quota`
-  are provisioned but unused.
+  `clock`, `uuid`, `db` (Turso client over Hrana HTTP + the bind helpers).
+- **Database** — `users` + `interpretations` tables live. `subscriptions`/`usage_tracking`/`ai_quota`
+  are provisioned but unused. `services/db.rs` speaks Hrana over `worker::Fetch`; the `libsql`
+  crate's own `cloudflare` feature is unusable here because it pins `worker ^0.6` against our 0.8.
 
 ### Engine Worker (crates/worker/src/lib.rs)
 

@@ -108,7 +108,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Some(t) if !t.is_empty() && t.len() <= 256 => t,
                 _ => return Ok(error::error("Validation failed", 400)),
             };
-            let db = match ctx.env.d1("DB") {
+            let db = match db::Turso::from_env(&ctx.env) {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
@@ -126,18 +126,15 @@ pub fn register(router: R<'static>) -> R<'static> {
             .await;
             // Single-use atomic consume: only a valid, unused, unexpired hash
             // is marked used. 0 rows affected = invalid.
-            let stmt = match db
-                .prepare(
-                    "UPDATE login_tokens SET used_at = datetime('now') \
-                     WHERE token_hash = ?1 AND used_at IS NULL AND expires_at > ?2",
-                )
-                .bind_refs([&h, &n].into_iter())
+            let consumed = match db::exec_changes(
+                &db,
+                "UPDATE login_tokens SET used_at = datetime('now') \
+                 WHERE token_hash = ?1 AND used_at IS NULL AND expires_at > ?2",
+                &[&h, &n],
+            )
+            .await
             {
-                Ok(s) => s,
-                Err(_) => return Ok(error::error("db error", 500)),
-            };
-            let consumed = match stmt.run().await {
-                Ok(r) => r.meta().ok().flatten().and_then(|m| m.changes).unwrap_or(0),
+                Ok(changes) => changes,
                 Err(_) => return Ok(error::error("db error", 500)),
             };
             if consumed == 0 {
@@ -184,25 +181,17 @@ pub fn register(router: R<'static>) -> R<'static> {
                             let now = clock::now_iso();
                             let c = db::text(&invite_code);
                             let n = db::text(&now);
-                            let stmt = match db
-                                .prepare(
-                                    "UPDATE invites SET used_count = used_count + 1 \
-                                     WHERE code = ?1 AND used_count < max_uses \
-                                     AND (expires_at IS NULL OR expires_at > ?2) \
-                                     AND revoked_at IS NULL",
-                                )
-                                .bind_refs([&c, &n].into_iter())
+                            let consumed = match db::exec_changes(
+                                &db,
+                                "UPDATE invites SET used_count = used_count + 1 \
+                                 WHERE code = ?1 AND used_count < max_uses \
+                                 AND (expires_at IS NULL OR expires_at > ?2) \
+                                 AND revoked_at IS NULL",
+                                &[&c, &n],
+                            )
+                            .await
                             {
-                                Ok(s) => s,
-                                Err(_) => return Ok(error::error("db error", 500)),
-                            };
-                            let consumed = match stmt.run().await {
-                                Ok(r) => r
-                                    .meta()
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|m| m.changes)
-                                    .unwrap_or(0),
+                                Ok(changes) => changes,
                                 Err(_) => return Ok(error::error("db error", 500)),
                             };
                             if consumed == 0 {
@@ -298,7 +287,7 @@ async fn issue_login_link(
     if !email_delivery_configured(ctx) {
         return Ok(error::error("email delivery not configured", 503));
     }
-    let db = match ctx.env.d1("DB") {
+    let db = match db::Turso::from_env(&ctx.env) {
         Ok(d) => d,
         Err(_) => return Ok(error::error("db unavailable", 500)),
     };

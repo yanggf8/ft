@@ -3,12 +3,6 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "fortunet-db"
-database_id = "88d074eb-7331-402b-bc76-1ac3cb0588da"
-
 # Durable Objects — same class_names as the JS worker so the in-place deploy keeps
 # existing session + AI-metric storage bit-compatible (Stage B single-way gate).
 [[durable_objects.bindings]]
@@ -37,6 +31,11 @@ service = "fortunet-engine"
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
+# Turso (libSQL) database, replacing the former D1 `DB` binding. The URL is not
+# a secret; the matching TURSO_AUTH_TOKEN is (`wrangler secret put`). Mint one
+# with `gwebcdb-mint turso --tier write --db fortunet --export` — a group token
+# covers every database in the group.
+TURSO_URL = "libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io"
 # Magic-link sender (audit P0-01). onboarding@resend.dev is Resend's test
 # sender: it only delivers to the Resend account owner's own email. Swap to a
 # verified domain address before opening registration to real users.
