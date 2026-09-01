@@ -18,7 +18,9 @@ P0-01(登入無身分驗證)修復正式上線的完整記錄。背景與修復�
 - **D1**:`login_tokens` 表已套用(`wrangler d1 execute fortunet-db --remote --file scripts/schema.sql`,冪等)
 - **Secret**:`RESEND_API_KEY`(Resend, Sending access;上傳走 `wrangler secret bulk` + KEY=VALUE 檔轉 JSON,值不經對話)
 - **Vars**(`crates/api/wrangler.toml [vars]`):`MAIL_FROM=onboarding@resend.dev`(測試寄件者,只能寄給 Resend 帳號信箱 `yanggf@msn.com`)、`ENVIRONMENT=development`
-- **選填未設**:`WEB_ORIGIN`(預設 fortunet.pages.dev)、`ALLOWED_ORIGINS`(preview 部署用,設了才收 preview origin)
+- **選填未設**:`WEB_ORIGIN`(預設 fortunet.pages.dev)。`ALLOWED_ORIGINS` 已於 2026-08-31 加入
+  `wrangler.toml [vars]`(空字串 = 只收內建 allowlist;每次 preview 部署後把該 preview 的
+  hashed origin 逐筆加入即可,CORS 比對是 exact origin,不收 wildcard)
 
 ## E2E 驗證(通過)
 
@@ -46,7 +48,7 @@ register(`yanggf@msn.com`)→ 202 → 信件 → 點連結 → token 單次消�
 
 ## 待辦
 
-- [ ] 部署期修復 commit(見 working tree:auth.rs / email.rs / wrangler.toml / .gitignore)
+- [x] 部署期修復 commit(見 working tree:auth.rs / email.rs / wrangler.toml / .gitignore)— 已提交 `d034bb4`
 - [ ] 正式網域寄件(Resend 驗證網域 → 換 `MAIL_FROM`)
-- [ ] `scripts/verify-deployment.sh` 的 ZiWei 測試打已刪除的 debug 路由,擇期修正
-- [ ] `ALLOWED_ORIGINS` 於首次 preview 部署時補設
+- [x] `scripts/verify-deployment.sh` 的 ZiWei 測試打已刪除的 debug 路由,擇期修正 — 已改打引擎 worker(`7c9eaa3`,2026-08-31)
+- [x] `ALLOWED_ORIGINS` 於首次 preview 部署時補設 — var 已預留(空值=僅內建 allowlist),每次 preview 部署後補該 origin(2026-08-31)

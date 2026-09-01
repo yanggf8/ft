@@ -102,10 +102,24 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 
 ## Engine Versions
 
-`ENGINE_VERSION_ZIWEI = "3.0.0"` (x-iztro matches iztro, no bump), `ENGINE_VERSION_WESTERN = "4.0.0"`
-(real ephemeris + top-level `sunSign`/`moonSign`). `CHART_SCHEMA_VERSION = 3`. Bump `WESTERN` only
-after the §8.2 event-table validation. When bumped, stored caches with an older
-`meta.engineVersion*` are treated as stale and recalculated.
+The authoritative constants live in `crates/api/src/services/engine_version.rs`:
+`ENGINE_VERSION_ZIWEI = "3.0.0"`, `ENGINE_VERSION_WESTERN = "4.0.0"` (real ephemeris +
+top-level `sunSign`/`moonSign`), `CHART_SCHEMA_VERSION = 3`. Cache freshness is judged by
+these: stored charts whose `meta.engineVersion*` differs are stale and recalculated. The
+engine worker's own response field `engineVersionZiwei` says `"4.0.0"` but is decorative —
+the api side stamps and compares against its own constant. Keep them in sync when bumping.
+Bump `WESTERN` only after the §8.2 event-table validation. When bumped, stored caches with
+an older `meta.engineVersion*` are treated as stale and recalculated.
+
+## Testing
+
+`cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api` — **native target
+only** (CI step `test (native)`); `js_sys::Date`/clock calls panic outside wasm, so
+api-side tests pin pure logic (extraction like `trial_access_for`) rather than the js_sys
+call sites. `ft-worker` and `ft-web` have no unit tests: the engine worker is validated
+through `scripts/verify-deployment.sh` against production, the frontend through the
+deployed Pages site. Do not assume `cargo test --target wasm32-unknown-unknown` works —
+the wasm test binaries cannot execute without a wasm-bindgen test runner.
 
 ## Coding Standards
 

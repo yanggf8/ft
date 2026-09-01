@@ -2,6 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Archived 2026-08-31:** this feature shipped and the residual unchecked boxes are bookkeeping, not open work — see git log for the shipped commits.
+
+
 **Goal:** Reskin ft-web from light indigo to a dark cosmic-silver theme: deep-space black, silver star palette, blue-violet interaction accent, a CSS static star field plus a canvas Milky-Way particle layer with shooting stars.
 
 **Architecture:** Pure frontend reskin — zero Rust/wasm changes. All styling lives in `crates/web/style.css` (semantic classes from Leptos components are reused as-is). Decorative starfield elements are static divs in `crates/web/index.html` (they survive Leptos's mount-to-body append). One new vanilla JS file (`galaxy.js`) renders band-distributed particles on a full-viewport canvas; it never enters the wasm bundle. Shipped in two phases per spec §6a: theme first, galaxy second.

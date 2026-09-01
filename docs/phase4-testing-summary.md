@@ -115,6 +115,10 @@
 - [ ] WAF rules
 - [ ] Request size limits
 
+> Status note (2026-08-31): all five still open — they are hardening backlog, not
+> regressions. The security audit P0/P2 items and the magic-link launch are tracked in
+> `docs/launch-record-2026-08-29.md` (only the Resend custom-domain sender remains there).
+
 ---
 
 ## Test Commands

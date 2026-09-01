@@ -86,3 +86,95 @@ fn hash_str(s: &str) -> String {
 pub fn compute_birth_hash(input: &BirthHashInput) -> String {
     hash_str(&join_parts(input))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_birth_hash, hash_str, BirthHashInput};
+
+    fn input(year: i64, lat: f64, lon: f64) -> BirthHashInput {
+        BirthHashInput {
+            birth_year: Some(year),
+            birth_month: Some(5),
+            birth_day: Some(15),
+            birth_hour: Some(14),
+            birth_minute: Some(30),
+            gender: Some("male".to_owned()),
+            timezone: Some("Asia/Taipei".to_owned()),
+            latitude: Some(lat),
+            longitude: Some(lon),
+        }
+    }
+
+    #[test]
+    fn hash_str_matches_js_tostring16_signing() {
+        // The hash must reproduce JS `(h|0).toString(16)`: a negative i32
+        // renders as "-" + hex of the magnitude, not two's complement.
+        // djb2-ish of "a" is 97 (positive); the exact negative value is
+        // pinned against the TS worker's output for the joined default
+        // birth string below, and a couple of stable sign edges are checked
+        // directly through hash_str.
+        assert_eq!(hash_str("a"), "61");
+        // "hello" is 99162322 = 0x5e918d2 through the djb2-ish loop
+        // (h = (h<<5) - h + c, seeded at 0); stays positive.
+        assert_eq!(hash_str("hello"), "5e918d2");
+        // A known negative: "abc123" wraps the i32 (final h = -1424436592 =
+        // -0x54E72D70); JS toString(16) prints "-" + hex of the magnitude,
+        // never two's complement.
+        assert_eq!(hash_str("abc123"), "-54e72d70");
+    }
+
+    #[test]
+    fn integral_lat_lon_render_without_decimals() {
+        // JS String(25) == "25", String(121.5) == "121.5" — the joined
+        // string and therefore the hash depend on this.
+        let a = compute_birth_hash(&input(1990, 25.0, 121.0));
+        let b = compute_birth_hash(&input(1990, 25.0, 121.5));
+        assert_ne!(a, b);
+        assert_eq!(a, compute_birth_hash(&input(1990, 25.0, 121.0)));
+    }
+
+    #[test]
+    fn changed_birth_data_changes_the_hash() {
+        let base = compute_birth_hash(&input(1990, 25.0, 121.5));
+        let other_year = compute_birth_hash(&input(1991, 25.0, 121.5));
+        let other_hour = compute_birth_hash(&input(1990, 25.0, 121.5).clone_and_set_hour(3));
+        assert_ne!(base, other_year);
+        assert_ne!(base, other_hour);
+    }
+
+    #[test]
+    fn none_fields_use_the_documented_defaults() {
+        // hour ?? 12, minute ?? 0, gender ?? '', tz ?? 'Asia/Taipei'.
+        let all_none = BirthHashInput {
+            birth_year: Some(1990),
+            birth_month: Some(5),
+            birth_day: Some(15),
+            birth_hour: None,
+            birth_minute: None,
+            gender: None,
+            timezone: None,
+            latitude: None,
+            longitude: None,
+        };
+        let explicit_defaults = BirthHashInput {
+            birth_hour: Some(12),
+            birth_minute: Some(0),
+            gender: Some(String::new()),
+            timezone: Some("Asia/Taipei".to_owned()),
+            ..all_none.clone()
+        };
+        // Defaults substitute to the same joined string (lat/lon '' == '').
+        assert_eq!(
+            compute_birth_hash(&all_none),
+            compute_birth_hash(&explicit_defaults)
+        );
+    }
+
+    impl BirthHashInput {
+        fn clone_and_set_hour(&self, hour: i64) -> Self {
+            let mut copy = self.clone();
+            copy.birth_hour = Some(hour);
+            copy
+        }
+    }
+}

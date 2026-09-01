@@ -45,6 +45,12 @@ MAIL_FROM = "onboarding@resend.dev"
 # (case-insensitive) may manage invites; unset = nobody (fail-closed).
 ADMIN_EMAIL = "yanggf@msn.com"
 
+# CORS extra exact origins (comparisons are scheme+host+port, never substring).
+# Pages preview deployments get hashed origins like
+# https://abc12345.fortunet.pages.dev — each preview origin must be listed
+# here explicitly after deploying a preview, or preview previews fail CORS.
+ALLOWED_ORIGINS = ""
+
 # Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
 # class_names are already in `new_sqlite_classes` and are NOT re-run.
 [[migrations]]

@@ -2,6 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Archived 2026-08-31:** this feature shipped and the residual unchecked boxes are bookkeeping, not open work — see git log for the shipped commits.
+
+
 **Goal:** 內測邀請制:多條命名邀請連結 + 原子消費 + /admin 管理頁。
 
 **Architecture:** D1 `invites` 表 + login_tokens/users 各加一欄;register 兩階段

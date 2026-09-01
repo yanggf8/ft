@@ -514,3 +514,42 @@ fn is_valid_email(s: &str) -> bool {
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_email;
+
+    #[test]
+    fn accepts_ordinary_addresses() {
+        assert!(is_valid_email("yanggf@msn.com"));
+        assert!(is_valid_email("user.name+tag@sub.example.co.uk"));
+        // Magic-link probe address shape used by the rate-limit check.
+        assert!(is_valid_email("ratelimit-probe@example.invalid"));
+    }
+
+    #[test]
+    fn rejects_structurally_broken_addresses() {
+        assert!(!is_valid_email(""));
+        assert!(!is_valid_email("no-at-sign"));
+        assert!(!is_valid_email("two@@at"));
+        assert!(!is_valid_email("double@@at.com"));
+        assert!(!is_valid_email("@local-missing.com"));
+        assert!(!is_valid_email("domain-missing@"));
+        assert!(!is_valid_email("no-dot@nodot"));
+        assert!(!is_valid_email("has space@example.com"));
+    }
+
+    #[test]
+    fn rejects_edge_dot_and_length_cases() {
+        // Current validator behavior (kept as-is, matching the TS it mirrors):
+        // only the domain's first/last char and any ".." run are checked, so a
+        // leading dot inside the local part is accepted. Pin it as documented.
+        assert!(is_valid_email(".leading-dot@x.com"));
+        assert!(is_valid_email("trailing-dot.@x.com"));
+        assert!(!is_valid_email("dot..dot@x.com"));
+        assert!(!is_valid_email("ok@.leading-domain.com"));
+        assert!(!is_valid_email("ok@trailing-domain.com."));
+        assert!(is_valid_email(&format!("{}@example.com", "a".repeat(243)))); // 255 total
+        assert!(!is_valid_email(&format!("{}@example.com", "a".repeat(244)))); // 256 total
+    }
+}
