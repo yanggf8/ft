@@ -39,6 +39,7 @@ pub fn ProfilePage() -> impl IntoView {
                 show_form=show_form
                 on_saved=saved
             />
+            <PersonalityCard />
         </div>
     }
 }
@@ -103,6 +104,60 @@ fn BirthCard(
                     initial=auth.user.get_untracked()
                     on_saved=on_saved
                 />
+            </Show>
+        </div>
+    }
+}
+
+#[component]
+fn PersonalityCard() -> impl IntoView {
+    let data = RwSignal::new(None::<crate::api::PersonalityMeResponse>);
+    let loading = RwSignal::new(true);
+
+    {
+        let data = data;
+        let loading = loading;
+        leptos::task::spawn_local(async move {
+            if let Ok(resp) = crate::api::get_personality(false).await {
+                data.set(Some(resp));
+            }
+            loading.set(false);
+        });
+    }
+
+    view! {
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                <h2>"人格資料"</h2>
+                <a href="/personality" class="btn-link" style="text-decoration:none">"前往測驗 →"</a>
+            </div>
+            <Show when=move || loading.get() fallback=move || {
+                let resp = data.get();
+                match resp.as_ref().and_then(|r| r.profile.as_ref()) {
+                    Some(p) => {
+                        let status = p.status.clone();
+                        let ocean = p.oceanMeasured.clone();
+                        view! {
+                            <div style="display:grid;gap:0.5rem">
+                                <p style="font-size:0.85rem;color:var(--silver-dim)">
+                                    "狀態: " {status.clone()}
+                                </p>
+                                {ocean.map(|o| view! {
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.85rem">
+                                        <span>"外向: " {format!("{:.0}", o.extraversion)}</span>
+                                        <span>"友善: " {format!("{:.0}", o.agreeableness)}</span>
+                                        <span>"自律: " {format!("{:.0}", o.conscientiousness)}</span>
+                                        <span>"情緒穩定: " {format!("{:.0}", o.emotionalStability)}</span>
+                                        <span>"開放: " {format!("{:.0}", o.intellectImagination)}</span>
+                                    </div>
+                                }.into_any()).unwrap_or_else(|| view! { <p class="muted">"尚無量測數據"</p> }.into_any())}
+                            </div>
+                        }.into_any()
+                    }
+                    None => view! { <p class="muted">"尚未完成人格測驗，前往測驗可補充命格參考"</p> }.into_any(),
+                }
+            }>
+                <p class="muted">"載入中..."</p>
             </Show>
         </div>
     }
