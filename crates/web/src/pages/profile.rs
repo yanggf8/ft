@@ -93,7 +93,7 @@ fn BirthCard(
                     let has = auth.user.get().map(|u| u.hasBirthData).unwrap_or(false);
                     if has {
                         let text: String = auth.user.get().and_then(|u| u.birth_summary()).unwrap_or_default();
-                        view! { <p style="color:#374151">{text}</p> }.into_any()
+                        view! { <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p> }.into_any()
                     } else {
                         view! { <p class="muted">"請先填寫出生資料以開始算命"</p> }.into_any()
                     }

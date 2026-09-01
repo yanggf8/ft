@@ -242,6 +242,18 @@ input, select {
   color: var(--text);
 }
 
+select option {
+  background: var(--deep-space);
+  color: var(--text);
+}
+
+select option:checked,
+select option:hover,
+select option:focus {
+  background: var(--metal-mid);
+  color: var(--ink-on-chrome);
+}
+
 input::placeholder { color: var(--silver-faint); }
 
 input:focus, select:focus {
