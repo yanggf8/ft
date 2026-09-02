@@ -13,6 +13,7 @@ use super::super::services::engine::{self, EngineBirth};
 use super::super::services::engine_version::{
     CHART_SCHEMA_VERSION, ENGINE_VERSION_WESTERN, ENGINE_VERSION_ZIWEI,
 };
+use super::super::services::generation;
 use super::super::services::uuid;
 use super::common::{
     apply_cache_headers, auth_user, client_ip, create_etag, embed_meta, extracted_version,
@@ -35,6 +36,8 @@ struct UserBirthRow {
     latitude: Option<f64>,
     longitude: Option<f64>,
     birth_data_hash: Option<String>,
+    #[serde(default)]
+    generation_tags: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -203,7 +206,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         Ok(v) => v,
                         Err(e) => return Ok(error::error(format!("{}", e), 502)),
                     };
-                    let merged = serde_json::json!({
+                    let mut merged = serde_json::json!({
                         "ziwei": ziwei, "western": western,
                         "meta": {
                             "engineVersionZiwei": ENGINE_VERSION_ZIWEI,
@@ -211,6 +214,47 @@ pub fn register(router: R<'static>) -> R<'static> {
                             "chartSchemaVersion": CHART_SCHEMA_VERSION,
                         }
                     });
+                    // P0: embed generation_tags + generation_stories so prompt can render 【世代語境】
+                    {
+                        let tags: Vec<String> = birth
+                            .generation_tags
+                            .as_deref()
+                            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                            .unwrap_or_default();
+                        if !tags.is_empty() {
+                            if let Some(obj) = merged.as_object_mut() {
+                                obj.insert(
+                                    "generation_tags".to_string(),
+                                    serde_json::to_value(&tags).unwrap_or(serde_json::Value::Null),
+                                );
+                                // Build per-tag stories preserving tag order; skip unknown tags.
+                                let mut stories: Vec<serde_json::Value> = Vec::new();
+                                for tag in &tags {
+                                    if let Some((title, story)) = generation::generation_story_for_tag(tag) {
+                                        stories.push(serde_json::json!({
+                                            "tag": tag,
+                                            "title": title,
+                                            "story": story
+                                        }));
+                                    }
+                                }
+                                // Also exercise combined_generation_story to keep the helper covered;
+                                // prompts can use the per-tag array, but we also expose the combined
+                                // title/story for debugging / future use.
+                                let _combined = generation::combined_generation_story(&tags);
+                                if !stories.is_empty() {
+                                    obj.insert("generation_stories".to_string(), serde_json::Value::Array(stories));
+                                }
+                                // Keep a top-level combined string for convenience (optional).
+                                if let Some((c_title, c_desc)) = _combined {
+                                    obj.insert(
+                                        "generation_combined".to_string(),
+                                        serde_json::json!({ "title": c_title, "story": c_desc }),
+                                    );
+                                }
+                            }
+                        }
+                    }
 
                     if !anything_configured(&ctx) {
                         return Ok(error::error("AI service not configured", 503));
@@ -468,7 +512,7 @@ async fn get_birth_data(db: &db::Turso, user: &str) -> Result<UserBirthRow, Resp
     let u = db::text(user);
     let row: Option<UserBirthRow> = db::first(
         db,
-        "SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, latitude, longitude, birth_data_hash FROM users WHERE id = ?1",
+        "SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, latitude, longitude, birth_data_hash, generation_tags FROM users WHERE id = ?1",
         &[&u],
     ).await.map_err(|e| error::error(format!("db error: {}", e), 500))?;
     row.ok_or_else(|| error::error("User not found", 404))

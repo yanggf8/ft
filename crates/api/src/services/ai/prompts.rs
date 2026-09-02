@@ -158,6 +158,71 @@ pub fn build_prompt(
             z_gender_cn,
             z_palaces.join("\n")
         ));
+        // P0: 【世代語境】 — if the merged chart carries generation_tags, render them
+        // as contextual narrative for the LLM, keeping existing palace/planet templates untouched.
+        {
+            let tags: Vec<String> = chart
+                .get("generation_tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !tags.is_empty() {
+                let stories = chart
+                    .get("generation_stories")
+                    .and_then(|v| v.as_array())
+                    .cloned();
+                let mut section = String::from("【世代語境】\n");
+                // Prefer the embedded generation_stories (tag/title/story) when present,
+                // otherwise fall back to the canonical generation_story_for_tag lookup so
+                // the prompt stays correct even for older cached charts.
+                if let Some(arr) = stories {
+                    for entry in arr {
+                        let tag = entry.get("tag").and_then(|v| v.as_str()).unwrap_or("");
+                        let title = entry.get("title").and_then(|v| v.as_str()).unwrap_or(tag);
+                        let story = entry.get("story").and_then(|v| v.as_str()).unwrap_or("");
+                        if !story.is_empty() {
+                            section.push_str(&format!("{}：{}\n", title, story));
+                        }
+                    }
+                } else {
+                    for tag in &tags {
+                        if let Some((title, story)) =
+                            crate::services::generation::generation_story_for_tag(tag)
+                        {
+                            section.push_str(&format!("{}：{}\n", title, story));
+                        }
+                    }
+                }
+                // Only emit the section if we actually resolved at least one story line.
+                if section.lines().count() > 1 {
+                    section.push_str(
+                        "請將上述世代背景自然融入四個章節的敘事，讓故事既回應命盤也回應時代。\n\n",
+                    );
+                    p.push_str(&section);
+                } else if tags
+                    .iter()
+                    .any(|t| crate::services::generation::generation_story_for_tag(t).is_some())
+                {
+                    // Fallback: rebuild via generation module if embedded stories were empty
+                    let mut fb = String::from("【世代語境】\n");
+                    for tag in &tags {
+                        if let Some((title, story)) =
+                            crate::services::generation::generation_story_for_tag(tag)
+                        {
+                            fb.push_str(&format!("{}：{}\n", title, story));
+                        }
+                    }
+                    fb.push_str(
+                        "請將上述世代背景自然融入四個章節的敘事，讓故事既回應命盤也回應時代。\n\n",
+                    );
+                    p.push_str(&fb);
+                }
+            }
+        }
         p.push_str(&format!(
             "【西洋占星】\n太陽：{}\n月亮：{}\n行星：{}\n\n",
             w_sun,

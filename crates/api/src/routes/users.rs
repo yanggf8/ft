@@ -186,6 +186,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 timezone: body.timezone.clone(),
                 latitude: body.latitude,
                 longitude: body.longitude,
+                generation_tags: body.generation_tags.clone(),
             });
 
             let db = match db::Turso::from_env(&ctx.env) {

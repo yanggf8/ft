@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     timezone TEXT DEFAULT 'Asia/Taipei',
     latitude REAL,
     longitude REAL,
+    generation_tags TEXT,            -- JSON array e.g. '["1980s","1990s"]'
     birth_data_hash TEXT,            -- for cache invalidation
     invited_by TEXT,                 -- invite code that created this account
     
@@ -144,3 +145,7 @@ CREATE TABLE IF NOT EXISTS invites (
 -- get these from the CREATE TABLE definitions above:
 --   ALTER TABLE login_tokens ADD COLUMN pending_invite_code TEXT;
 --   ALTER TABLE users ADD COLUMN invited_by TEXT;
+--   ALTER TABLE users ADD COLUMN generation_tags TEXT;  -- P0: users.generation_tags JSON array; idempotent — re-running on a DB that already has the column will error "duplicate column name", which is safe to ignore
+
+-- Idempotent helper for existing Turso DBs (run once; ignore duplicate-column error):
+--   turso db shell fortunet "ALTER TABLE users ADD COLUMN generation_tags TEXT"

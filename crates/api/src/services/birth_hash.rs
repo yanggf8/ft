@@ -21,6 +21,11 @@ pub struct BirthHashInput {
     pub timezone: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    /// P0: generation_tags influences cache invalidation for story.
+    /// `None` / empty => omitted from the join so legacy hashes (9 segments)
+    /// stay byte-for-byte identical; non-empty => appended as a 10th segment.
+    #[serde(default)]
+    pub generation_tags: Option<Vec<String>>,
 }
 
 /// Reproduce the TS `[ ... ].join('-')` with `??` defaults, then the djb2-ish
@@ -32,7 +37,7 @@ fn join_parts(input: &BirthHashInput) -> String {
     let tz = input.timezone.as_deref().unwrap_or("Asia/Taipei");
     let lat = input.latitude.map(|f| render_f64(f)).unwrap_or_default();
     let lon = input.longitude.map(|f| render_f64(f)).unwrap_or_default();
-    format!(
+    let base = format!(
         "{}-{}-{}-{}-{}-{}-{}-{}-{}",
         num(input.birth_year),
         num(input.birth_month),
@@ -43,7 +48,27 @@ fn join_parts(input: &BirthHashInput) -> String {
         tz,
         lat,
         lon
-    )
+    );
+    // P0: append generation_tags as a 10th segment when non-empty.
+    // Empty/None is omitted so the joined string stays exactly the legacy
+    // 9-segment form and existing caches are not mass-invalidated on deploy.
+    // When tags exist, sort + join with ',' for stable hashing regardless of
+    // selection order (UI preserves order, but hash must be deterministic).
+    // Also note: `routes/users.rs` already does `DELETE FROM interpretations`
+    // on birth update, so hash-based invalidation is a safety net, not the
+    // sole mechanism.
+    if let Some(tags) = &input.generation_tags {
+        let mut norm: Vec<String> = tags
+            .iter()
+            .filter(|s| !s.trim().is_empty())
+            .cloned()
+            .collect();
+        if !norm.is_empty() {
+            norm.sort();
+            return format!("{}-{}", base, norm.join(","));
+        }
+    }
+    base
 }
 
 fn num(v: Option<i64>) -> String {
@@ -102,6 +127,7 @@ mod tests {
             timezone: Some("Asia/Taipei".to_owned()),
             latitude: Some(lat),
             longitude: Some(lon),
+            generation_tags: None,
         }
     }
 
@@ -155,6 +181,7 @@ mod tests {
             timezone: None,
             latitude: None,
             longitude: None,
+            generation_tags: None,
         };
         let explicit_defaults = BirthHashInput {
             birth_hour: Some(12),
@@ -168,6 +195,38 @@ mod tests {
             compute_birth_hash(&all_none),
             compute_birth_hash(&explicit_defaults)
         );
+    }
+
+    #[test]
+    fn generation_tags_empty_preserves_legacy_hash() {
+        let without = input(1990, 25.0, 121.5);
+        let mut with_empty = without.clone();
+        with_empty.generation_tags = Some(vec![]);
+        let mut with_none = without.clone();
+        with_none.generation_tags = None;
+        assert_eq!(
+            compute_birth_hash(&without),
+            compute_birth_hash(&with_empty)
+        );
+        assert_eq!(compute_birth_hash(&without), compute_birth_hash(&with_none));
+    }
+
+    #[test]
+    fn generation_tags_changes_hash_and_order_insensitive() {
+        let base = input(1990, 25.0, 121.5);
+        let mut tagged = base.clone();
+        tagged.generation_tags = Some(vec!["1980s".to_string()]);
+        assert_ne!(compute_birth_hash(&base), compute_birth_hash(&tagged));
+
+        let mut a = base.clone();
+        a.generation_tags = Some(vec!["1980s".to_string(), "1990s".to_string()]);
+        let mut b = base.clone();
+        b.generation_tags = Some(vec!["1990s".to_string(), "1980s".to_string()]);
+        assert_eq!(compute_birth_hash(&a), compute_birth_hash(&b));
+
+        let mut c = base.clone();
+        c.generation_tags = Some(vec!["1980s".to_string()]);
+        assert_ne!(compute_birth_hash(&a), compute_birth_hash(&c));
     }
 
     impl BirthHashInput {
