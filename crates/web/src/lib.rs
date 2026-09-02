@@ -106,7 +106,7 @@ fn VerifyPage() -> impl IntoView {
                     fallback=move || view! {
                         <h2 style="margin-bottom:1rem;text-align:center">"登入連結無效或已過期"</h2>
                         <p class="error">{move || reason.get()}</p>
-                        <p style="font-size:0.8rem;color:#6b7280;line-height:1.8;text-align:center">
+                        <p style="font-size:0.8rem;color:#9aa3b2;line-height:1.8;text-align:center">
                             "連結只能使用一次，且會在數分鐘後失效。請回到登入頁重新申請一封登入信。"
                         </p>
                         <div style="margin-top:1.5rem;text-align:center">

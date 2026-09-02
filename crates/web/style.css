@@ -18,8 +18,15 @@
   --metal-hi: #f8fafc;        /* hover/focus highlight          15.2:1 */
   --metal-mid: #c8d0dc;       /* interactive text base          10.1:1 */
   --metal-lo: #9aa3b2;        /* control edges                   6.4:1 */
-  --metal-deep: #6f7787;      /* horizon band / dark edge floor  3.62:1 */
+  --metal-deep: #6f7787;      /* horizon band / dark edge floor  3.62:1 — large text / decor only */
+  --metal-deep-small: #8a93a5; /* small text on dark — AA-safe replacement for #6f7787 */
   --ink-on-chrome: #10141f;   /* text on a chrome plate          >=6.2:1 */
+  /* WCAG AA contrast tokens (spec § contrast) */
+  --text-muted-on-dark: #9aa3b2;  /* secondary on #1c202a — was #6b7280 (fails) */
+  --text-muted-on-light: #4b5563; /* secondary on white/#fdf2f8 — was #9ca3af (fails) */
+  --error-on-light: #b91c1c;      /* error on #fff — was #ef4444 (fails) */
+  --error-on-dark: #fb7185;       /* error on #1c202a / var(--deep-space) — was #ef4444 */
+  --gen-title: #f5f3ff;           /* generation title on subtle purple — was #6d28d9 (1.62:1) */
   --metal-line: rgba(200, 208, 220, 0.22);
   --metal-edge: linear-gradient(
     135deg,

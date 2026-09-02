@@ -208,7 +208,7 @@ fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
                     <strong>"大限:"</strong>
                     {move || chart.major_limits.iter().map(|m| format!("{}-{} {}{}", m.start_age, m.end_age, m.stem, m.branch)).collect::<Vec<_>>().join(" · ")}
                 </span>
-                <span style="color:#6b7280;font-size:0.75rem">
+                <span style="color:#9aa3b2;font-size:0.75rem">
                     {move || format!("#{} · {}", meta.chart_schema_version, meta.engine_version_ziwei)}
                 </span>
             </div>
@@ -226,7 +226,7 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
         <div style="display:grid;gap:1rem">
             <div style="text-align:center;padding:0.75rem 1rem;background:linear-gradient(135deg,#fdf2f8,#f0f9ff);border-radius:12px;border:1px solid #fce7f3">
                 <div style="font-size:1.1rem;font-weight:700;color:#be185d">"‧₊˚✧ 西洋星盤 ✧˚₊‧"</div>
-                <div style="font-size:0.75rem;color:#9ca3af;margin-top:2px">"太陽 · 月亮 · 上升 · 行星"</div>
+                <div style="font-size:0.75rem;color:#4b5563;margin-top:2px">"太陽 · 月亮 · 上升 · 行星"</div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.5rem">
                 <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:0.6rem;text-align:center">

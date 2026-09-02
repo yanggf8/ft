@@ -175,7 +175,7 @@ pub fn BirthDataForm(
                                 style=move || {
                                     let selected = generation_tags.get().contains(&tag_str);
                                     if selected {
-                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid #a78bfa;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;cursor:pointer"
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid #8b5cf6;background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#10141f;cursor:pointer"
                                     } else {
                                         "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--silver-dim);cursor:pointer"
                                     }

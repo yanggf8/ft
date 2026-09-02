@@ -126,7 +126,7 @@ pub fn LoginPage() -> impl IntoView {
                                             .map(|c| c.valid)
                                             .unwrap_or(false)
                                     }>
-                                        <p style="font-size:0.75rem;color:#10b981;margin-top:0.25rem">
+                                        <p style="font-size:0.75rem;color:#34d399;margin-top:0.25rem">
                                             {move || {
                                                 format!(
                                                     "✓ 已套用邀請:{}",
@@ -145,7 +145,7 @@ pub fn LoginPage() -> impl IntoView {
                                             .map(|c| !c.valid)
                                             .unwrap_or(false)
                                     }>
-                                        <p style="font-size:0.75rem;color:#ef4444;margin-top:0.25rem">
+                                        <p style="font-size:0.75rem;color:#fb7185;margin-top:0.25rem">
                                             "✗ 邀請碼無效或已失效"
                                         </p>
                                     </Show>
@@ -178,7 +178,7 @@ pub fn LoginPage() -> impl IntoView {
                         </form>
                         <div style="margin:1.25rem 0;display:flex;align-items:center;gap:0.75rem">
                             <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
-                            <span style="font-size:0.75rem;color:#9ca3af">或</span>
+                            <span style="font-size:0.75rem;color:#4b5563">或</span>
                             <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
                         </div>
                         <button
@@ -202,7 +202,7 @@ pub fn LoginPage() -> impl IntoView {
                                 {move || if is_register.get() { "已有帳號？登入" } else { "沒有帳號？註冊" }}
                             </button>
                         </div>
-                        <p style="margin-top:1rem;font-size:0.75rem;color:#6b7280;text-align:center">
+                        <p style="margin-top:1rem;font-size:0.75rem;color:#9aa3b2;text-align:center">
                             "送出後我們會寄一封登入信到這個 Email；點信中的連結才會完成登入。"
                         </p>
                     }
@@ -218,7 +218,7 @@ pub fn LoginPage() -> impl IntoView {
                             }
                         }}
                     </p>
-                    <p style="font-size:0.8rem;color:#6b7280;line-height:1.8;text-align:center">
+                    <p style="font-size:0.8rem;color:#9aa3b2;line-height:1.8;text-align:center">
                         "連結會在數分鐘後失效，且只能使用一次。沒收到信請先檢查垃圾郵件資料夾；"
                         "登入時若一直沒收到，可能表示這個 Email 尚未註冊（系統不會另外通知）。"
                     </p>

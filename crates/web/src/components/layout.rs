@@ -149,7 +149,7 @@ pub fn Layout(children: Children) -> impl IntoView {
                                     </Show>
                                     <div style="height:1px;background:#f3f4f6;margin:6px 0"></div>
                                     <button
-                                        style="width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:14px;color:#ef4444;background:none;border:none;cursor:pointer"
+                                        style="width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:14px;color:#b91c1c;background:none;border:none;cursor:pointer"
                                         on:click=move |_| {
                                             close_menu();
                                             auth.logout();

@@ -112,7 +112,7 @@ fn BirthCard(
                                 <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p>
                                 {gen.map(|(title, desc)| view! {
                                     <div style="background:linear-gradient(135deg,rgba(167,139,250,0.12),rgba(244,114,182,0.10));border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:0.85rem 1rem">
-                                        <div style="font-weight:700;font-size:0.9rem;color:#6d28d9;margin-bottom:0.25rem">{title}</div>
+                                        <div style="font-weight:700;font-size:0.9rem;color:var(--gen-title);margin-bottom:0.25rem">{title}</div>
                                         <p style="font-size:0.85rem;line-height:1.6;color:var(--silver-dim);margin:0">{desc}</p>
                                     </div>
                                 }.into_any()).unwrap_or_else(|| view! { <span></span> }.into_any())}
