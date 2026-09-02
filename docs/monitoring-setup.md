@@ -74,11 +74,12 @@ interface LogEntry {
    - Large payloads (> 100KB)
 
 ### Implementation
-```typescript
-// backend/src/lib/logger.ts
-export function log(entry: LogEntry) {
-  console.log(JSON.stringify(entry));
-  // Cloudflare automatically captures console.log
+```rust
+// crates/api/src/services/ — structured logging via console.log (captured by Workers)
+// Historical: backend/src/lib/logger.ts removed in 98d3521 — now Rust (workers-rs)
+pub fn log(entry: LogEntry) {
+    worker::console_log!("{}", serde_json::to_string(&entry).unwrap());
+    // Cloudflare automatically captures console.log
 }
 ```
 
@@ -165,18 +166,10 @@ GROUP BY subscription_tier;
 - Requires log shipping
 
 ### Option 3: Simple Admin Page
-```typescript
-// backend/src/routes/admin.ts (protected)
-app.get('/admin/stats', authMiddleware, async (c) => {
-  const stats = {
-    users: await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first(),
-    charts: await c.env.DB.prepare('SELECT COUNT(*) as count FROM chart_records').first(),
-    chartsToday: await c.env.DB.prepare(
-      "SELECT COUNT(*) as count FROM chart_records WHERE DATE(created_at) = DATE('now')"
-    ).first(),
-  };
-  return c.json(stats);
-});
+```rust
+// crates/api/src/routes/ — protected admin stats (historical: backend/src/routes/admin.ts removed in 98d3521)
+ // workers-rs handler, auth via SessionDO
+```
 ```
 
 ---

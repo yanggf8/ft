@@ -485,7 +485,8 @@ GET  /api/billing/entitlements
 
 ## 🎨 Phase 3: Frontend (Week 12-15) ✅
 
-**Goal**: Build React frontend with all user-facing features.
+**Goal**: Build frontend with all user-facing features.
+> Historical: original plan was React (`frontend/src/App.tsx`, `BrowserRouter`/`AuthProvider`), superseded by Rust workspace 98d3521 — now Leptos CSR (`crates/web/src/lib.rs`, `crates/web/src/api.rs`).
 
 ### Week 12-13: Core Application ✅
 
@@ -522,16 +523,17 @@ GET  /api/billing/entitlements
 
 | Type | Coverage Target | Tools | Status |
 |------|-----------------|-------|--------|
-| Unit Tests | >90% | Vitest | ✅ 15 tests passing |
-| Integration Tests | >85% | Vitest + Miniflare | ✅ Ready |
+| Unit Tests | >90% | `cargo test` (native) | ✅ 29 tests passing |
+| Integration Tests | >85% | `cargo test` + `verify-deployment.sh` | ✅ Ready |
+> Historical: `Vitest` / `Vitest + Miniflare` removed in 98d3521 — now `cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api` (native) + `scripts/verify-deployment.sh`.
 | E2E Tests | Critical paths | Documented | ✅ Plan complete |
 | Performance | p95 < 200ms | k6 | ✅ Script ready |
 
 ### Week 16-17: Automated Testing ✅
 ```bash
-# Run all tests
-npm run test --prefix backend  # 15/15 passing
-npm run test --prefix frontend # API client tests ready
+# Current (Rust workspace, native only — see CLAUDE.md)
+cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api
+# Historical: npm run test --prefix backend / --prefix frontend removed in 98d3521
 ```
 
 ### Week 18: Security & Performance Audit ✅
@@ -547,7 +549,7 @@ npm run test --prefix frontend # API client tests ready
 - ✅ Rate limiting in place
 - ✅ Load test script created
 - ✅ E2E test plan documented
-- ✅ No TypeScript errors
+- ✅ No type errors (`cargo check --target wasm32-unknown-unknown` clean; historical: "No TypeScript errors" / `npm run typecheck` removed in 98d3521)
 
 ---
 

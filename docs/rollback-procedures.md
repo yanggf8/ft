@@ -26,14 +26,14 @@
 ### Steps
 ```bash
 # 1. Check current deployment
-cd backend
-wrangler deployments list
+cd crates/api
+unset CLOUDFLARE_API_TOKEN && wrangler deployments list
 
 # 2. Identify last good deployment
 # Look for deployment before the issue started
 
 # 3. Rollback
-wrangler rollback
+unset CLOUDFLARE_API_TOKEN && wrangler rollback
 
 # 4. Verify
 ./scripts/verify-deployment.sh
@@ -41,6 +41,7 @@ wrangler rollback
 # 5. Notify team
 # Post in Slack/Discord: "Rolled back API to [version] due to [issue]"
 ```
+> Historical: `cd backend` / bare `wrangler` (without `unset CLOUDFLARE_API_TOKEN &&`) superseded by Rust workspace 98d3521 — `backend/` removed, OAuth via `unset CLOUDFLARE_API_TOKEN && wrangler`.
 
 ### Verification
 - [ ] Health check passes
@@ -68,15 +69,15 @@ wrangler rollback
 4. Click "..." → "Rollback to this deployment"
 5. Confirm
 
-# Or via CLI
-cd frontend
+# Or via CLI (Rust/Leptos)
 # Pages doesn't have direct rollback, redeploy previous commit
 git log --oneline
 git checkout <previous-commit>
-npm run build
-wrangler pages deploy dist
+./scripts/build-web.sh   # or: cargo build -p ft-web --target wasm32-unknown-unknown
+unset CLOUDFLARE_API_TOKEN && wrangler pages deploy crates/web/dist --project-name=fortunet
 git checkout main
 ```
+> Historical: `cd frontend` / `npm run build` / `wrangler pages deploy dist` superseded by Rust workspace 98d3521 — `frontend/` removed, use `crates/web` + `scripts/build-web.sh` + `scripts/deploy-web.sh`.
 
 ### Verification
 - [ ] Site loads correctly
@@ -94,17 +95,18 @@ git checkout main
 
 **Prevention**: Always test migrations locally first
 ```bash
-# Test locally
-npm run db:init:local
+# Test locally (Turso)
+turso db shell fortunet < scripts/schema.sql   # single source of truth
 
-# Then apply to production
-npm run db:init
+# Then apply to production (same file; Turso, not D1)
+turso db shell fortunet < scripts/schema.sql
 ```
+> Historical: `npm run db:init:local` / `npm run db:init` (D1) removed in 98d3521 — now Turso (`scripts/schema.sql`).
 
 **Recovery**:
-- D1 doesn't support automatic rollback
-- Must manually write reverse migration
-- Contact Cloudflare support for point-in-time recovery
+- Turso point-in-time recovery via Turso dashboard/support (not D1)
+- Must manually write reverse migration if needed
+- Contact Turso/Cloudflare support for point-in-time recovery
 
 ### Issue: Data Corruption
 
@@ -123,10 +125,11 @@ npm run db:init
 ### Issue: Session DO Causing Errors
 
 **Quick Fix**: Disable feature temporarily
-```typescript
-// In backend/src/middleware/auth.ts
+```rust
+// In crates/api/src/durable_objects/session.rs (SessionDO) or crates/api/src/routes/common.rs
 // Comment out DO calls, use stateless auth temporarily
 ```
+> Historical: `backend/src/middleware/auth.ts` removed in 98d3521 — now `crates/api/src/durable_objects/session.rs` + `crates/api/src/routes/` (Rust/workers-rs).
 
 **Proper Fix**:
 1. Identify bug in session-do.ts
@@ -161,11 +164,12 @@ npm run db:init
 ### Issue: All Providers Down
 
 **Temporary Disable**:
-```typescript
-// In backend/src/routes/charts.ts
+```rust
+// In crates/api/src/routes/charts.rs
 // Add at top of /interpret endpoint:
-return c.json({ error: 'AI service temporarily unavailable' }, 503);
+return Err(ApiError::ServiceUnavailable("AI service temporarily unavailable"));
 ```
+> Historical: `backend/src/routes/charts.ts` (`c.json(..., 503)`) removed in 98d3521 — now `crates/api/src/routes/charts.rs` (Rust/workers-rs).
 
 **User Communication**:
 - Update status page
@@ -180,16 +184,17 @@ return c.json({ error: 'AI service temporarily unavailable' }, 503);
 ### Issue: Legitimate users getting 429s
 
 **Quick Fix**: Increase limits temporarily
-```typescript
-// In backend/src/routes/charts.ts
-const CALC_LIMIT = 30; // Change to 60
-const AI_LIMIT = 10;   // Change to 20
+```rust
+// In crates/api/src/routes/charts.rs (or crates/api/src/routes/common.rs limiter)
+const CALC_LIMIT: u32 = 30; // Change to 60
+const AI_LIMIT: u32 = 10;   // Change to 20
 ```
+> Historical: `backend/src/routes/charts.ts` removed in 98d3521 — now `crates/api/src/routes/charts.rs` (Rust).
 
 **Deploy**:
 ```bash
-cd backend
-npm run deploy
+unset CLOUDFLARE_API_TOKEN && wrangler deploy   # from crates/api, or: ./scripts/deploy-engine.sh / ./scripts/deploy-web.sh
+# Historical: cd backend && npm run deploy removed in 98d3521
 ```
 
 **Proper Fix**: Implement per-user rate limiting (not per-IP)
@@ -205,9 +210,9 @@ npm run deploy
 **Immediate**:
 ```bash
 # Rotate all secrets
-wrangler secret put IFLOW_API_KEY
-wrangler secret put GROQ_API_KEY
-wrangler secret put CEREBRAS_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler secret put IFLOW_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler secret put GROQ_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler secret put CEREBRAS_API_KEY
 ```
 
 **Follow-up**:

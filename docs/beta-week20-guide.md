@@ -94,8 +94,8 @@ turso db shell fortunet "SELECT COUNT(*) FROM interpretations"
 
 ### Rollback if needed
 ```bash
-cd backend
-wrangler rollback
+unset CLOUDFLARE_API_TOKEN && wrangler rollback   # from crates/api
+# Historical: cd backend && wrangler rollback removed in 98d3521 — backend/ no longer exists
 ```
 
 ---

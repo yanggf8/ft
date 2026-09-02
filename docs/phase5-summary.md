@@ -163,9 +163,11 @@ Prevents API token permission issues.
 ## Bug Fixes
 
 ### Security Headers Fix (2025-12-10)
+> Historical: superseded by Rust workspace 98d3521 — original stack was Hono (`backend/src/middleware/security.ts`, `c.header()` / `c.res.headers.set()`). Current implementation is `crates/api/src/lib.rs` (`workers-rs` `#[event(fetch)]`, `resolve_origin` + `decorate` with exact-hostname CORS allowlist + security headers). Retained for audit.
+
 - **Issue**: Security headers middleware wasn't applying headers to responses
-- **Cause**: Hono's `c.header()` doesn't work reliably after `await next()`
-- **Fix**: Changed to `c.res.headers.set()` in `backend/src/middleware/security.ts`
+- **Cause** (historical Hono): Hono's `c.header()` doesn't work reliably after `await next()`
+- **Fix** (historical): Changed to `c.res.headers.set()` in `backend/src/middleware/security.ts`
 - **Result**: All 6 verification checks now passing
 
 ---

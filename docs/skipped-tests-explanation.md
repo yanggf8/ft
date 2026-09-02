@@ -1,8 +1,10 @@
 # Why Tests Are Skipped
 
+> Historical: superseded by Rust workspace 98d3521 — `backend/src/__tests__/` (Vitest, `describe.skip`) removed. Current tests are `cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api` (native) + `scripts/verify-deployment.sh` (live API). Below retained for audit.
+
 ## Backend: 3 Integration Tests Skipped
 
-**File**: `backend/src/__tests__/integration/charts.test.ts`
+**File** (historical): `backend/src/__tests__/integration/charts.test.ts`
 
 **Reason**: Line 4 shows `describe.skip()`
 ```typescript
@@ -17,9 +19,10 @@ describe.skip('Charts API Integration', () => {
 - Would consume AI API credits
 - Meant for manual verification, not CI/CD
 
-**How to run them**:
+**How to run them** (historical):
 ```bash
 npm test -- --run integration
+# Current: ./scripts/verify-deployment.sh (live API) or cargo test -p ft-api (native)
 ```
 
 **Tests skipped**:
