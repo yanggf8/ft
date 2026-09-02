@@ -55,6 +55,8 @@ pub fn generation_story_for_tag(tag: &str) -> Option<(&'static str, &'static str
 }
 
 /// Combined narrative for multiple tags (preserves tag order).
+/// 主世代權重：首個 tag 為敘事主幹（全文），後續 tag 為副世代對比補充（各取首句以「而／同時」連接）。
+/// 標題仍以 " × " 串接；描述以主世代全文為首段，副世代各取第一句（以 。 分句）並加「而」或「同時」連接詞作對比，避免單純 "；" 串接。
 pub fn combined_generation_story(tags: &[String]) -> Option<(String, String)> {
     if tags.is_empty() {
         return None;
@@ -75,11 +77,30 @@ pub fn combined_generation_story(tags: &[String]) -> Option<(String, String)> {
         return None;
     }
     let title = titles.join(" × ");
-    let desc = descs.join("；");
-    Some((title, format!("跨世代合寫：{desc}")))
+    // 主世代為首個有效 tag 的全文，副世代各取第一句作對比補充
+    let primary = descs[0];
+    let mut combined = String::from(primary);
+    for (idx, sec) in descs.iter().skip(1).enumerate() {
+        let first = sec.split('。').next().unwrap_or(sec);
+        let trimmed = first.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let first_sentence = if sec.contains('。') {
+            format!("{trimmed}。")
+        } else {
+            trimmed.to_string()
+        };
+        let connector = if idx % 2 == 0 { "而" } else { "同時" };
+        combined.push_str(connector);
+        combined.push_str(&first_sentence);
+    }
+    Some((title, format!("跨世代合寫：{combined}")))
 }
 
 /// Per-tag stories, filtered to known tags and preserving input order.
+/// 主世代權重：回傳順序即權重順序，首個元素為主世代（敘事主幹），後續為副世代（對比／補充）；
+/// 僅作語意註解，不改 API 行為與排序（保持輸入 tags 順序）。
 pub fn stories_for_tags(tags: &[String]) -> Vec<(&'static str, &'static str)> {
     tags.iter()
         .filter_map(|t| generation_story_for_tag(t))
