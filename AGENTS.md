@@ -1,11 +1,12 @@
 # 🤖 FortuneT V2 - Repository Guidelines
 
-**Current Phase**: Phase 5 (Pre-Migration) - Week 20 ✅
-**Status**: Production live, beta testing materials ready
+**Current Phase**: Phase 6 Go-Live — Beta Testing ✅
+**Status**: Rust workspace live (Leptos CSR + workers-rs), production on Cloudflare
 
 **Live URLs**:
 - Frontend: https://fortunet.pages.dev
-- Backend: https://fortunet-api.yanggf.workers.dev
+- Backend API: https://fortunet-api.yanggf.workers.dev
+- Engine Worker: https://fortunet-engine.yanggf.workers.dev
 
 ---
 
@@ -14,66 +15,54 @@
 ### Wrangler Commands - Always Use OAuth
 **For ANY wrangler command, always unset API token first:**
 ```bash
-unset CLOUDFLARE_API_TOKEN && npx wrangler [command]
+unset CLOUDFLARE_API_TOKEN && wrangler [command]
+# then: wrangler whoami  # confirm OAuth
 ```
 
 **Examples:**
 ```bash
-# Deploy
-unset CLOUDFLARE_API_TOKEN && npx wrangler deploy
-
-# Check deployments
-unset CLOUDFLARE_API_TOKEN && npx wrangler deployments list
-
-# Manage secrets
-unset CLOUDFLARE_API_TOKEN && npx wrangler secret put IFLOW_API_KEY
-
-# Turso commands
-unset CLOUDFLARE_API_TOKEN && turso db shell fortunet "SELECT COUNT(*) FROM users"
-
-# Pages deploy
-unset CLOUDFLARE_API_TOKEN && npx wrangler pages deploy dist
+unset CLOUDFLARE_API_TOKEN && wrangler deploy
+unset CLOUDFLARE_API_TOKEN && wrangler deployments list
+unset CLOUDFLARE_API_TOKEN && wrangler secret put IFLOW_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler pages deploy dist --project-name=fortunet
+turso db shell fortunet "SELECT COUNT(*) FROM users"
 ```
 
-**Why**: API tokens have permission issues. OAuth provides full access to all Cloudflare features.
+**Why**: API tokens have permission issues. OAuth provides full access. One-person project, all work lands directly on `main`, deployment is manual (no token in CI).
 
-**Rule**: Combine `unset CLOUDFLARE_API_TOKEN &&` with every `npx wrangler` command.
+**Rule**: Combine `unset CLOUDFLARE_API_TOKEN &&` with every `wrangler` command. Check `wrangler whoami` first.
+
+### Turso / gwebcdb credentials
+Ask `armo` (`armo`, `armo mint` …) — two token systems coexist (`gwebcdb-mint` = group token for every DB, CLI resolve = per-DB token). `401 does not have the permissions` = per-DB token, not a wrong flag. Do not use Cloudflare D1.
+
+### Build / Deploy never auto-start
+Ask before starting servers, `cargo install trunk` / Leptos first-build can hang the machine, and `cargo` must be wrapped with timeout. Never start servers automatically.
 
 ---
 
 ## 📋 Project Overview
 
-FortuneT V2 is a Cloudflare-native migration with AI-powered storytelling features.
+FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`workers-rs`) + isolated engine Worker + Turso.
 
-**Primary Document**: [MASTER_PLAN.md](./MASTER_PLAN.md) - Start here for all planning.
+**Primary Documents**:
+- [CLAUDE.md](./CLAUDE.md) — workspace, routes, DOs, services, engine versions (authoritative)
+- [MASTER_PLAN.md](./MASTER_PLAN.md) — migration timeline (historical, superseded by 98d3521)
+- [README.md](./README.md) — live URLs, quick start, tech stack
 
 ---
 
-## 🚀 Phase 2 Progress
+## 🚀 Progress
 
-### Week 7-8: Calculation Engines ✅
+### Engines ✅
 
-| Engine | Status | Endpoint |
-|--------|--------|----------|
-| **ZiWei (紫微斗數)** | ✅ Complete | `POST /api/charts/calculate/ziwei` |
-| **Western Zodiac** | ✅ Complete | `POST /api/charts/calculate/western` |
+| Engine | Status | Notes |
+|--------|--------|-------|
+| **ZiWei (紫微斗數)** | ✅ Complete | `x-iztro` via `crates/worker` → `crates/domain/ziwei`, 4×4 palace grid, Wuxing + BaZi |
+| **Western Zodiac** | ✅ Complete | `solar-ephemeris` Moon + `vsop87` planets, via `crates/domain/western` |
 
-#### ZiWei Features
-- Solar-to-lunar conversion (1900-2100)
-- Four pillars calculation
-- Life palace & body palace
-- Five element determination
-- 14 main stars placement
-- Auxiliary stars (文昌、文曲、左輔、右弼、祿存、擎羊、陀羅)
+**Generation Tags** (2026-09): `1940s–2010s` selectable as birth attribute (default from `birth_year`), stored as JSON array `users.generation_tags`, embedded into story prompt `【世代語境】`, 1930s/2020s added, prompt thickened to ~1072 chars (fourPillars, majorLimits, isLeap, brightness/sihua, ascendant/houses).
 
-#### Western Features
-- Sun sign calculation
-- Approximate moon sign
-- Basic planetary positions
-
-### Week 9: AI Integration ✅
-
-#### Provider Strategy (3-tier failover)
+### AI Integration ✅
 
 | Priority | Provider | Model | 特點 |
 |----------|----------|-------|------|
@@ -81,114 +70,90 @@ FortuneT V2 is a Cloudflare-native migration with AI-powered storytelling featur
 | Secondary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
 | Tertiary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
 
-#### AI Mutex DO Features
-- Serialized requests (1 concurrent)
-- Auto failover on error
-- exresource tracking per provider/day:
-  - `requests` - 請求數
-  - `tokens` - token 用量
-  - `errors` - 錯誤數
-  - `lastError` - 最後錯誤 (time, code, message)
-  - `latencySum` - 延遲總和
-  - `failovers` - failover 次數
+**AIMutexDO**: serialized (1 concurrent), `MAX_QUEUE_DEPTH=8`, `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource tracking (`requests/tokens/errors/lastError/latencySum/failovers`), 45s provider timeout, offline stub when all fail. `SessionDO` key `session`, 7-day TTL.
 
-#### Chart & AI Endpoints (Birth-Data Centric)
+### Chart & AI Endpoints (Birth-Data Centric)
 ```bash
-PUT  /api/users/me/birth        # Save birth data to user profile (invalidates cache)
-GET  /api/charts/:type          # Auto-calculate chart from stored birth data (cached)
-POST /api/charts/:type/interpret # AI interpretation with failover (cached)
-GET  /api/charts                # List user's cached interpretations
+PUT  /api/users/me/birth        # Save birth data + generation_tags (invalidates interpretations)
+GET  /api/charts/:type          # Auto-calculate chart from stored birth (cached, birth_data_hash gated)
+POST /api/charts/:type/interpret # AI interpretation (story cache, fromCache, 409 RECALC)
+GET  /api/charts                # List cached interpretations
+GET  /api/users/me              # Includes generation_tags (JSON array), billing, hasBirthData
 ```
-`:type` is `ziwei` or `western`. Birth data is stored once on the user profile; charts are derived from it and cached per `(user_id, divination_type)` keyed by `birth_data_hash`. Updating birth data deletes all cached interpretations for that user.
+`:type` is `ziwei` or `western`. `PUT /api/users/me/birth` deletes `interpretations` for user; `birth_data_hash` includes sorted `generation_tags`.
 
 ### Deployed Infrastructure
 
 | Component | Status | URL/ID |
 |-----------|--------|--------|
-| **Workers API** | ✅ Live | https://fortunet-api.yanggf.workers.dev |
+| **Workers API** (`ft-api`) | ✅ Live | https://fortunet-api.yanggf.workers.dev |
+| **Engine Worker** (`ft-engine`, FT_ENGINE binding) | ✅ Live | https://fortunet-engine.yanggf.workers.dev |
+| **Frontend** (Leptos CSR, Pages) | ✅ Live | https://fortunet.pages.dev |
 | **Turso Database** | ✅ Ready | `libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io` |
-| **R2 Storage** | ✅ Ready | `fortunet-storage` |
-| **Session DO** | ✅ Working | DO storage (key-value) |
-| **AI Mutex DO** | ✅ Working | DO storage, 3-provider failover |
-| **CI/CD** | ✅ Configured | `.github/workflows/deploy.yml` |
+| **Session DO** | ✅ Working | `SESSION_DO`, key `session` |
+| **AI Mutex DO** | ✅ Working | `AI_MUTEX_DO`, queue 8 / 60s |
+| **CI** | ✅ Configured | `.github/workflows/deploy.yml` — `cargo fmt --check` + `cargo test` (native) + `cargo clippy/build` (wasm) |
+| **R2** | ✅ Ready | `fortunet-storage` |
 
 ### Cloudflare Secrets
 
 | Secret | Purpose |
 |--------|---------|
-| `IFLOW_API_KEY` | Primary AI provider |
-| `GROQ_API_KEY` | Secondary AI provider |
-| `CEREBRAS_API_KEY` | Tertiary AI provider |
+| `IFLOW_API_KEY` | Primary AI |
+| `GROQ_API_KEY` | Secondary AI |
+| `CEREBRAS_API_KEY` | Tertiary AI |
+| `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret) |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-fortune-teller-v2/
-├── MASTER_PLAN.md              # ⭐ Consolidated migration plan
-├── README.md                   # Project overview
+ft/
+├── CLAUDE.md                   # ⭐ Authoritative workspace guide
+├── README.md                   # Live URLs & tech stack
 ├── AGENTS.md                   # This file
-├── FRONTEND_FIXES.md           # Frontend-backend contract fixes
-├── STORYTELLING_ROADMAP.md     # Phase 7 storytelling features
-│
-├── .github/
-│   └── workflows/
-│       └── deploy.yml          # ✅ CI/CD pipeline
-│
-├── backend/                    # ✅ Cloudflare Workers
-│   ├── src/
-│   │   ├── index.ts            # Main entry (Hono)
-│   │   ├── durable-objects/
-│   │   │   ├── session-do.ts   # Session management
-│   │   │   └── ai-mutex-do.ts  # AI failover & tracking
-│   │   ├── services/
-│   │   │   ├── billing.ts      # Trial & subscription logic
-│   │   │   ├── ai/             # 3-provider failover (iFlow/Groq/Cerebras)
-│   │   │   ├── ziwei/          # ZiWei calculation
-│   │   │   └── western/        # Western calculation
-│   │   ├── middleware/
-│   │   │   ├── auth.ts         # Auth middleware
-│   │   │   ├── security.ts     # Security headers
-│   │   │   └── cache.ts        # HTTP cache headers + ETag helpers
-│   │   └── routes/
-│   │       ├── auth.ts         # register/login/logout
-│   │       ├── users.ts        # /me, PUT /me/birth
-│   │       └── charts.ts       # GET /:type, POST /:type/interpret
-│   ├── scripts/
-│   │   ├── schema.sql          # Turso schema (birth-data centric)
-│   │   └── migrate-v2.sql      # v1→v2 migration
-│   ├── wrangler.toml           # Cloudflare config
-│   └── package.json
-│
-├── frontend/                   # ✅ React + Vite
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Layout.tsx
-│   │   │   ├── ProtectedRoute.tsx
-│   │   │   └── BirthDataForm.tsx  # Birth data entry (on profile)
-│   │   ├── pages/
-│   │   │   ├── HomePage.tsx
-│   │   │   ├── LoginPage.tsx
-│   │   │   ├── ProfilePage.tsx
-│   │   │   └── DivinationPage.tsx # /divination/:type
-│   │   ├── contexts/
-│   │   │   └── AuthContext.tsx
-│   │   ├── lib/
-│   │   │   └── api.ts
-│   │   ├── types/
-│   │   │   └── index.ts
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── index.html
-│   ├── vite.config.ts
-│   └── package.json
-│
+├── STORYTELLING_ROADMAP.md     # Storytelling roadmap
+├── MASTER_PLAN.md              # Historical TS plan (superseded 98d3521)
+├── Cargo.toml / Cargo.lock     # Workspace
+├── .github/workflows/deploy.yml
+├── scripts/
+│   ├── schema.sql              # ⭐ Single source of truth (Turso)
+│   ├── deploy-engine.sh        # worker-build + wrangler deploy (OAuth)
+│   ├── deploy-web.sh           # build-web.sh + pages deploy
+│   └── verify-deployment.sh
+├── vendor/solar-ephemeris/     # patch.crates-io
+├── crates/
+│   ├── schema/                 # ft-schema: api + storage DTOs (single source)
+│   ├── domain/
+│   │   ├── ziwei/              # ft-ziwei (x-iztro)
+│   │   ├── western/            # ft-western (solar-ephemeris + vsop87)
+│   │   └── big5/               # ft-big5
+│   ├── worker/                 # ft-worker (fortunet-engine, /engine/ziwei + /engine/western)
+│   ├── api/                    # ft-api (fortunet-api, routes/ + durable_objects/ + services/)
+│   │   └── src/
+│   │       ├── lib.rs          # #[event(fetch)] + CORS/headers
+│   │       ├── routes/         # auth, users, charts, oauth, admin_invites
+│   │       ├── durable_objects/# SessionDO, AIMutexDO
+│   │       └── services/       # billing, birth_hash (incl. generation_tags), engine, ai/prompts, generation, etc.
+│   └── web/                    # ft-web (Leptos CSR, generation.rs synced with api)
+│       ├── src/
+│       │   ├── lib.rs          # App + Protected guard
+│       │   ├── api.rs          # gloo-net client
+│       │   ├── pages/          # Home, Login, Profile, Divination, Story
+│       │   ├── components/     # BirthDataForm, PalaceGrid, etc.
+│       │   └── generation.rs   # 1930s-2020s stories (synced)
+│       ├── scripts/gen-stars.js
+│       ├── galaxy.js
+│       └── dist/               # build output
 └── docs/
-    ├── audit/                  # ✅ Phase -1 complete
-    └── phase0/                 # ✅ Phase 0 complete (GO)
+    ├── audit/ / phase0/        # Historical
+    ├── phase5-summary.md
+    ├── monitoring-setup.md
+    └── rollback-procedures.md
 ```
+
+No `backend/` / `frontend/` — removed in `98d3521 chore: Phase D cleanup`. `crates/*/build/` and `crates/web/dist/` are ignored build outputs; `galaxy.js` / `gen-stars.js` are current (not legacy).
 
 ---
 
@@ -201,115 +166,70 @@ Phase 1:  Foundation          Week 4-6    ✅ COMPLETED
 Phase 2:  Core Features       Week 7-11   ✅ COMPLETED
 Phase 3:  Frontend            Week 12-15  ✅ COMPLETED
 Phase 4:  Integration/Test    Week 16-18  ✅ COMPLETED
-Phase 5:  Pre-Migration       Week 19-20  ← NEXT
-Phase 6:  Go-Live             Week 21
-Stabilization                 Week 22-25
-Phase 7:  Storytelling        Week 26-33
+Phase 5:  Pre-Migration       Week 19-20  ✅ COMPLETED
+Phase 6:  Go-Live             Week 21     ✅ LIVE (Beta Testing)
+Phase 7:  Storytelling        Week 26-33  ← P0/P1 generation chain live (2026-09)
 ```
 
----
-
-## 🎯 Phase 2 Tasks (Week 7-11)
-
-### Week 7-8: Chart Calculation Engines ✅
-- [x] Port ZiWei calculation engine
-- [x] Port Western zodiac engine
-- [x] Solar-to-lunar conversion
-- [x] Main & auxiliary star placement
-
-### Week 9: AI Integration ✅
-- [x] 3-provider failover: iFlow → Groq → Cerebras
-- [x] iFlow GLM-4.6 (primary, best narrative)
-- [x] Groq kimi-k2-instruct-0905 (secondary, fast)
-- [x] Cerebras llama-3.3-70b (tertiary, stable)
-- [x] AI Mutex DO (serialized requests, failover)
-- [x] exresource tracking (usage, errors, latency, failovers)
-
-### Week 10-11: Billing ✅
-- [x] Trial period (30 days free)
-- [x] `trial_ends_at` field in users table
-- [x] `billing.ts` service (checkUserAccess)
-- [x] `/api/users/me` returns billing status
-- [ ] Native app IAP integration (planned - Taiwan-first: LINE Pay / 台灣支付優先, then Apple/Google store billing)
-- [ ] Web payments (deferred - Stripe only for international, behind Taiwan local methods)
-
-### Week 12-15: Frontend ✅
-- [x] Vite + React + TypeScript setup
-- [x] Passwordless auth (email-only, sessionId)
-- [x] API client with session management
-- [x] Auth context & protected routes
-- [x] Pages: Home, Login, Profile, Chart
-- [x] Chart creation form (ZiWei/Western)
-- [x] AI interpretation UI
-- [x] Mobile responsive design
-- [x] Build: 179KB (57KB gzipped)
+Recent: 2026-09 rename `我的命盤→我的命格`, Wuxing+BaZi, personality merged, 4×4 palace, generation tags as selectable birth attribute, story prompt thickened.
 
 ---
 
 ## 💻 Development Commands
 
-### Backend
+### Workspace (Cargo)
 ```bash
-cd backend
-npm run dev                   # Local dev (localhost:8787)
-npm run typecheck             # TypeScript check
-npm test                      # Safe: Does nothing (prevents accidental API calls)
-npm run test:integration      # Run integration tests (calls production API)
-
-# Deploy (IMPORTANT: Always use OAuth, not API token)
-unset CLOUDFLARE_API_TOKEN    # Must unset token first
-npx wrangler deploy           # Will prompt for OAuth login
-
-# Secrets management
-npx wrangler secret put IFLOW_API_KEY
-npx wrangler secret put GROQ_API_KEY
-npx wrangler secret put CEREBRAS_API_KEY
-
-# Database
-turso db shell fortunet < scripts/schema.sql  # Apply schema to Turso
-turso db shell fortunet < scripts/schema.sql  # 或本地 turso dev
+cargo build -p ft-api -p ft-worker -p ft-web   # add --target wasm32-unknown-unknown for worker/web
+cargo check -p ft-api --target wasm32-unknown-unknown
+cargo fmt --all                                # CI gates on --check
+cargo clippy --target wasm32-unknown-unknown   # report-only
+cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api  # native only, no wasm runner
+# Do NOT assume cargo test --target wasm32-unknown-unknown works (js_sys::Date panics outside wasm)
 ```
 
-**⚠️ Deployment Rule**: Always `unset CLOUDFLARE_API_TOKEN` before deploying. Wrangler should use OAuth authentication, not API tokens, to avoid permission issues.
+### Backend Worker (crates/api) & Engine Worker (crates/worker)
+```bash
+cd crates/api && worker-build --release && wrangler deploy   # OAuth only, unset token first
+./scripts/deploy-engine.sh                                   # same
 
-### CI/CD Setup (GitHub)
-Required secrets:
-- `CLOUDFLARE_API_TOKEN` - API token with Workers/R2 permissions
-- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+# Frontend (Leptos CSR)
+./scripts/deploy-web.sh                                      # build-web.sh + pages deploy
+cd crates/web && ./scripts/build-web.sh                      # build only (cargo + wasm-bindgen, no trunk)
+
+# Verify
+./scripts/verify-deployment.sh
+
+# Database (single source of truth: scripts/schema.sql)
+turso db shell fortunet < scripts/schema.sql
+turso db shell fortunet "ALTER TABLE users ADD COLUMN generation_tags TEXT"  # idempotent, ignore duplicate column
+gwebcdb-mint turso --tier write --db fortunet --export        # group token (covers every DB)
+armo price / armo mint / ...                                  # Turso/gwebcdb toolset
+```
+
+**Deploy rule**: `unset CLOUDFLARE_API_TOKEN && wrangler ...`, prefer `wrangler whoami` first. CI does not deploy (OAuth only). One-person project, all work on `main`.
 
 ---
 
 ## 📝 Coding Standards
 
-- **TypeScript**: Strict mode enabled
-- **Files**: `kebab-case.ts`
-- **Variables**: `camelCase`
-- **Constants**: `UPPER_SNAKE_CASE`
-- **Indentation**: 2 spaces
-- **Quotes**: Single quotes
-- **Semicolons**: Required
+- **Rust**, 2-space indent, `snake_case` (wire keys `camelCase` via `serde(rename)`)
+- `cargo fmt --all --check` is gating in CI; `clippy` is report-only — prefer not to add warnings
+- Schema DTO field names are **semantic**: storage keys and wire keys must not be renamed (`crates/schema` is single source)
+- Engine versions authoritative in `crates/api/src/services/engine_version.rs` (`ENGINE_VERSION_ZIWEI="3.0.0"`, `ENGINE_VERSION_WESTERN="4.0.0"`, `CHART_SCHEMA_VERSION=3`)
 
 ### Testing Philosophy
-- **Integration tests only** - No unit tests, no mocks, no placeholders
-- **Real APIs** - Tests must call actual deployed services
-- **Real data** - No fake data or stubs
-- **Real environment** - Test against production or staging only
-- **Rule**: If you can't test it with real integration, don't write the test
+- `cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api` — native only; `ft-worker`/`ft-web` validated via `verify-deployment.sh` + deployed Pages
+- Integration over mocks; no default data/hardcoding
 
 ---
 
-**Current Usage** (Phase 2):
-- Workers: ~10 requests/day (testing)
-- Turso: 0.09 MB (libSQL) 
-- DO: Minimal (session + AI mutex)
-- R2: 0 MB / 10 GB limit
-- AI: Free tiers (iFlow/Groq/Cerebras)
+**Current Usage** (2026-09):
+- Workers: ~10 req/day (testing)
+- Turso: libSQL (no D1 cap)
+- DO: session + AI mutex (queue 8 / 60s)
+- AI: free tiers (iFlow/Groq/Cerebras) within $0
 
-**Free Tier Limits**:
-- Workers: 100K requests/day
-- Turso: libSQL (no D1 free-tier DB cap)
-- DO: 400K requests/day
-- R2: 10GB storage
+**Free Tier Limits**: Workers 100K/day, DO 400K/day, R2 10GB, Turso free.
 
 ---
 
@@ -317,12 +237,15 @@ Required secrets:
 
 | Document | Status |
 |----------|--------|
-| [MASTER_PLAN.md](./MASTER_PLAN.md) | ⭐ Primary reference |
-| [docs/phase0/d1_compatibility_report.md](./docs/phase0/d1_compatibility_report.md) | ✅ 100% Pass |
-| [docs/phase0/go_no_go_decision.md](./docs/phase0/go_no_go_decision.md) | ✅ GO |
+| [CLAUDE.md](./CLAUDE.md) | ⭐ Authoritative |
+| [README.md](./README.md) | ✅ Synced 2026-09-02 |
+| [MASTER_PLAN.md](./MASTER_PLAN.md) | ⚠️ Historical TS plan, superseded 98d3521 |
+| [STORYTELLING_ROADMAP.md](./STORYTELLING_ROADMAP.md) | Storytelling roadmap |
+| [docs/monitoring-setup.md](./docs/monitoring-setup.md) | Monitoring & alerts |
+| [docs/rollback-procedures.md](./docs/rollback-procedures.md) | Emergency procedures |
 
 ---
 
-**Last Updated**: 2025-12-04
+**Last Updated**: 2026-09-02
 **API URL**: https://fortunet-api.yanggf.workers.dev
-**Frontend Build**: 179KB (57KB gzipped)
+**Workspace**: Cargo (`ft-api` / `ft-worker` / `ft-web` / `ft-schema` / `ft-ziwei` / `ft-western` / `ft-big5`)
