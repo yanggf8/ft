@@ -26,6 +26,8 @@ struct UserRow {
     created_at: Option<String>,
     #[serde(default)]
     role: Option<String>,
+    #[serde(default)]
+    generation_tags: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -82,7 +84,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             let u = db::text(&user);
             let row: Option<UserRow> = match db::first(
                 &db,
-                "SELECT id, email, full_name, avatar_url, birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, subscription_tier, trial_ends_at, created_at, role FROM users WHERE id = ?1",
+                "SELECT id, email, full_name, avatar_url, birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, subscription_tier, trial_ends_at, created_at, role, generation_tags FROM users WHERE id = ?1",
                 &[&u],
             ).await {
                 Ok(r) => r,
@@ -125,7 +127,8 @@ pub fn register(router: R<'static>) -> R<'static> {
                     "id": row.id, "email": row.email, "full_name": row.full_name, "avatar_url": row.avatar_url,
                     "birth_year": row.birth_year, "birth_month": row.birth_month, "birth_day": row.birth_day,
                     "birth_hour": row.birth_hour, "birth_minute": row.birth_minute, "gender": row.gender,
-                    "timezone": row.timezone, "subscription_tier": tier, "trial_ends_at": trial_ends_at,
+                    "timezone": row.timezone, "generation_tags": row.generation_tags.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()).unwrap_or(serde_json::Value::Null),
+                    "subscription_tier": tier, "trial_ends_at": trial_ends_at,
                     "created_at": row.created_at, "billing": billing_info, "hasBirthData": has_birth_data,
                     "isAdmin": is_admin,
                 }),
@@ -188,6 +191,8 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
             let timezone = body.timezone.clone().unwrap_or_else(|| "Asia/Taipei".to_string());
+            let gen_tags = body.generation_tags.as_ref().map(|v| serde_json::to_string(v).unwrap_or_else(|_| "[]".into()));
+            let gen_t = db::opt_text(gen_tags.as_deref());
             let by_t = db::opt_int(body.birth_year);
             let bm_t = db::opt_int(body.birth_month);
             let bd_t = db::opt_int(body.birth_day);
@@ -201,8 +206,8 @@ pub fn register(router: R<'static>) -> R<'static> {
             let u_t = db::text(&user);
             if let Err(e) = db::exec(
                 &db,
-                "UPDATE users SET birth_year = ?1, birth_month = ?2, birth_day = ?3, birth_hour = ?4, birth_minute = ?5, gender = ?6, timezone = ?7, latitude = ?8, longitude = ?9, birth_data_hash = ?10, updated_at = datetime('now') WHERE id = ?11",
-                &[&by_t, &bm_t, &bd_t, &bh_t, &bmi_t, &g_t, &tz_t, &lat_t, &lon_t, &h_t, &u_t],
+                "UPDATE users SET birth_year = ?1, birth_month = ?2, birth_day = ?3, birth_hour = ?4, birth_minute = ?5, gender = ?6, timezone = ?7, latitude = ?8, longitude = ?9, birth_data_hash = ?10, generation_tags = ?11, updated_at = datetime('now') WHERE id = ?12",
+                &[&by_t, &bm_t, &bd_t, &bh_t, &bmi_t, &g_t, &tz_t, &lat_t, &lon_t, &h_t, &gen_t, &u_t],
             ).await {
                 return Ok(error::error(format!("db error: {}", e), 500));
             }

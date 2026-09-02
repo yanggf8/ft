@@ -73,6 +73,8 @@ pub struct UserProfile {
     #[serde(default)]
     pub timezone: Option<String>,
     #[serde(default)]
+    pub generation_tags: Option<Vec<String>>,
+    #[serde(default)]
     pub subscription_tier: Option<String>,
     #[serde(default)]
     pub trial_ends_at: Option<String>,
@@ -121,6 +123,8 @@ pub struct BirthDataRequest {
     pub latitude: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub longitude: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation_tags: Option<Vec<String>>,
 }
 
 /// `PUT /api/users/me/birth` (200).

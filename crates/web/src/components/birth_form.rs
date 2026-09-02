@@ -25,8 +25,31 @@ pub fn BirthDataForm(
             .and_then(|u| u.gender.clone())
             .unwrap_or_default(),
     );
+    let generation_tags = RwSignal::new(
+        initial
+            .as_ref()
+            .and_then(|u| u.generation_tags.clone())
+            .unwrap_or_default(),
+    );
     let saving = RwSignal::new(false);
     let error = RwSignal::new(String::new());
+
+    // Generation tags: default from birth_year, user can toggle
+    let all_gens = ["1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s"];
+    let default_gen = move || {
+        let y = year.get();
+        let d = (y / 10) * 10;
+        format!("{}s", d)
+    };
+    // Initialize with existing tags or default
+    Effect::new(move |_| {
+        if generation_tags.get().is_empty() {
+            let d = default_gen();
+            if all_gens.contains(&d.as_str()) {
+                generation_tags.set(vec![d]);
+            }
+        }
+    });
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -34,6 +57,10 @@ pub fn BirthDataForm(
         saving.set(true);
         spawn_local(async move {
             let g = gender.get_untracked();
+            let tags = {
+                let t = generation_tags.get_untracked();
+                if t.is_empty() { None } else { Some(t) }
+            };
             let body = BirthDataRequest {
                 birth_year: year.get_untracked(),
                 birth_month: month.get_untracked(),
@@ -44,6 +71,7 @@ pub fn BirthDataForm(
                     Some(hour.get_untracked())
                 },
                 gender: if g.is_empty() { None } else { Some(g) },
+                generation_tags: tags,
                 ..Default::default()
             };
             match api::update_birth_data(&body).await {
@@ -123,6 +151,47 @@ pub fn BirthDataForm(
                     <option value="male">"男"</option>
                     <option value="female">"女"</option>
                 </select>
+            </div>
+
+            <div>
+                <label class="form-label">"世代標籤"</label>
+                <p style="font-size:0.75rem;color:var(--silver-dim);margin-bottom:0.4rem">
+                    "依出生年預設，可自選多個；未來重疊時將合寫成一段世代故事"
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.35rem">
+                    {all_gens.iter().map(|tag| {
+                        let tag_str = tag.to_string();
+                        let tag_clone = tag_str.clone();
+                        view! {
+                            <button
+                                type="button"
+                                class="tag-chip"
+                                style=move || {
+                                    let selected = generation_tags.get().contains(&tag_str);
+                                    if selected {
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid #a78bfa;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;cursor:pointer"
+                                    } else {
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--silver-dim);cursor:pointer"
+                                    }
+                                }
+                                on:click=move |_| {
+                                    let mut tags = generation_tags.get();
+                                    if tags.contains(&tag_clone) {
+                                        tags.retain(|t| t != &tag_clone);
+                                        if tags.is_empty() {
+                                            tags.push(default_gen());
+                                        }
+                                    } else {
+                                        tags.push(tag_clone.clone());
+                                    }
+                                    generation_tags.set(tags);
+                                }
+                            >
+                                {*tag}
+                            </button>
+                        }
+                    }).collect_view()}
+                </div>
             </div>
 
             <Show when=move || !error.get().is_empty()>

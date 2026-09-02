@@ -39,3 +39,35 @@ pub fn generation_story(birth_year: i64) -> Option<(&'static str, &'static str)>
         _ => None,
     }
 }
+
+/// Currently no overlap (decades are disjoint), but if tags overlap in future,
+/// combine their stories into one narrative. Preserves order of tags as given.
+pub fn combined_generation_story(tags: &[String]) -> Option<(String, String)> {
+    if tags.is_empty() {
+        return None;
+    }
+    if tags.len() == 1 {
+        let (t, d) = generation_story_for_tag(&tags[0])?;
+        return Some((t.to_string(), d.to_string()));
+    }
+    let mut titles = Vec::new();
+    let mut descs = Vec::new();
+    for tag in tags {
+        if let Some((t, d)) = generation_story_for_tag(tag) {
+            titles.push(t);
+            descs.push(d);
+        }
+    }
+    if titles.is_empty() {
+        return None;
+    }
+    let title = titles.join(" × ");
+    let desc = descs.join("；");
+    Some((title, format!("跨世代合寫：{desc}")))
+}
+
+fn generation_story_for_tag(tag: &str) -> Option<(&'static str, &'static str)> {
+    // tag like "1960s"
+    let year: i64 = tag.trim_end_matches('s').parse().ok()?;
+    generation_story(year)
+}

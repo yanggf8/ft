@@ -94,8 +94,19 @@ fn BirthCard(
                     let has = auth.user.get().map(|u| u.hasBirthData).unwrap_or(false);
                     if has {
                         let text: String = auth.user.get().and_then(|u| u.birth_summary()).unwrap_or_default();
-                        let year = auth.user.get().and_then(|u| u.birth_year).unwrap_or(0);
-                        let gen = crate::generation::generation_story(year);
+                        let gen = {
+                            let tags = auth.user.get().and_then(|u| u.generation_tags.clone()).unwrap_or_default();
+                            if tags.len() > 1 {
+                                crate::generation::combined_generation_story(&tags)
+                                    .map(|(t,d)| (t, d))
+                            } else if tags.len() == 1 {
+                                crate::generation::combined_generation_story(&tags)
+                                    .map(|(t,d)| (t, d))
+                            } else {
+                                let year = auth.user.get().and_then(|u| u.birth_year).unwrap_or(0);
+                                crate::generation::generation_story(year).map(|(t,d)| (t.to_string(), d.to_string()))
+                            }
+                        };
                         view! {
                             <div style="display:grid;gap:0.75rem">
                                 <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p>
