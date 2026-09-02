@@ -1,5 +1,8 @@
 # 🚀 FortuneT V2 - Master Migration Plan (Consolidated)
 
+> [!CAUTION]
+> Historical TypeScript plan — superseded by 98d3521 (Rust workspace: crates/schema/domain/worker/api/web). For current architecture, see CLAUDE.md and README.md. This document is retained for audit only.
+
 **Version**: 3.0 (Revised December 2025) — *Historical: D1 references below are the original plan; production is now Turso (libSQL) — see `CLAUDE.md`.*
 **Timeline**: 24 weeks core + 8 weeks storytelling (32 weeks total)
 **Status**: Phase 5 Complete - Ready for Beta Testing
@@ -256,27 +259,9 @@ function makeDecision(criteria: GoNoGoDecision): 'GO' | 'NO-GO' | 'GO-WITH-MITIG
 
 ### Week 4: Repository & Cloudflare Setup
 
-```bash
-# 1. Create new repository
-mkdir fortune-teller-v2 && cd fortune-teller-v2
-git init
+> Superseded: Rust implementation in `crates/api`, `crates/worker`, `crates/web`, `crates/schema` — see `CLAUDE.md` Architecture. Original `backend/`/`frontend/` npm scaffolding removed to avoid confusion.
 
-# 2. Setup structure
-mkdir -p backend/src/{routes,services,durable-objects,middleware}
-mkdir -p backend/scripts
-mkdir -p frontend/src/{components,pages,services,hooks,types}
-mkdir -p shared/types
-mkdir -p docs/{audit,phase0,architecture}
-
-# 3. Initialize packages
-cd backend && npm init -y
-npm install hono @cloudflare/workers-types
-npm install -D wrangler vitest typescript
-
-cd ../frontend && npm init -y
-npm install react react-dom react-router-dom zustand
-npm install -D vite @vitejs/plugin-react typescript
-```
+*Original plan created `backend/src/{routes,services,durable-objects,middleware}` via `mkdir -p` and ran `npm init` / `npm install hono @cloudflare/workers-types` (backend) and `npm install react react-dom react-router-dom` (frontend). → 已由 `crates/api/src/{routes,services,durable_objects}` (workers-rs) / `crates/web` (Leptos CSR) / `crates/schema` 取代。*
 
 #### Backend Setup: `backend/wrangler.toml`
 ```toml
@@ -306,39 +291,10 @@ ENVIRONMENT = "development"
 ```
 
 #### Backend Entry: `backend/src/index.ts`
-```typescript
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 
-type Bindings = {
-  DB: D1Database;
-  SESSION_DO: DurableObjectNamespace;
-  CACHE_DO: DurableObjectNamespace;
-  STORAGE: R2Bucket;
-  GROQ_API_KEY: string;
-  STRIPE_SECRET_KEY: string;
-  JWT_SECRET: string;
-};
+> Superseded: Rust implementation in `crates/api/src/lib.rs` (workers-rs `#[event(fetch)]`, CORS exact-hostname allowlist, security headers).
 
-const app = new Hono<{ Bindings: Bindings }>();
-
-// Middleware
-app.use('*', cors());
-
-// Health check
-app.get('/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
-
-// Routes will be added in Phase 2
-// app.route('/api/auth', authRoutes);
-// app.route('/api/charts', chartRoutes);
-// app.route('/api/ai', aiRoutes);
-
-export default app;
-
-// Durable Objects exports
-export { SessionDO } from './durable-objects/session-do';
-export { CacheDO } from './durable-objects/cache-do';
-```
+*Original Hono `new Hono<{ Bindings }>()` + `app.use(cors())` + `/health` 範例已刪除 → 已由 `crates/api/src/lib.rs` 取代。*
 
 ### Week 5: Database Schema & Migrations
 
@@ -403,57 +359,10 @@ CREATE INDEX idx_subscriptions_provider_ref ON subscriptions(provider, original_
 ### Week 6: Authentication System
 
 #### Session Durable Object: `backend/src/durable-objects/session-do.ts`
-```typescript
-export class SessionDO implements DurableObject {
-  private state: DurableObjectState;
-  
-  constructor(state: DurableObjectState) {
-    this.state = state;
-  }
 
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    
-    switch (url.pathname) {
-      case '/create':
-        return this.createSession(request);
-      case '/get':
-        return this.getSession();
-      case '/destroy':
-        return this.destroySession();
-      default:
-        return new Response('Not found', { status: 404 });
-    }
-  }
+> Superseded: Rust implementation in `crates/api/src/durable_objects/session.rs` (`SessionDO`, key `"session"`, 7-day TTL, expired-cleanup on `get`/`refresh`).
 
-  private async createSession(request: Request): Promise<Response> {
-    const { userId, email } = await request.json();
-    const session = {
-      userId,
-      email,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    };
-    await this.state.storage.put('session', session);
-    return Response.json(session);
-  }
-
-  private async getSession(): Promise<Response> {
-    const session = await this.state.storage.get('session');
-    if (!session) return new Response('No session', { status: 401 });
-    if (session.expiresAt < Date.now()) {
-      await this.state.storage.delete('session');
-      return new Response('Session expired', { status: 401 });
-    }
-    return Response.json(session);
-  }
-
-  private async destroySession(): Promise<Response> {
-    await this.state.storage.delete('session');
-    return Response.json({ success: true });
-  }
-}
-```
+*Original TypeScript `SessionDO` (`/create`/`/get`/`/destroy` + `expiresAt = Date.now() + 7d`) 已刪除 → 已由 `crates/api/src/durable_objects/session.rs` 取代。*
 
 ### Phase 1 Exit Criteria
 - [ ] Repository structure created
@@ -472,26 +381,17 @@ export class SessionDO implements DurableObject {
 
 ### Week 7-8: Chart Calculation Engines
 
-#### Zi Wei Engine: `backend/src/services/ziwei/calculator.ts` ✅
-**Status**: Implemented (Phase 2, Week 7-8)
+#### Zi Wei Engine: `backend/src/services/ziwei/calculator.ts`
 
-**Actual Implementation**:
-- `ZiWeiCalculator` class with full solar-to-lunar conversion
-- Four pillars, life/body palace calculation
-- 14 main stars + auxiliary star placement
-- Five element determination
+> Superseded: Rust implementation in `crates/domain/ziwei` (wraps `x-iztro`) + `crates/worker` (`/engine/ziwei`) + `crates/api/src/services/engine.rs`.
 
-See: `backend/src/services/ziwei/calculator.ts`, `lunar.ts`, `constants.ts`
+*Original `ZiWeiCalculator` / `lunar.ts` / `constants.ts` 已刪除 → 已由 `crates/domain/ziwei` 取代。*
 
-#### Western Zodiac Engine: `backend/src/services/western/calculator.ts` ✅
-**Status**: Implemented (Phase 2, Week 7-8)
+#### Western Zodiac Engine: `backend/src/services/western/calculator.ts`
 
-**Actual Implementation**:
-- `WesternCalculator` class
-- Sun sign, approximate moon sign (±2 signs)
-- Basic planetary positions
+> Superseded: Rust implementation in `crates/domain/western` (hybrid `solar-ephemeris` + `vsop87`) + `crates/worker` (`/engine/western`).
 
-See: `backend/src/services/western/calculator.ts`
+*Original `WesternCalculator` (approximate moon ±2 signs) 已刪除 → 已由 `crates/domain/western` 取代。*
 
 ### Week 9: AI Integration ✅
 
@@ -504,9 +404,10 @@ See: `backend/src/services/western/calculator.ts`
 | Tertiary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
 
 #### Implementation: `backend/src/durable-objects/ai-mutex-do.ts`
-- Serialized requests (1 concurrent)
-- Auto failover on provider error
-- exresource tracking per provider/day
+
+> Superseded: Rust implementation in `crates/api/src/durable_objects/ai_mutex.rs` (`AIMutexDO`, `queue`+`oneshot` serialisation, `MAX_QUEUE_DEPTH=8`, 3-provider failover `iFlow → Groq → Cerebras`).
+
+*Original `ai-mutex-do.ts` (1 concurrent + exresource tracking) 已刪除 → 已由 `crates/api/src/durable_objects/ai_mutex.rs` / `crates/api/src/services/ai/` 取代。*
 
 #### Endpoint
 ```bash
@@ -589,30 +490,10 @@ GET  /api/billing/entitlements
 ### Week 12-13: Core Application ✅
 
 #### App Entry: `frontend/src/App.tsx`
-```tsx
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { HomePage } from './pages/HomePage';
-import { ChartPage } from './pages/ChartPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { LoginPage } from './pages/LoginPage';
 
-export function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/chart/:id" element={<ProtectedRoute><ChartPage /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
-}
-```
+> Superseded: Rust implementation in `crates/web/src/lib.rs` (`#[component] App`, `wasm_bindgen(start)` mount, `Protected` guard) + `crates/web/src/api.rs`.
+
+*Original React `App.tsx` (`BrowserRouter`/`AuthProvider`/`ProtectedRoute`) 已刪除 → 已由 `crates/web/src/lib.rs` (Leptos CSR) 取代。*
 
 ### Week 14-15: Features & Polish ✅
 
@@ -874,5 +755,6 @@ const COST_ALERTS = {
 ---
 
 **Document Version**: 3.0
-**Last Updated**: 2026-03-10
+**Last Updated**: 2026-09-02
+**Superseded**: 2026-09-02 — Historical TypeScript plan superseded by 98d3521; retained for audit only.
 **Next Action**: Plan native app IAP implementation
