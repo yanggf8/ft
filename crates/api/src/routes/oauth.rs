@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use worker::wasm_bindgen::JsValue;
 use worker::{Fetch, Headers, Method, Request, RequestInit, Response, Result, RouteContext};
 
@@ -10,10 +10,10 @@ use crate::services::billing;
 use crate::services::clock;
 use crate::services::db;
 use crate::services::oauth::{
-    CallbackAction, GOOGLE_CALLBACK_PATH, GOOGLE_TOKEN_URL, GOOGLE_USERINFO_URL, GoogleProfile,
-    STATE_COOKIE_NAME, evaluate_callback, failure_redirect_url, google_consent_url,
-    parse_google_userinfo, random_oauth_state, read_cookie, state_clear_cookie, state_set_cookie,
-    token_exchange_body,
+    evaluate_callback, failure_redirect_url, google_consent_url, parse_google_userinfo,
+    random_oauth_state, read_cookie, state_clear_cookie, state_set_cookie, token_exchange_body,
+    CallbackAction, GoogleProfile, GOOGLE_CALLBACK_PATH, GOOGLE_TOKEN_URL, GOOGLE_USERINFO_URL,
+    STATE_COOKIE_NAME,
 };
 use crate::services::uuid;
 
@@ -37,7 +37,8 @@ fn secret_var(ctx: &RouteContext<()>, name: &str) -> Option<String> {
 }
 
 fn google_config(ctx: &RouteContext<()>) -> Option<(String, String)> {
-    let client_id = env_var(ctx, "GOOGLE_CLIENT_ID").or_else(|| secret_var(ctx, "GOOGLE_CLIENT_ID"))?;
+    let client_id =
+        env_var(ctx, "GOOGLE_CLIENT_ID").or_else(|| secret_var(ctx, "GOOGLE_CLIENT_ID"))?;
     let client_secret =
         secret_var(ctx, "GOOGLE_CLIENT_SECRET").or_else(|| env_var(ctx, "GOOGLE_CLIENT_SECRET"))?;
     Some((client_id, client_secret))
@@ -128,7 +129,8 @@ async fn google_callback(ctx: &RouteContext<()>, req: &Request) -> Result<Respon
     let cookie_state = read_cookie(&cookie_header, STATE_COOKIE_NAME).map(str::to_owned);
 
     let url_str = req.url().map(|u| u.to_string()).unwrap_or_default();
-    let url_parsed = url::Url::parse(&url_str).unwrap_or_else(|_| url::Url::parse("http://localhost/").unwrap());
+    let url_parsed =
+        url::Url::parse(&url_str).unwrap_or_else(|_| url::Url::parse("http://localhost/").unwrap());
     let mut query: HashMap<String, String> = HashMap::new();
     for (k, v) in url_parsed.query_pairs() {
         query.insert(k.to_string(), v.to_string());
@@ -165,7 +167,10 @@ async fn google_callback(ctx: &RouteContext<()>, req: &Request) -> Result<Respon
         return failure_redirect(&origin, "oauth_error");
     };
     let Some(user) = upsert_google_user(ctx, &profile).await else {
-        worker::console_log!("oauth/callback: upsert_google_user failed for {}", profile.email);
+        worker::console_log!(
+            "oauth/callback: upsert_google_user failed for {}",
+            profile.email
+        );
         return failure_redirect(&origin, "oauth_error");
     };
     let Some(session_id) = create_session(ctx, &user.id, &user.email).await else {
@@ -227,15 +232,16 @@ struct UserRow {
     email: String,
 }
 
-async fn upsert_google_user(
-    ctx: &RouteContext<()>,
-    profile: &GoogleProfile,
-) -> Option<UserRow> {
+async fn upsert_google_user(ctx: &RouteContext<()>, profile: &GoogleProfile) -> Option<UserRow> {
     let db = db::Turso::from_env(&ctx.env).ok()?;
     let email = db::text(&profile.email);
-    let existing: Option<UserRow> = db::first(&db, "SELECT id, email FROM users WHERE email = ?1", &[&email])
-        .await
-        .ok()?;
+    let existing: Option<UserRow> = db::first(
+        &db,
+        "SELECT id, email FROM users WHERE email = ?1",
+        &[&email],
+    )
+    .await
+    .ok()?;
 
     if let Some(existing) = existing {
         if let Some(picture) = &profile.picture {
@@ -279,11 +285,7 @@ async fn upsert_google_user(
     })
 }
 
-async fn create_session(
-    ctx: &RouteContext<()>,
-    user_id: &str,
-    email: &str,
-) -> Option<String> {
+async fn create_session(ctx: &RouteContext<()>, user_id: &str, email: &str) -> Option<String> {
     let session_id = uuid::random_uuid();
     let ns = ctx.env.durable_object("SESSION_DO").ok()?;
     let stub = ns.id_from_name(&session_id).ok()?.get_stub().ok()?;

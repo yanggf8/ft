@@ -18,7 +18,9 @@ pub fn ZiWeiPalaceGrid(palaces: Vec<ZiWeiPalaceV3>) -> impl IntoView {
     // Traditional 4x4 layout, center 2x2 empty. Map branch to grid position.
     // Order: 寅(0,3) 卯(0,2) 辰(0,1) 巳(0,0) 午(1,0) 未(2,0) 申(3,0) 酉(3,1) 戌(3,2) 亥(3,3) 子(2,3) 丑(1,3)
     // For CSS grid 4x4, positions 5,6,9,10 are center.
-    let order = ["巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑", "寅", "卯", "辰"];
+    let order = [
+        "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑", "寅", "卯", "辰",
+    ];
     let mut sorted: Vec<Option<ZiWeiPalaceV3>> = vec![None; 12];
     for p in palaces {
         if let Some(idx) = order.iter().position(|b| *b == p.branch) {

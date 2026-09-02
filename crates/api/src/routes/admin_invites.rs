@@ -28,9 +28,10 @@ async fn require_admin(ctx: &RouteContext<()>, req: &Request) -> Result<String, 
     let user_id = auth_user(req, ctx).await?;
     let db = db::Turso::from_env(&ctx.env).map_err(|_| error::error("db unavailable", 500))?;
     let uid = db::text(&user_id);
-    let row: Option<EmailRow> = db::first(&db, "SELECT email, role FROM users WHERE id = ?1", &[&uid])
-        .await
-        .map_err(|_| error::error("db error", 500))?;
+    let row: Option<EmailRow> =
+        db::first(&db, "SELECT email, role FROM users WHERE id = ?1", &[&uid])
+            .await
+            .map_err(|_| error::error("db error", 500))?;
     let (email, role) = match row {
         Some(r) => (r.email, r.role.unwrap_or_default()),
         None => return Err(error::error("Forbidden", 403)),

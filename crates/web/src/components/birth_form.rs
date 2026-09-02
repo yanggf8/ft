@@ -35,7 +35,9 @@ pub fn BirthDataForm(
     let error = RwSignal::new(String::new());
 
     // Generation tags: default from birth_year, user can toggle
-    let all_gens = ["1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s"];
+    let all_gens = [
+        "1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s",
+    ];
     let default_gen = move || {
         let y = year.get();
         let d = (y / 10) * 10;
@@ -59,7 +61,11 @@ pub fn BirthDataForm(
             let g = gender.get_untracked();
             let tags = {
                 let t = generation_tags.get_untracked();
-                if t.is_empty() { None } else { Some(t) }
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(t)
+                }
             };
             let body = BirthDataRequest {
                 birth_year: year.get_untracked(),
