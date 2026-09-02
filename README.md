@@ -90,8 +90,6 @@ Always `unset CLOUDFLARE_API_TOKEN` before `wrangler` — use OAuth (`wrangler w
 | **[CLAUDE.md](./CLAUDE.md)** | Workspace, routes, DOs, services, engine versions |
 | **[AGENTS.md](./AGENTS.md)** | Dev guide & critical rules |
 | **[MASTER_PLAN.md](./MASTER_PLAN.md)** | Migration timeline & phases |
-| [DEPLOY_FRONTEND.md](./DEPLOY_FRONTEND.md) | Deployment instructions |
-| [FRONTEND_FIXES.md](./FRONTEND_FIXES.md) | API contract fixes |
 | [docs/phase5-summary.md](./docs/phase5-summary.md) | Phase 5 deliverables |
 | [docs/monitoring-setup.md](./docs/monitoring-setup.md) | Monitoring & alerts |
 | [docs/rollback-procedures.md](./docs/rollback-procedures.md) | Emergency procedures |
