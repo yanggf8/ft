@@ -151,6 +151,33 @@ impl AIMutexDO {
         };
         let interpret = body.interpretRequest;
         let today = clock::today_utc();
+        // ── P2 telemetry: generation tags context for story (no behavior change) ──
+        let ai_tags_len = interpret
+            .chartData
+            .get("generation_tags")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        let ai_has_generation_story = if ai_tags_len == 0 {
+            false
+        } else if let Some(arr) = interpret
+            .chartData
+            .get("generation_stories")
+            .and_then(|v| v.as_array())
+        {
+            !arr.is_empty()
+        } else {
+            interpret
+                .chartData
+                .get("generation_tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .any(|t| crate::services::generation::generation_story_for_tag(t).is_some())
+                })
+                .unwrap_or(false)
+        };
         let mut last_error: Option<(String, String, String)> = None;
         let mut failover_count = 0u32;
 
@@ -192,6 +219,17 @@ impl AIMutexDO {
                 Ok(result) => {
                     let latency = clock::now_ms() - start;
                     let tokens = result.tokens_used.unwrap_or(0.0);
+                    // P2 telemetry: generation hit + story length + stub flag
+                    worker::console_log!(
+                        "metric: ai_chart_type={} provider={} ai_is_stub=false ai_generation_tags_len={} ai_has_generation_story={} ai_story_chars={} failovers={} latency_ms={}",
+                        interpret.chartType,
+                        name,
+                        ai_tags_len,
+                        ai_has_generation_story,
+                        result.interpretation.chars().count(),
+                        failover_count,
+                        latency as u64
+                    );
                     self.record(
                         RecordCtx {
                             provider: name.to_string(),
@@ -223,6 +261,14 @@ impl AIMutexDO {
         let stub = format!(
             "【{}】此為本地備用解讀（AI 服務暫時不可用，已自動切換為離線模板，待 AI 恢復後可重新生成）。命盤已正確計算，本次為離線模板的溫和解讀，字數足夠通過測試門檻。",
             interpret.chartType
+        );
+        worker::console_log!(
+            "metric: ai_chart_type={} provider=stub ai_is_stub=true ai_generation_tags_len={} ai_has_generation_story={} ai_story_chars={} failovers={}",
+            interpret.chartType,
+            ai_tags_len,
+            ai_has_generation_story,
+            stub.chars().count(),
+            failover_count
         );
         Response::from_json(&serde_json::json!({
             "interpretation": stub,

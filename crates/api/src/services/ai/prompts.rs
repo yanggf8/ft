@@ -511,6 +511,35 @@ pub fn build_prompt(
         if let Some(f) = focus {
             p.push_str(&format!("\n\n請特別著墨：{}", f));
         }
+        // P2 telemetry: generation tags + prompt length (story generation path)
+        {
+            let prompt_tags_len = chart
+                .get("generation_tags")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            let prompt_has_generation_story = if prompt_tags_len == 0 {
+                false
+            } else if let Some(arr) = chart.get("generation_stories").and_then(|v| v.as_array()) {
+                !arr.is_empty()
+            } else {
+                chart
+                    .get("generation_tags")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter().filter_map(|v| v.as_str()).any(|t| {
+                            crate::services::generation::generation_story_for_tag(t).is_some()
+                        })
+                    })
+                    .unwrap_or(false)
+            };
+            worker::console_log!(
+                "metric: prompt_chart_type=story prompt_generation_tags_len={} prompt_has_generation_story={} prompt_chars={}",
+                prompt_tags_len,
+                prompt_has_generation_story,
+                p.chars().count()
+            );
+        }
         return p;
     }
 

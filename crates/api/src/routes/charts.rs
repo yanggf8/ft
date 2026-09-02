@@ -79,6 +79,12 @@ pub fn register(router: R<'static>) -> R<'static> {
                     row
                 })
                 .collect();
+            // P2 telemetry: list hit/miss + count
+            worker::console_log!(
+                "metric: route=GET /api/charts count={} cache_hit={} fromCache=false",
+                interpretations.len(),
+                !interpretations.is_empty()
+            );
             Ok(ok_json(&serde_json::json!({ "interpretations": interpretations }), 200))
         })
         .get_async("/api/charts/story", |req, ctx| async move {
@@ -125,7 +131,49 @@ pub fn register(router: R<'static>) -> R<'static> {
                 let mut res = ok_json(&serde_json::json!({ "story": ai, "fromCache": true }), 200);
                 let _ = res.headers_mut().set("ETag", &etag);
                 apply_cache_headers(&mut res, 86400, true);
+                {
+                    let tags_len = birth
+                        .generation_tags
+                        .as_deref()
+                        .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                        .map(|v| v.len())
+                        .unwrap_or(0);
+                    let has_generation_story = if tags_len == 0 {
+                        false
+                    } else {
+                        birth
+                            .generation_tags
+                            .as_deref()
+                            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                            .map(|tags| {
+                                tags.iter().any(|t| {
+                                    generation::generation_story_for_tag(t).is_some()
+                                })
+                            })
+                            .unwrap_or(false)
+                    };
+                    let is_stub = ai.contains("離線模板") || ai.contains("offline-template");
+                    worker::console_log!(
+                        "metric: route=GET /api/charts/story cache_hit=true fromCache=true tags_len={} has_generation_story={} is_stub={} ai_story_chars={}",
+                        tags_len,
+                        has_generation_story,
+                        is_stub,
+                        ai.chars().count()
+                    );
+                }
                 return Ok(res);
+            }
+            {
+                let tags_len = birth
+                    .generation_tags
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                    .map(|v| v.len())
+                    .unwrap_or(0);
+                worker::console_log!(
+                    "metric: route=GET /api/charts/story cache_hit=false fromCache=false tags_len={} has_generation_story=false",
+                    tags_len
+                );
             }
             Ok(error::error_code("No story yet. POST /story/generate first", "NO_STORY", 404))
         })
@@ -180,6 +228,26 @@ pub fn register(router: R<'static>) -> R<'static> {
                             if is_story_chart_current(ex.chart_data.as_deref()) {
                                 let mut res = ok_json(&serde_json::json!({ "story": ai, "fromCache": true }), 200);
                                 apply_cache_headers(&mut res, 86400, true);
+                                {
+                                    let tags: Vec<String> = birth
+                                        .generation_tags
+                                        .as_deref()
+                                        .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                                        .unwrap_or_default();
+                                    let tags_len = tags.len();
+                                    let has_generation_story = tags
+                                        .iter()
+                                        .any(|t| generation::generation_story_for_tag(t).is_some());
+                                    let is_stub = ai.contains("離線模板")
+                                        || ai.contains("offline-template");
+                                    worker::console_log!(
+                                        "metric: route=POST /api/charts/story/generate cache_hit=true fromCache=true tags_len={} has_generation_story={} is_stub={} ai_story_chars={}",
+                                        tags_len,
+                                        has_generation_story,
+                                        is_stub,
+                                        ai.chars().count()
+                                    );
+                                }
                                 return Ok(res);
                             }
                         }
@@ -286,6 +354,28 @@ pub fn register(router: R<'static>) -> R<'static> {
                         "story": ai_resp.interpretation, "provider": ai_resp.provider, "model": ai_resp.model, "fromCache": false,
                     }), 200);
                     apply_cache_headers(&mut res, 86400, true);
+                    {
+                        let tags: Vec<String> = birth
+                            .generation_tags
+                            .as_deref()
+                            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                            .unwrap_or_default();
+                        let tags_len = tags.len();
+                        let has_generation_story = tags
+                            .iter()
+                            .any(|t| generation::generation_story_for_tag(t).is_some());
+                        let is_stub = ai_resp.provider == "stub"
+                            || ai_resp.model == "offline-template"
+                            || ai_resp.interpretation.contains("離線模板");
+                        worker::console_log!(
+                            "metric: route=POST /api/charts/story/generate cache_hit=false fromCache=false tags_len={} has_generation_story={} is_stub={} ai_story_chars={} provider={}",
+                            tags_len,
+                            has_generation_story,
+                            is_stub,
+                            ai_resp.interpretation.chars().count(),
+                            ai_resp.provider
+                        );
+                    }
                     Ok(res)
                 }
             }
@@ -347,6 +437,23 @@ pub fn register(router: R<'static>) -> R<'static> {
                     }), 200);
                     let _ = res.headers_mut().set("ETag", &etag);
                     apply_cache_headers(&mut res, 3600, false);
+                    {
+                        let tags: Vec<String> = birth
+                            .generation_tags
+                            .as_deref()
+                            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                            .unwrap_or_default();
+                        let tags_len = tags.len();
+                        let has_generation_story = tags
+                            .iter()
+                            .any(|t| generation::generation_story_for_tag(t).is_some());
+                        worker::console_log!(
+                            "metric: route=GET /api/charts/:type divination_type={} cache_hit=true fromCache=true tags_len={} has_generation_story={}",
+                            div_type,
+                            tags_len,
+                            has_generation_story
+                        );
+                    }
                     return Ok(res);
                 }
             }
@@ -409,6 +516,23 @@ pub fn register(router: R<'static>) -> R<'static> {
             let mut res = ok_json(&response, 200);
             let _ = res.headers_mut().set("ETag", &etag);
             apply_cache_headers(&mut res, 3600, false);
+            {
+                let tags: Vec<String> = birth
+                    .generation_tags
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+                    .unwrap_or_default();
+                let tags_len = tags.len();
+                let has_generation_story = tags
+                    .iter()
+                    .any(|t| generation::generation_story_for_tag(t).is_some());
+                worker::console_log!(
+                    "metric: route=GET /api/charts/:type divination_type={} cache_hit=false fromCache=false tags_len={} has_generation_story={}",
+                    div_type,
+                    tags_len,
+                    has_generation_story
+                );
+            }
             Ok(res)
         })
         .post_async("/api/charts/:type/interpret", {
@@ -472,6 +596,39 @@ pub fn register(router: R<'static>) -> R<'static> {
                         let mut res = ok_json(&serde_json::json!({ "interpretation": ai, "fromCache": true }), 200);
                         let _ = res.headers_mut().set("ETag", &etag);
                         apply_cache_headers(&mut res, 86400, true);
+                        {
+                            let tags_len = parsed
+                                .get("generation_tags")
+                                .and_then(|v| v.as_array())
+                                .map(|a| a.len())
+                                .unwrap_or(0);
+                            let has_generation_story = if tags_len == 0 {
+                                false
+                            } else if let Some(arr) =
+                                parsed.get("generation_stories").and_then(|v| v.as_array())
+                            {
+                                !arr.is_empty()
+                            } else {
+                                parsed
+                                    .get("generation_tags")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| {
+                                        arr.iter().filter_map(|v| v.as_str()).any(|t| {
+                                            generation::generation_story_for_tag(t).is_some()
+                                        })
+                                    })
+                                    .unwrap_or(false)
+                            };
+                            let is_stub = ai.contains("離線模板") || ai.contains("offline-template");
+                            worker::console_log!(
+                                "metric: route=POST /api/charts/:type/interpret divination_type={} cache_hit=true fromCache=true tags_len={} has_generation_story={} is_stub={} ai_story_chars={}",
+                                div_type,
+                                tags_len,
+                                has_generation_story,
+                                is_stub,
+                                ai.chars().count()
+                            );
+                        }
                         return Ok(res);
                     }
                     if !anything_configured(&ctx) {
@@ -492,6 +649,42 @@ pub fn register(router: R<'static>) -> R<'static> {
                         "interpretation": ai_resp.interpretation, "provider": ai_resp.provider, "model": ai_resp.model, "fromCache": false,
                     }), 200);
                     apply_cache_headers(&mut res, 86400, true);
+                    {
+                        let tags_len = chart_data
+                            .get("generation_tags")
+                            .and_then(|v| v.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        let has_generation_story = if tags_len == 0 {
+                            false
+                        } else if let Some(arr) =
+                            chart_data.get("generation_stories").and_then(|v| v.as_array())
+                        {
+                            !arr.is_empty()
+                        } else {
+                            chart_data
+                                .get("generation_tags")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter().filter_map(|v| v.as_str()).any(|t| {
+                                        generation::generation_story_for_tag(t).is_some()
+                                    })
+                                })
+                                .unwrap_or(false)
+                        };
+                        let is_stub = ai_resp.provider == "stub"
+                            || ai_resp.model == "offline-template"
+                            || ai_resp.interpretation.contains("離線模板");
+                        worker::console_log!(
+                            "metric: route=POST /api/charts/:type/interpret divination_type={} cache_hit=false fromCache=false tags_len={} has_generation_story={} is_stub={} ai_story_chars={} provider={}",
+                            div_type,
+                            tags_len,
+                            has_generation_story,
+                            is_stub,
+                            ai_resp.interpretation.chars().count(),
+                            ai_resp.provider
+                        );
+                    }
                     Ok(res)
                 }
             }
