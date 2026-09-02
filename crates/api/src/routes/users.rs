@@ -50,6 +50,8 @@ struct BirthBody {
     latitude: Option<f64>,
     #[serde(default)]
     longitude: Option<f64>,
+    #[serde(default)]
+    generation_tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, serde::Deserialize)]
