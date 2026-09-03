@@ -662,3 +662,37 @@ main { flex: 1; }
   }
   :root { --glass-bg-strong: rgba(12, 14, 22, 0.9); }
 }
+
+/* ── light-surface safety (contrast fix) ──
+   任何白/淺底面板內的文字必須用深墨色，否則會繼承 var(--text)/var(--starlight)
+   的淡色而隱形（如 divination 西洋行星白卡）。掛上 .on-light 即自動翻正，
+   並把鏡面標題的漸層關掉改實色，避免白字在白底上消失。
+   另外提供 .text-frame 給疊在不確定背景上的淡字（加描邊/陰影）備用。 */
+.on-light { color: var(--ink-on-chrome); }
+.on-light h1, .on-light h2, .on-light h3, .on-light h4, .on-light h5, .on-light h6,
+.on-light .palace-head {
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: var(--ink-on-chrome);
+  filter: none;
+  color: var(--ink-on-chrome);
+}
+.on-light .muted { color: var(--text-muted-on-light); }
+.on-light a { color: #1e3a8a; text-decoration-color: rgba(30, 58, 138, 0.35); }
+.on-light a:hover { color: #1e40af; text-decoration-color: #1e40af; }
+/* 淺底上的 star 標籤：覆蓋深色玻璃版的淡字設定 */
+.on-light .star { background: #fff; color: var(--text-muted-on-light); border-color: #e5e7eb; }
+.on-light .star.main { background: #fff; color: #374151; border-color: #e5e7eb; }
+
+/* 字框備用：淡字疊在照片/漸層等不確定底色上時，描邊保底線可讀性 */
+.text-frame {
+  text-shadow:
+    0 1px 2px rgba(16, 20, 31, 0.75),
+    0 0 1px rgba(16, 20, 31, 0.9),
+    0 0 8px rgba(16, 20, 31, 0.45);
+}
+.text-frame--light {
+  -webkit-text-stroke: 0.45px rgba(16, 20, 31, 0.55);
+  paint-order: stroke fill;
+}

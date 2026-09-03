@@ -252,7 +252,7 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
                         let sym = planet_symbol(&p.name);
                         let sign_sym = sign_symbol(&p.sign);
                         let label = format!("{} {} {} {:.1}°", sym, p.name, sign_sym, p.degree);
-                        view! { <span class="star main" style="background:#fff;border:1px solid #fce7f3;border-radius:8px;padding:0.4rem 0.6rem;font-size:0.8rem;display:flex;align-items:center;gap:0.3rem;justify-content:center"><span style="font-size:1rem">{sym}</span>{format!("{} {} {:.1}°", p.name, sign_sym, p.degree)}</span> }
+                        view! { <span class="star main on-light" style="background:#fff;border:1px solid #fce7f3;border-radius:8px;padding:0.4rem 0.6rem;font-size:0.8rem;display:flex;align-items:center;gap:0.3rem;justify-content:center;color:#374151"><span style="font-size:1rem">{sym}</span>{format!("{} {} {:.1}°", p.name, sign_sym, p.degree)}</span> }
                     }).collect_view()}
                 </div>
             </div>
