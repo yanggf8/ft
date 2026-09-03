@@ -380,3 +380,145 @@ pub const ANCHORS: &[Anchor] = &[
         source: Source::DesignerJudgment,
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn every_v1_cell_has_at_least_two() {
+        let mut counts: HashMap<(Domain, TriggerClass), usize> = HashMap::new();
+        for a in ANCHORS {
+            *counts.entry((a.domain, a.trigger)).or_default() += 1;
+        }
+        for domain in [Domain::Work, Domain::Money] {
+            for trigger in [
+                TriggerClass::T1,
+                TriggerClass::T2,
+                TriggerClass::T3,
+                TriggerClass::T4,
+                TriggerClass::T5,
+                TriggerClass::T6,
+            ] {
+                let c = counts.get(&(domain, trigger)).copied().unwrap_or(0);
+                assert!(c >= 2, "cell {:?}/{:?} has {} <2", domain, trigger, c);
+            }
+        }
+        for domain in [Domain::Love, Domain::Family, Domain::Health] {
+            for trigger in [
+                TriggerClass::T1,
+                TriggerClass::T2,
+                TriggerClass::T3,
+                TriggerClass::T4,
+                TriggerClass::T5,
+                TriggerClass::T6,
+            ] {
+                let c = counts.get(&(domain, trigger)).copied().unwrap_or(0);
+                assert_eq!(c, 0, "v1 should have 0 for {:?}/{:?}", domain, trigger);
+            }
+        }
+    }
+
+    #[test]
+    fn priority_unique_and_contiguous_per_cell() {
+        let mut by_cell: HashMap<(Domain, TriggerClass), Vec<u8>> = HashMap::new();
+        for a in ANCHORS {
+            by_cell
+                .entry((a.domain, a.trigger))
+                .or_default()
+                .push(a.priority);
+        }
+        for ((d, t), mut ps) in by_cell {
+            ps.sort_unstable();
+            let mut seen = HashSet::new();
+            for &p in &ps {
+                assert!(
+                    seen.insert(p),
+                    "duplicate priority {} in {:?}/{:?}",
+                    p,
+                    d,
+                    t
+                );
+            }
+            for (i, &p) in ps.iter().enumerate() {
+                assert_eq!(
+                    p,
+                    (i as u8) + 1,
+                    "priority not 1..N contiguous in {:?}/{:?}: got {:?}",
+                    d,
+                    t,
+                    ps
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn id_globally_unique() {
+        let mut seen = HashSet::new();
+        for a in ANCHORS {
+            assert!(seen.insert(a.id), "duplicate id {}", a.id);
+        }
+    }
+
+    #[test]
+    fn dimension_in_range() {
+        for a in ANCHORS {
+            assert!(
+                a.dimension <= 4,
+                "dimension {} out of range for {}",
+                a.dimension,
+                a.id
+            );
+        }
+    }
+
+    #[test]
+    fn valence_not_over_half() {
+        let neg = ANCHORS
+            .iter()
+            .filter(|a| a.valence == Valence::Negative)
+            .count();
+        assert!(
+            neg * 2 <= ANCHORS.len(),
+            "Negative {} > half of {}",
+            neg,
+            ANCHORS.len()
+        );
+    }
+
+    #[test]
+    fn money_has_no_loss_forecast() {
+        for a in ANCHORS.iter().filter(|a| a.domain == Domain::Money) {
+            let f = a.forecast;
+            assert!(
+                !f.contains("損失") && !f.contains("負債") && !f.contains("虧損"),
+                "money forecast contains loss word: {} => {}",
+                a.id,
+                f
+            );
+        }
+    }
+
+    #[test]
+    fn ids_are_lowercase_t_format() {
+        for a in ANCHORS {
+            // 例: work-t1-agr-lo-1
+            let parts: Vec<&str> = a.id.split('-').collect();
+            assert!(parts.len() >= 4, "id format unexpected: {}", a.id);
+            assert!(
+                parts[1].starts_with('t'),
+                "id trigger part should be t1..t6: {}",
+                a.id
+            );
+            // 小寫檢查
+            assert_eq!(
+                a.id.to_ascii_lowercase(),
+                a.id,
+                "id should be lowercase: {}",
+                a.id
+            );
+        }
+    }
+}
