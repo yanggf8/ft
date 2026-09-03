@@ -355,6 +355,145 @@ mod big5_wire_tests {
     }
 }
 
+// ── F5 predictions / situation_checks / prediction_feedback ──
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DomainWire {
+    Work,
+    Love,
+    Family,
+    Money,
+    Health,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerWire {
+    #[serde(rename = "t1")]
+    T1,
+    #[serde(rename = "t2")]
+    T2,
+    #[serde(rename = "t3")]
+    T3,
+    #[serde(rename = "t4")]
+    T4,
+    #[serde(rename = "t5")]
+    T5,
+    #[serde(rename = "t6")]
+    T6,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AnchorCoverageWire {
+    High,
+    Low,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SituationWire {
+    Absent,
+    Occurred,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResponseWire {
+    Hit,
+    Miss,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PredictionSourceWire {
+    #[serde(rename = "rule_anchor")]
+    RuleAnchor,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Prediction {
+    pub id: String,
+    pub profileId: String,
+    pub cycleId: String,
+    pub domain: DomainWire,
+    pub trigger: TriggerWire,
+    pub tendency: String,
+    pub forecast: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experiment: Option<String>,
+    pub anchorIds: Vec<String>,
+    pub anchorCoverage: AnchorCoverageWire,
+    pub source: PredictionSourceWire,
+    pub rulesVersion: String,
+    #[serde(default)]
+    pub isControl: bool,
+    pub createdAt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SituationCheck {
+    pub cycleId: String,
+    pub trigger: TriggerWire,
+    pub situation: SituationWire,
+    pub createdAt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictionFeedback {
+    pub predictionId: String,
+    pub response: ResponseWire,
+    pub createdAt: String,
+}
+
+#[cfg(test)]
+mod f5_wire_tests {
+    use super::*;
+
+    #[test]
+    fn trigger_wire_is_lowercase_t1() {
+        let j = serde_json::to_value(TriggerWire::T1).unwrap();
+        assert_eq!(j, "t1");
+        let back: TriggerWire = serde_json::from_value(j).unwrap();
+        assert_eq!(back, TriggerWire::T1);
+        let t6 = serde_json::to_value(TriggerWire::T6).unwrap();
+        assert_eq!(t6, "t6");
+    }
+
+    #[test]
+    fn domain_wire_is_lowercase() {
+        let j = serde_json::to_value(DomainWire::Work).unwrap();
+        assert_eq!(j, "work");
+    }
+
+    #[test]
+    fn prediction_roundtrip() {
+        let p = Prediction {
+            id: "p1".into(),
+            profileId: "prof1".into(),
+            cycleId: "2026-09-01".into(),
+            domain: DomainWire::Work,
+            trigger: TriggerWire::T1,
+            tendency: "t".into(),
+            forecast: "f".into(),
+            experiment: Some("e".into()),
+            anchorIds: vec!["work-t1-agr-lo-1".into()],
+            anchorCoverage: AnchorCoverageWire::High,
+            source: PredictionSourceWire::RuleAnchor,
+            rulesVersion: "rules-1".into(),
+            isControl: false,
+            createdAt: "2026-09-01T00:00:00Z".into(),
+        };
+        let j = serde_json::to_value(&p).unwrap();
+        assert_eq!(j["domain"], "work");
+        assert_eq!(j["trigger"], "t1");
+        assert_eq!(j["anchorCoverage"], "high");
+        assert_eq!(j["source"], "rule_anchor");
+        let back: Prediction = serde_json::from_value(j).unwrap();
+        assert_eq!(back.domain, DomainWire::Work);
+    }
+}
+
 // ── Errors ──
 
 /// Every non-2xx body from `ft-api` is `{ error, code? }`.
