@@ -5,6 +5,7 @@
 pub mod anchors;
 pub mod api;
 pub mod items;
+pub mod predict;
 pub mod storage;
 
 use serde::{Deserialize, Serialize};

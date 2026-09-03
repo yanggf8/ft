@@ -40,6 +40,7 @@ pub enum Source {
     DesignerJudgment,
 }
 
+#[derive(Debug)]
 pub struct Anchor {
     pub id: &'static str,
     pub domain: Domain,
