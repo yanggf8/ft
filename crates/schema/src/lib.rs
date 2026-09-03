@@ -2,6 +2,7 @@
 //! Mirrors backend/src/shared/schemas/ziwei-v3.ts (Zod) but in Rust types.
 //! Phase A: ZiWei V3 + Western types. Big5 to follow.
 
+pub mod anchors;
 pub mod api;
 pub mod items;
 pub mod storage;
