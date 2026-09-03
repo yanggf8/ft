@@ -149,3 +149,45 @@ CREATE TABLE IF NOT EXISTS invites (
 
 -- Idempotent helper for existing Turso DBs (run once; ignore duplicate-column error):
 --   turso db shell fortunet "ALTER TABLE users ADD COLUMN generation_tags TEXT"
+
+-- ── F5 predictions / situation_checks / prediction_feedback ──
+-- Spec: docs/superpowers/specs/2026-09-03-f5-rule-anchors-design.md §3
+-- 遷移註記：rev.3 舊 predictions(situation_id, divination_type, prediction_text, cache_key)
+-- 與舊 situation_checks(id, domains JSON) 已作廢；本 DDL 為重建權威，舊 prod 表需 DROP 後重建
+-- cycle_id = Asia/Taipei 週一 00:00 起算的週起始日 YYYY-MM-DD，對齊 7 天視野與 F6 回訪
+CREATE TABLE IF NOT EXISTS predictions (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  profile_id        TEXT NOT NULL,
+  cycle_id          TEXT NOT NULL,
+  domain            TEXT NOT NULL,
+  trigger           TEXT NOT NULL,
+  tendency          TEXT NOT NULL,
+  forecast          TEXT NOT NULL,
+  experiment        TEXT,
+  anchor_ids        TEXT NOT NULL,
+  anchor_coverage   TEXT NOT NULL,
+  source            TEXT NOT NULL DEFAULT 'rule_anchor',
+  rules_version     TEXT NOT NULL,
+  is_control        INTEGER NOT NULL DEFAULT 0,
+  created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle ON predictions(user_id, cycle_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_profile ON predictions(profile_id);
+
+CREATE TABLE IF NOT EXISTS situation_checks (
+  user_id     TEXT NOT NULL,
+  cycle_id    TEXT NOT NULL,
+  trigger     TEXT NOT NULL,
+  situation   TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, cycle_id, trigger)
+);
+
+-- F6 第 2 段（僅在 occurred 時）
+CREATE TABLE IF NOT EXISTS prediction_feedback (
+  prediction_id TEXT PRIMARY KEY,
+  response      TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE
+);
