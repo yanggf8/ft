@@ -131,11 +131,12 @@ hits(D) = { a in ANCHORS | a.domain == D && 命中(a.dimension, a.level) }
 | 條件 | `anchor_coverage` |
 |---|---|
 | `hits_T*` 空 | 不產出（非 low） |
+| 該維 IPIP-15 三題全距 ≥ 2（同維內部不一致） | `low` |
 | 同維高/低同時命中（同 dimension 的 High 與 Low 同時在 hits_T*） | `low`，且禁止輸出對立因果 |
 | `hits_T*` 數 == 1 | `low` |
-| `hits_T*` 數 ≥ 2 且無同維矛盾 | `high` |
+| `hits_T*` 數 ≥ 2 且無上述降級 | `high` |
 
-> v1 縱深設計的不變式（§4）保證「≥2」可達（每格 ≥2 條）；「≥2」的分母為目錄總數，沿 rev.4。
+> `全距 ≥2` 為 rev.4 明訂的測量品質降級（單維三題分散即視為不穩定），v1 沿用；`≥2` 的可達性由每格 ≥2 條的不變式保證（§4），分母指目錄容量。
 
 ### 2.4 全中檔（零命中）的空狀態
 
@@ -200,6 +201,22 @@ CREATE TABLE IF NOT EXISTS situation_checks (
 
 - `(user_id, cycle_id, trigger)` 唯一，天然支撐去重與 `absent` 率的基率校準（備註 §5.4.4，準則 C2）。
 - 值域校準的可行動作是**停用**某 trigger（不再產出、歷史保留），而非重定義（備註 §5.4.4 注意段）。
+
+### 3.2b `prediction_feedback`（F6 第 2 段，P0 補齊）
+
+`situation_checks` 只存 F6 第 1 段（`absent / occurred`），第 2 段（`hit / miss / other`，僅在 `occurred` 時提問）無處存即為 P0 缺口。新增獨立表，與 `predictions.id` 一對一：
+
+```sql
+CREATE TABLE IF NOT EXISTS prediction_feedback (
+  prediction_id TEXT PRIMARY KEY,           -- FK -> predictions.id
+  response      TEXT NOT NULL,              -- hit | miss | other
+  created_at    TEXT NOT NULL,
+  FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE
+);
+```
+
+- 計入規則（備註 §5.4.1）：`absent` 不進分母；`occurred+hit` 進分子分母；`occurred+miss` 與 `occurred+other` 僅進分母。`other` 與 `miss` 分開存僅供人工診斷 forecast 措辭，不影響計算。
+- F8 分母一律為 `occurred`，兩組（真實/對照）皆需完成第 1 段且問法逐字相同，否則差值混入提問差異。
 
 ### 3.3 wire 型別（`crates/schema/src/api.rs`）
 
