@@ -309,14 +309,24 @@ pub async fn batch(db: &Turso, stmts: &[(&str, &[&Param<'_>])]) -> Result<Vec<us
             json!({ "type": "execute", "stmt": { "sql": sql, "args": args } })
         })
         .collect();
+    // Hrana v2：batch 的 steps 要巢狀在 `batch` 欄位下——
+    // `{"type":"batch","batch":{"steps":[...]}}`（2026-09-04 實測 Turso）。
+    // 套在 `batch` 內執行＝隱式交易，任一 step 失敗整批 rollback。
     let body = json!({
         "requests": [
-            { "type": "batch", "steps": steps },
+            { "type": "batch", "batch": { "steps": steps } },
             { "type": "close" },
         ]
     })
     .to_string();
     let payload = db.post_payload(&body).await?;
+    batch_result_counts(&payload)
+}
+
+/// 解析 v2 pipeline 回應的第一個結果為 batch response → 每 step 的 affected 筆數。
+/// 容錯兩種形狀：現行 Turso 的 `step_results`/`step_errors`，以及 spec 的
+/// `{"type":"success","results":[...]}`；`type=="error"` → 整批失敗。
+fn batch_result_counts(payload: &Value) -> Result<Vec<usize>, Error> {
     let step = payload
         .get("results")
         .and_then(Value::as_array)
@@ -334,22 +344,31 @@ pub async fn batch(db: &Turso, stmts: &[(&str, &[&Param<'_>])]) -> Result<Vec<us
         .get("response")
         .and_then(|response| response.get("result"))
         .ok_or_else(|| err("batch result missing"))?;
-    let results = match result.get("type").and_then(Value::as_str) {
-        Some("success") => result
-            .get("results")
-            .and_then(Value::as_array)
-            .ok_or_else(|| err("batch success missing results"))?,
-        Some("error") => {
-            let message = result
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("batch failed and was rolled back");
-            return Err(err(format!("turso: {message}")));
+    if result.get("type").and_then(Value::as_str) == Some("error") {
+        let message = result
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("batch failed and was rolled back");
+        return Err(err(format!("turso: {message}")));
+    }
+    let step_results = result
+        .get("step_results")
+        .and_then(Value::as_array)
+        .or_else(|| result.get("results").and_then(Value::as_array))
+        .ok_or_else(|| err("batch step_results missing"))?;
+    if let Some(errors) = result.get("step_errors").and_then(Value::as_array) {
+        for (i, e) in errors.iter().enumerate() {
+            if !e.is_null() {
+                let message = e
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("batch step failed");
+                return Err(err(format!("turso batch step {i}: {message}")));
+            }
         }
-        _ => return Err(err("unexpected batch result type")),
-    };
-    Ok(results.iter().map(affected_count).collect())
+    }
+    Ok(step_results.iter().map(affected_count).collect())
 }
 
 /// Bind value → Hrana's tagged form. Integers go as strings, which is what the
@@ -433,6 +452,47 @@ mod tests {
         );
         // 缺欄位 → 0
         assert_eq!(affected_count(&json!({})), 0);
+    }
+
+    #[test]
+    fn batch_result_counts_parses_live_turso_shape() {
+        // 2026-09-04 實測 Turso /v2/pipeline：step_results / step_errors 形狀
+        let payload = serde_json::json!({
+            "results": [
+                { "type": "ok", "response": { "type": "batch", "result": {
+                    "step_results": [
+                        { "cols": [], "rows": [], "affected_row_count": 2 },
+                        { "cols": [], "rows": [], "affected_row_count": 0 }
+                    ],
+                    "step_errors": [null, null]
+                } } },
+                { "type": "ok", "response": { "type": "close" } }
+            ]
+        });
+        assert_eq!(batch_result_counts(&payload).unwrap(), vec![2, 0]);
+    }
+
+    #[test]
+    fn batch_result_counts_surfaces_step_error() {
+        let payload = serde_json::json!({
+            "results": [{ "type": "ok", "response": { "type": "batch", "result": {
+                "step_results": [null],
+                "step_errors": [{ "message": "boom" }]
+            } } }]
+        });
+        let e = batch_result_counts(&payload).unwrap_err().to_string();
+        assert!(e.contains("boom"), "{e}");
+    }
+
+    #[test]
+    fn batch_result_counts_accepts_spec_success_shape() {
+        let payload = serde_json::json!({
+            "results": [{ "type": "ok", "response": { "type": "batch", "result": {
+                "type": "success",
+                "results": [{ "affected_row_count": "3" }]
+            } } }]
+        });
+        assert_eq!(batch_result_counts(&payload).unwrap(), vec![3]);
     }
 
     #[test]
