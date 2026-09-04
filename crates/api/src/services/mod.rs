@@ -14,3 +14,4 @@ pub mod generation;
 pub mod invite;
 pub mod login_token;
 pub mod oauth;
+pub mod predictions;
