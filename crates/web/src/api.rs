@@ -348,3 +348,33 @@ pub async fn delete_personality() -> Result<PersonalityDeleteResponse, ApiErr> {
         .map_err(|e| ApiErr::Network(e.to_string()))?;
     decode(resp).await
 }
+
+// ── F5 predictions（docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md §2）──
+
+/// `GET /api/predictions` — 當週列表（含 checks/feedback；forecast 可能被伺服器遮罩）。
+/// 進卡片/收齊/寫入後一律 no_cache: true（伺服器已 no-store，對齊 personality 頁）。
+pub async fn get_predictions(no_cache: bool) -> Result<ListPredictionsResponse, ApiErr> {
+    get_json("/api/predictions", no_cache).await
+}
+
+/// `POST /api/predictions/generate` — 冪等（cycle 凍結）。空 body。
+pub async fn generate_predictions() -> Result<GeneratePredictionsResponse, ApiErr> {
+    post_empty("/api/predictions/generate").await
+}
+
+/// `PUT /api/predictions/checks` — F6 第 1 段。`cycleId` 恆 None（省略 = 當週）。
+pub async fn put_situation_check(b: &CheckSituationRequest) -> Result<SituationCheck, ApiErr> {
+    send_json(Request::put(&url("/api/predictions/checks")), b).await
+}
+
+/// `POST /api/predictions/:id/feedback` — F6 第 2 段（僅 occurred 後、一次性）。
+pub async fn post_prediction_feedback(
+    id: &str,
+    b: &FeedbackRequest,
+) -> Result<PredictionFeedback, ApiErr> {
+    send_json(
+        Request::post(&url(&format!("/api/predictions/{}/feedback", id))),
+        b,
+    )
+    .await
+}
