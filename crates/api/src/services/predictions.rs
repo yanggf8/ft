@@ -275,21 +275,30 @@ pub async fn list_cycle(
     )
     .await
     .map_err(db_err)?;
-    let predictions = rows.into_iter().filter_map(to_prediction).collect();
+    let mut predictions = Vec::with_capacity(rows.len());
+    for r in rows {
+        predictions.push(to_prediction(r).ok_or_else(|| {
+            PredictionsError::Db("predictions row has corrupt enum/source".into())
+        })?);
+    }
 
-    let checks: Vec<SituationCheck> = db::all::<CheckRow>(
+    let checks_rows: Vec<CheckRow> = db::all::<CheckRow>(
         db,
         "SELECT cycle_id, trigger, situation, created_at FROM situation_checks \
          WHERE user_id = ?1 AND cycle_id = ?2 ORDER BY trigger",
         &[&db::text(user_id), &db::text(cycle_id)],
     )
     .await
-    .map_err(db_err)?
-    .into_iter()
-    .filter_map(to_check)
-    .collect();
+    .map_err(db_err)?;
+    let mut checks = Vec::with_capacity(checks_rows.len());
+    for r in checks_rows {
+        checks.push(
+            to_check(r)
+                .ok_or_else(|| PredictionsError::Db("situation_checks row corrupt".into()))?,
+        );
+    }
 
-    let feedback: Vec<PredictionFeedback> = db::all::<FeedbackRow>(
+    let feedback_rows: Vec<FeedbackRow> = db::all::<FeedbackRow>(
         db,
         "SELECT pf.prediction_id, pf.response, pf.created_at FROM prediction_feedback pf \
          JOIN predictions p ON p.id = pf.prediction_id \
@@ -297,10 +306,14 @@ pub async fn list_cycle(
         &[&db::text(user_id), &db::text(cycle_id)],
     )
     .await
-    .map_err(db_err)?
-    .into_iter()
-    .filter_map(to_feedback)
-    .collect();
+    .map_err(db_err)?;
+    let mut feedback = Vec::with_capacity(feedback_rows.len());
+    for r in feedback_rows {
+        feedback.push(
+            to_feedback(r)
+                .ok_or_else(|| PredictionsError::Db("prediction_feedback row corrupt".into()))?,
+        );
+    }
 
     Ok(CycleView {
         predictions,
@@ -313,16 +326,9 @@ pub async fn list_cycle(
 /// 全數改 null。GET 與 generate 回應皆須經過本函數。
 pub fn redact_view(view: &mut CycleView) {
     use std::collections::HashSet;
-    let distinct: HashSet<String> = view
-        .predictions
-        .iter()
-        .map(|p| format!("{:?}", p.trigger))
-        .collect();
-    let answered: HashSet<String> = view
-        .checks
-        .iter()
-        .map(|c| format!("{:?}", c.trigger))
-        .collect();
+    // TriggerWire 已 derive Hash（Grok 二審 P2 #9：不用 Debug 當鍵）
+    let distinct: HashSet<TriggerWire> = view.predictions.iter().map(|p| p.trigger).collect();
+    let answered: HashSet<TriggerWire> = view.checks.iter().map(|c| c.trigger).collect();
     if !distinct.is_subset(&answered) {
         for p in &mut view.predictions {
             p.tendency = None;
@@ -390,11 +396,36 @@ pub async fn generate(
     }
     let sel = filter_negative_half(sel);
 
-    // 4. 落庫（每 domain 原子 WHERE NOT EXISTS，UNIQUE 當防呆；空週也寫 generations 凍結）
+    // 4. 先寫 cycle 凍結快照（Grok 二審 P0 #1：freeze 先於 predictions）。
+    //    Turso 每句 execute 是獨立 HTTP，無交易；freeze 先拿者才有資格插 predictions，
+    //    重試/並發只會早退，不會「補 domain」混 profile；空週也凍結。
     let created = clock::now_iso();
     if created.is_empty() {
         return Err(PredictionsError::Db("clock unavailable".into()));
     }
+    let gen_changes = db::exec_changes(
+        db,
+        "INSERT OR IGNORE INTO prediction_generations (user_id, cycle_id, profile_id, generated_at) \
+         VALUES (?1, ?2, ?3, ?4)",
+        &[
+            &db::text(user_id),
+            &db::text(cycle_id),
+            &db::text(&profile.id),
+            &db::text(&created),
+        ],
+    )
+    .await
+    .map_err(db_err)?;
+    if gen_changes == 0 {
+        // 併發/重試：他人已凍結 → 只回現況（絕不補 domain）
+        let view = list_cycle(db, user_id, cycle_id).await?;
+        return Ok(GenOutcome {
+            generated: false,
+            view,
+        });
+    }
+
+    // 5. 只有自己拿到 freeze 才插 predictions（每 domain 原子 WHERE NOT EXISTS，UNIQUE 當防呆）
     for s in &sel {
         let id = uuid::random_uuid();
         let anchor_ids = serde_json::to_string(&s.anchor_ids).unwrap_or_else(|_| "[]".to_string());
@@ -426,24 +457,9 @@ pub async fn generate(
         .map_err(db_err)?;
     }
 
-    // 5. cycle 凍結快照（PRIMARY KEY 防重；INSERT OR IGNORE）
-    let gen_changes = db::exec_changes(
-        db,
-        "INSERT OR IGNORE INTO prediction_generations (user_id, cycle_id, profile_id, generated_at) \
-         VALUES (?1, ?2, ?3, ?4)",
-        &[
-            &db::text(user_id),
-            &db::text(cycle_id),
-            &db::text(&profile.id),
-            &db::text(&created),
-        ],
-    )
-    .await
-    .map_err(db_err)?;
-
     let view = list_cycle(db, user_id, cycle_id).await?;
     Ok(GenOutcome {
-        generated: gen_changes > 0,
+        generated: true,
         view,
     })
 }
@@ -474,23 +490,6 @@ pub async fn upsert_check(
         return Err(PredictionsError::UnknownTrigger);
     }
 
-    let locked: Option<OneRow> = db::first(
-        db,
-        "SELECT 1 AS one FROM prediction_feedback pf \
-         JOIN predictions p ON p.id = pf.prediction_id \
-         WHERE p.user_id = ?1 AND p.cycle_id = ?2 AND p.trigger = ?3 LIMIT 1",
-        &[
-            &db::text(user_id),
-            &db::text(cycle_id),
-            &db::text(trigger_str),
-        ],
-    )
-    .await
-    .map_err(db_err)?;
-    if locked.is_some() {
-        return Err(PredictionsError::SituationLocked);
-    }
-
     let created = clock::now_iso();
     if created.is_empty() {
         return Err(PredictionsError::Db("clock unavailable".into()));
@@ -499,10 +498,15 @@ pub async fn upsert_check(
         SituationWire::Absent => "absent",
         SituationWire::Occurred => "occurred",
     };
-    db::exec(
+    // 原子鎖（Grok 二審 P1 #2）：feedback 存在 → SELECT 0 列 → changes=0 → SITUATION_LOCKED。
+    // 檢查與寫入同一句，無「SELECT 通過→feedback 寫入→覆寫 situation」的交錯窗。
+    let changes = db::exec_changes(
         db,
         "INSERT INTO situation_checks (user_id, cycle_id, trigger, situation, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5) \
+         SELECT ?1, ?2, ?3, ?4, ?5 \
+         WHERE NOT EXISTS (SELECT 1 FROM prediction_feedback pf \
+                           JOIN predictions p ON p.id = pf.prediction_id \
+                           WHERE p.user_id = ?2 AND p.cycle_id = ?3 AND p.trigger = ?4) \
          ON CONFLICT(user_id, cycle_id, trigger) DO UPDATE \
            SET situation = excluded.situation, created_at = excluded.created_at",
         &[
@@ -515,6 +519,9 @@ pub async fn upsert_check(
     )
     .await
     .map_err(db_err)?;
+    if changes == 0 {
+        return Err(PredictionsError::SituationLocked);
+    }
 
     Ok(SituationCheck {
         cycleId: cycle_id.to_string(),
@@ -558,21 +565,12 @@ pub async fn record_feedback(
     )
     .await
     .map_err(db_err)?;
+    // 僅 occurred 放行（Grok 二審 P1 #3）：absent 仍為合法 409；其他損壞值 fail-closed。
     match check.map(|c| c.situation).as_deref() {
-        None => return Err(PredictionsError::SituationRequired),
+        Some("occurred") => {}
         Some("absent") => return Err(PredictionsError::SituationAbsent),
-        _ => {}
-    }
-
-    let exists: Option<OneRow> = db::first(
-        db,
-        "SELECT 1 AS one FROM prediction_feedback WHERE prediction_id = ?1",
-        &[&db::text(prediction_id)],
-    )
-    .await
-    .map_err(db_err)?;
-    if exists.is_some() {
-        return Err(PredictionsError::FeedbackExists);
+        None => return Err(PredictionsError::SituationRequired),
+        _ => return Err(PredictionsError::Db("situation_checks row corrupt".into())),
     }
 
     let created = clock::now_iso();
@@ -584,9 +582,13 @@ pub async fn record_feedback(
         ResponseWire::Miss => "miss",
         ResponseWire::Other => "other",
     };
-    db::exec(
+    // 原子一次性（Grok 二審 P2 #7）：WHERE NOT EXISTS → changes=0 = 已存在（FEEDBACK_EXISTS），
+    // 不靠 PK 撞出 500。
+    let changes = db::exec_changes(
         db,
-        "INSERT INTO prediction_feedback (prediction_id, response, created_at) VALUES (?1, ?2, ?3)",
+        "INSERT INTO prediction_feedback (prediction_id, response, created_at) \
+         SELECT ?1, ?2, ?3 \
+         WHERE NOT EXISTS (SELECT 1 FROM prediction_feedback WHERE prediction_id = ?1)",
         &[
             &db::text(prediction_id),
             &db::text(response_str),
@@ -595,6 +597,9 @@ pub async fn record_feedback(
     )
     .await
     .map_err(db_err)?;
+    if changes == 0 {
+        return Err(PredictionsError::FeedbackExists);
+    }
 
     Ok(PredictionFeedback {
         predictionId: prediction_id.to_string(),

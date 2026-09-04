@@ -184,14 +184,24 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Err(e) => return Ok(to_err(e)),
             };
             let cycle = match &body.cycleId {
-                Some(c) if c != &now => {
-                    return Ok(error::error_code(
-                        "Writes are only allowed for the current week",
-                        "STALE_CYCLE",
-                        409,
-                    ))
+                Some(c) => {
+                    // 格式先驗（Grok 二審 P2 #5）：非週一日期 → 400，不是 409
+                    if !is_monday_cycle_id(c) {
+                        return Ok(error::error_code(
+                            "cycleId must be a Monday YYYY-MM-DD",
+                            "INVALID_CYCLE",
+                            400,
+                        ));
+                    }
+                    if c != &now {
+                        return Ok(error::error_code(
+                            "Writes are only allowed for the current week",
+                            "STALE_CYCLE",
+                            409,
+                        ));
+                    }
+                    c.clone()
                 }
-                Some(c) => c.clone(),
                 None => now,
             };
             let check = match predictions::upsert_check(

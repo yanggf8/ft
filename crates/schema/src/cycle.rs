@@ -60,12 +60,19 @@ fn parse_iso_parts(iso: &str) -> Option<(i64, i64)> {
 /// 解析 `YYYY-MM-DD`（含月/日範圍驗證）→ (y, m, d)。
 fn parse_date_parts(s: &str) -> Option<(i64, i64, i64)> {
     let mut it = s.split('-');
-    let y: i64 = it.next()?.parse().ok()?;
-    let m: i64 = it.next()?.parse().ok()?;
-    let d: i64 = it.next()?.parse().ok()?;
+    let y_s = it.next()?;
+    let m_s = it.next()?;
+    let d_s = it.next()?;
     if it.next().is_some() {
         return None;
     }
+    // 鎖定零填充 YYYY-MM-DD（Grok 二審 P2 #6）：`2026-8-31` 不得通過
+    if y_s.len() != 4 || m_s.len() != 2 || d_s.len() != 2 {
+        return None;
+    }
+    let y: i64 = y_s.parse().ok()?;
+    let m: i64 = m_s.parse().ok()?;
+    let d: i64 = d_s.parse().ok()?;
     if !(1..=12).contains(&m) {
         return None;
     }
@@ -195,5 +202,8 @@ mod tests {
         assert!(!is_monday_cycle_id("2026-13-01"));
         assert!(!is_monday_cycle_id("2026-09-04T10:00:00Z"));
         assert!(!is_monday_cycle_id(""));
+        // 零填充鎖（Grok 二審 P2 #6）
+        assert!(!is_monday_cycle_id("2026-8-31"));
+        assert!(!is_monday_cycle_id("26-08-31"));
     }
 }

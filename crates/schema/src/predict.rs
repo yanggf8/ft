@@ -333,6 +333,26 @@ mod tests {
     }
 
     #[test]
+    fn two_negative_same_coverage_keeps_lower_priority() {
+        // D2-A：同 coverage → priority 小者勝（Grok 二審 nit）
+        let a1 = ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Negative && a.priority == 1)
+            .unwrap();
+        let a2 = ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Negative && a.priority == 2)
+            .unwrap();
+        let s1 = selected_with(a1, AnchorCoverage::High);
+        let s2 = selected_with(a2, AnchorCoverage::High);
+        for v in [vec![s1.clone(), s2.clone()], vec![s2.clone(), s1.clone()]] {
+            let filtered = filter_negative_half(v);
+            assert_eq!(filtered.len(), 1);
+            assert_eq!(filtered[0].anchor.priority, 1);
+        }
+    }
+
+    #[test]
     fn all_neutral_unchanged() {
         let neu = selected_with(neutral_anchor(), AnchorCoverage::High);
         let filtered = filter_negative_half(vec![neu.clone(), neu.clone()]);

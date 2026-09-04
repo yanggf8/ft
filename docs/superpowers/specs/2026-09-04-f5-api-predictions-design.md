@@ -187,7 +187,7 @@ SELECT * FROM prediction_feedback pf JOIN predictions p ON p.id=pf.prediction_id
 
 ### 4.1 forecast 遮罩（Grok P0-2：§5.4.2 的 API 強制，非 UI 細節）
 
-- **規則**：當週 `distinct(predictions.trigger)` 尚未全部有 `situation_checks` 列 → 回應中 `tendency`/`forecast`/`experiment` 為 `null`；收齊後才吐全文。
+- **規則**：當週 `distinct(predictions.trigger)` 尚未全部有 `situation_checks` 列 → 回應中 `tendency`/`forecast`/`experiment` **缺省（skip 序列化，語意等同 null）**；收齊後才吐全文。前端一律視為 optional（`== null` 語義），不得假設 key 存在（Grok 二審 P2 #8）。
 - 遮罩同時套用於 **GET** 與 **generate** 回應（兩者皆走同一序列化函數）。
 - **週中揭示政策（寫死）**：週內 UI 只可揭露 trigger 標準問法與「本週有 N 則預測」；第 1 段收齊後才顯示 tendency/forecast/experiment。不可「週一給全文、週日才問第 1 段」——那等於整週促發。
 - wire 調整：`Prediction.tendency` / `forecast` 改 `Option<String>`（`#[serde(default, skip_serializing_if="Option::is_none")]`）；`experiment` 維持 Option。`ft-schema` F5 wire 測試同步更新。
@@ -246,7 +246,9 @@ pub struct FeedbackRequest { pub response: ResponseWire }
 | 嚴重度 | 意見 | 裁決 |
 |---|---|---|
 | P0-1 | cycle 測試 #1 自相矛盾（週五→下週一）；解析須吃毫秒 | ✅ 修正 §1.1 釘死測試 + `.000Z` 邊界 |
-| P0-2 | forecast 未遮罩＝§5.4.2 於 API 層空洞；需寫死週中揭示政策 | ✅ §4.1 遮罩 + 週中政策寫死 |
+| P0-2 | forecast 未遮罩＝§5.4.2 於 API 層空洞；需寫死週中揭示政策 | ✅ §4.1 遮罩（缺省=null 語義）+ 週中政策寫死 |
+| 二審 P0 | freeze 寫在 predictions 之後，重試/並發會重開混 profile 窗 | ✅ §3.1 已是 freeze 先寫；實作對齊 |
+| 二審 P1 | lock 檢查非原子；feedback 對非 occurred 放行；filter_map 靜默丟列 | ✅ 單句原子鎖/一次性；僅 occurred 放行；壞列 fail-closed 500 |
 | P0-3 | latest-wins × 可改 situation → 計入規則無法強制；occurred 無第 2 段無編碼 | ✅ §3.3–3.4 鎖定/一次性；缺測不當 miss |
 | P0-4 | 冪等粒度 (user,cycle,domain) 可混 profile；generated 誤報 | ✅ §2 generations 表 cycle 凍結 |
 | P1-D2 | per-domain 不可取；A/B 擇一 | ✅ 採 A（n==2 留 1），F8 登記 |

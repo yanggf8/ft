@@ -367,7 +367,7 @@ pub enum DomainWire {
     Health,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TriggerWire {
     #[serde(rename = "t1")]
     T1,
@@ -551,6 +551,7 @@ mod f5_wire_tests {
         let j = serde_json::to_value(&p).unwrap();
         assert!(j.get("tendency").is_none());
         assert!(j.get("forecast").is_none());
+        assert!(j.get("experiment").is_none());
         // 缺省欄位反序列化回 None
         let back: Prediction = serde_json::from_value(j).unwrap();
         assert_eq!(back.tendency, None);
