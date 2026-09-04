@@ -127,6 +127,32 @@ else
   fi
 fi
 
+# Test 8: F5 predictions endpoints are routed and auth-guarded (401 without a session).
+# Auth-guard check is the scriptable part — a full F6 flow needs a magic-link login.
+echo -n "8. F5 predictions endpoints (401 without auth)... "
+PRED_OK=1
+for probe in \
+  "GET|/api/predictions" \
+  "POST|/api/predictions/generate" \
+  "PUT|/api/predictions/checks" \
+  "POST|/api/predictions/_smoke_/feedback"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    PRED_OK=0
+  fi
+done
+if [ "$PRED_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"
