@@ -62,6 +62,8 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 **Generation Tags** (2026-09): `1940s–2010s` selectable as birth attribute (default from `birth_year`), stored as JSON array `users.generation_tags`, embedded into story prompt `【世代語境】`, 1930s/2020s added, prompt thickened to ~1072 chars (fourPillars, majorLimits, isLeap, brightness/sihua, ascendant/houses).
 
+**F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` 四表 + 4 端點已上線。cycle 級凍結（`prediction_generations` 一週一 profile 快照，空週也凍結）、forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）、D2-A 全負面週例外；web `我的命格` PredictionsCard（§5.4.1 措辭回饋）。
+
 ### AI Integration ✅
 
 | Priority | Provider | Model | 特點 |
@@ -81,6 +83,15 @@ GET  /api/charts                # List cached interpretations
 GET  /api/users/me              # Includes generation_tags (JSON array), billing, hasBirthData
 ```
 `:type` is `ziwei` or `western`. `PUT /api/users/me/birth` deletes `interpretations` for user; `birth_data_hash` includes sorted `generation_tags`.
+
+### F5 Predictions Endpoints (2026-09, spec: docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md)
+```bash
+GET  /api/predictions?cycleId=   # 當週列表（checks/feedback/predictions；forecast 未收齊時遮罩為 null）
+POST /api/predictions/generate   # 冪等週期生成（cycle_id=Asia/Taipei 週一起算；prediction_generations 凍結）
+PUT  /api/predictions/checks     # F6 第 1 段 situation=absent|occurred（每週每 trigger 一次，去重）
+POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 occurred 後、一次性）
+```
+前置：最新 complete 人格側寫（`personality_profiles`）。`cycle_id` 為台北週一起算；寫入僅限當週（409 `STALE_CYCLE`）。
 
 ### Deployed Infrastructure
 
@@ -133,9 +144,9 @@ ft/
 │   ├── api/                    # ft-api (fortunet-api, routes/ + durable_objects/ + services/)
 │   │   └── src/
 │   │       ├── lib.rs          # #[event(fetch)] + CORS/headers
-│   │       ├── routes/         # auth, users, charts, oauth, admin_invites
+│   │       ├── routes/         # auth, users, charts, oauth, admin_invites, personality, predictions
 │   │       ├── durable_objects/# SessionDO, AIMutexDO
-│   │       └── services/       # billing, birth_hash (incl. generation_tags), engine, ai/prompts, generation, etc.
+│   │       └── services/       # billing, birth_hash (incl. generation_tags), engine, ai/prompts, generation, predictions (F5)
 │   └── web/                    # ft-web (Leptos CSR, generation.rs synced with api)
 │       ├── src/
 │       │   ├── lib.rs          # App + Protected guard
@@ -246,6 +257,6 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 
 ---
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-04
 **API URL**: https://fortunet-api.yanggf.workers.dev
 **Workspace**: Cargo (`ft-api` / `ft-worker` / `ft-web` / `ft-schema` / `ft-ziwei` / `ft-western` / `ft-big5`)

@@ -26,6 +26,7 @@
 - **ZiWei (紫微斗數)** - Traditional 4×4 palace grid, Wuxing + BaZi, 12 palaces with stars/attributes
 - **Western Zodiac** - Sun/Moon signs, planets, houses (hybrid ephemeris: solar-ephemeris + vsop87)
 - **我的命格** - Unified profile: personality, generation story, Wuxing/BaZi, Western summary
+- **本週預測 (F5)** - 每週可驗證的情境預測（work/money × T1–T6 規則錨點），F6 兩段式回饋（先問情境、再核對預測），forecast 於情境收齊後才揭露
 - **Generation Tags** - Birth-year derived tags (1940s–2010s), selectable as birth attribute for story grounding
 - **AI Interpretation** - 3-provider failover (iFlow → Groq → Cerebras), serialized via AIMutexDO, 45s provider timeout
 - **Free Trial** - 30 days for all new users
@@ -109,7 +110,7 @@ Phase 5:  Pre-Migration       Week 19-20  ✅ COMPLETED
 Phase 6:  Go-Live             Week 21     ← LIVE (Beta Testing)
 ```
 
-Recent highlights (2026-09): `我的命盤` → `我的命格` rename, Wuxing+BaZi display, personality merged into profile, generation story, ZiWei 4×4 palace layout, generation tags as selectable birth attribute.
+Recent highlights (2026-09): `我的命盤` → `我的命格` rename, Wuxing+BaZi display, personality merged into profile, generation story, ZiWei 4×4 palace layout, generation tags as selectable birth attribute. **F5 本週預測** live: 4 endpoints (`GET/POST /api/predictions*`) + 我的命格 PredictionsCard + F6 two-step feedback.
 
 ---
 
