@@ -73,7 +73,8 @@ cd crates/api && worker-build --release && wrangler deploy   # OAuth only
 cd crates/web && ./scripts/build-web.sh   # build only (cargo + wasm-bindgen, no trunk)
 
 # Verify
-./scripts/verify-deployment.sh
+./scripts/verify-deployment.sh              # 部署後全服務驗證（含 F5 端點 401 probe）
+./scripts/predictions-e2e.sh -t <session>   # F5 半自動 E2E（整條 generate→checks→feedback 鏈）
 
 # Database (single source of truth: scripts/schema.sql)
 turso db shell fortunet < scripts/schema.sql

@@ -93,6 +93,8 @@ POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 
 ```
 前置：最新 complete 人格側寫（`personality_profiles`）。`cycle_id` 為台北週一起算；寫入僅限當週（409 `STALE_CYCLE`）。
 
+半自動 E2E：`./scripts/predictions-e2e.sh -t <session>`（自己 mint session：造 `login_tokens` 列 + 走 `/api/auth/verify`；已實測整鏈 2026-09-04，並據實測修正 F7 `db::batch` 的 Hrana v2 請求形狀 `{"type":"batch","batch":{"steps":[...]}}`）。
+
 ### Deployed Infrastructure
 
 | Component | Status | URL/ID |
@@ -132,7 +134,8 @@ ft/
 │   ├── schema.sql              # ⭐ Single source of truth (Turso)
 │   ├── deploy-engine.sh        # worker-build + wrangler deploy (OAuth)
 │   ├── deploy-web.sh           # build-web.sh + pages deploy
-│   └── verify-deployment.sh
+│   ├── verify-deployment.sh    # 部署後全服務驗證（含 F5 端點 401 probe）
+│   └── predictions-e2e.sh      # F5 半自動 E2E：貼 session 跑 generate→checks→feedback 整鏈
 ├── vendor/solar-ephemeris/     # patch.crates-io
 ├── crates/
 │   ├── schema/                 # ft-schema: api + storage DTOs (single source)

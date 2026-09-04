@@ -130,7 +130,11 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 - **Web**：`我的命格` PredictionsCard — Stage 1 全收齊才 refetch 全文進 Stage 2；按鈕閘門
   `stage1_complete ∧ 已 refetch ∧ forecast.is_some()`；回饋三句用 §5.4.1 措辭；generate per-mount latch；
   window focus 重比 `cycleId` 偵測換週。
-- **F7 資料刪除**：`DELETE /api/personality/me` 五句一次 `db::batch`（Hrana v2 隱式交易，失敗整批 rollback）。
+- **F7 資料刪除**：`DELETE /api/personality/me` 五句一次 `db::batch`（Hrana v2 隱式交易，失敗整批 rollback；
+  請求形狀 `{"type":"batch","batch":{"steps":[...]}}`，回應解析支援 `step_results`/`step_errors` —— 2026-09-04
+  由 predictions-e2e.sh 實測抓到並修正）。
+- **E2E**：`scripts/predictions-e2e.sh -t <session>` 半自動整鏈（generate→checks→feedback，含遮罩閘門①②驗證）；
+  已實測通過（2026-09-04，測試帳號用完即清，F8 零污染）。
 - 設計文件：`docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md`、
   `docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md`。
 
