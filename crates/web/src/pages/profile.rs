@@ -8,6 +8,7 @@ use ft_schema::api::{
     SituationWire, TriggerWire,
 };
 use std::collections::HashSet;
+use wasm_bindgen::prelude::*;
 
 use crate::auth::use_auth;
 use crate::components::BirthDataForm;
@@ -211,7 +212,7 @@ fn friendly(e: &crate::api::ApiErr) -> String {
     if e.is_code("RATE_LIMIT") {
         "動作太頻繁，請稍後再試".to_string()
     } else {
-        e.to_string()
+        format!("載入失敗：{e}")
     }
 }
 
@@ -226,7 +227,17 @@ fn domain_label(d: DomainWire) -> &'static str {
 }
 
 /// 初始載入動線：GET → 空且未 generate → POST 一次 → 再 GET。
-async fn card_init(state: &RwSignal<PState>, latch: &RwSignal<bool>) {
+/// `initing` 重入鎖：mount/重試/focus 並發時只跑一趟（Grok UI 二審 P2-3）。
+async fn card_init(state: &RwSignal<PState>, latch: &RwSignal<bool>, initing: &RwSignal<bool>) {
+    if initing.get_untracked() {
+        return;
+    }
+    initing.set(true);
+    card_init_inner(state, latch).await;
+    initing.set(false);
+}
+
+async fn card_init_inner(state: &RwSignal<PState>, latch: &RwSignal<bool>) {
     state.set(PState::Loading);
     match crate::api::get_predictions(true).await {
         Ok(resp) if !resp.predictions.is_empty() => state.set(PState::Ready(Box::new(resp))),
@@ -267,6 +278,8 @@ async fn do_check(
     state: &RwSignal<PState>,
     pending: &RwSignal<Option<TriggerWire>>,
     latch: &RwSignal<bool>,
+    initing: &RwSignal<bool>,
+    notice: &RwSignal<Option<String>>,
     t: TriggerWire,
     s: SituationWire,
 ) {
@@ -277,28 +290,11 @@ async fn do_check(
         situation: s,
     };
     match crate::api::put_situation_check(&body).await {
-        Ok(check) => {
-            let complete = {
-                let mut answered: HashSet<TriggerWire> = match state.get_untracked() {
-                    PState::Ready(r) => r.checks.iter().map(|c| c.trigger).collect(),
-                    _ => HashSet::new(),
-                };
-                let triggers: HashSet<TriggerWire> = match state.get_untracked() {
-                    PState::Ready(r) => r.predictions.iter().map(|p| p.trigger).collect(),
-                    _ => HashSet::new(),
-                };
-                answered.insert(t);
-                triggers.is_subset(&answered)
-            };
-            if complete {
-                card_refresh(state).await;
-            } else {
-                state.update(|st| {
-                    if let PState::Ready(r) = st {
-                        r.checks.push(check);
-                    }
-                });
-            }
+        Ok(_) => {
+            // P1-1（Grok 二審）：每次 PUT 成功都 refetch，伺服器為真相——
+            // 並行最後兩題也不會有「本地收齊但 forecast 仍遮罩」的卡死分支。
+            card_refresh(state).await;
+            notice.set(None);
         }
         Err(e)
             if e.is_code("SITUATION_LOCKED")
@@ -312,9 +308,9 @@ async fn do_check(
         }
         Err(e) if e.is_code("STALE_CYCLE") => {
             latch.set(false);
-            card_init(state, latch).await;
+            card_init(state, latch, initing).await;
         }
-        Err(_) => {}
+        Err(e) => notice.set(Some(friendly(&e))),
     }
     pending.set(None);
 }
@@ -324,6 +320,8 @@ async fn do_feedback(
     state: &RwSignal<PState>,
     pending: &RwSignal<Option<String>>,
     latch: &RwSignal<bool>,
+    initing: &RwSignal<bool>,
+    notice: &RwSignal<Option<String>>,
     id: String,
     r: ResponseWire,
 ) {
@@ -336,6 +334,7 @@ async fn do_feedback(
                     x.feedback.push(fb);
                 }
             });
+            notice.set(None);
         }
         Err(e)
             if e.is_code("FEEDBACK_EXISTS")
@@ -349,9 +348,9 @@ async fn do_feedback(
         }
         Err(e) if e.is_code("STALE_CYCLE") => {
             latch.set(false);
-            card_init(state, latch).await;
+            card_init(state, latch, initing).await;
         }
-        Err(_) => {}
+        Err(e) => notice.set(Some(friendly(&e))),
     }
     pending.set(None);
 }
@@ -360,14 +359,48 @@ async fn do_feedback(
 fn PredictionsCard() -> impl IntoView {
     let state = RwSignal::new(PState::Loading);
     let latch = RwSignal::new(false);
+    let initing = RwSignal::new(false);
     let pending_check = RwSignal::new(None::<TriggerWire>);
     let pending_feedback = RwSignal::new(None::<String>);
+    let notice = RwSignal::new(None::<String>);
 
     {
         let state = state;
         let latch = latch;
+        let initing = initing;
         spawn_local(async move {
-            card_init(&state, &latch).await;
+            card_init(&state, &latch, &initing).await;
+        });
+    }
+
+    // P1-2（Grok 二審）：跨週一長駐 /profile — window focus 時重比 cycleId，
+    // 變了就清 latch 重跑初始動線（STALE_CYCLE 對 checks 走不到，不能只靠它）。
+    {
+        let state = state;
+        let latch = latch;
+        let initing = initing;
+        Effect::new(move |_| {
+            if let Some(win) = web_sys::window() {
+                let cb = Closure::<dyn FnMut()>::new(move || {
+                    let state = state;
+                    let latch = latch;
+                    let initing = initing;
+                    spawn_local(async move {
+                        if let Ok(resp) = crate::api::get_predictions(true).await {
+                            let changed = match state.get_untracked() {
+                                PState::Ready(r) => r.cycleId != resp.cycleId,
+                                _ => false,
+                            };
+                            if changed {
+                                latch.set(false);
+                                card_init(&state, &latch, &initing).await;
+                            }
+                        }
+                    });
+                });
+                let _ = win.add_event_listener_with_callback("focus", cb.as_ref().unchecked_ref());
+                cb.forget();
+            }
         });
     }
 
@@ -384,6 +417,10 @@ fn PredictionsCard() -> impl IntoView {
                 }}
             </div>
 
+            <Show when=move || notice.get().is_some()>
+                <p class="error">{move || notice.get().clone().unwrap_or_default()}</p>
+            </Show>
+
             <Show
                 when=move || matches!(state.get(), PState::Ready(_))
                 fallback=move || {
@@ -398,14 +435,24 @@ fn PredictionsCard() -> impl IntoView {
                         }.into_any(),
                         PState::Error(msg) => {
                             let msg = msg;
+                            let busy = move || initing.get();
                             view! {
                                 <p class="error">{msg}</p>
-                                <button class="btn-link" on:click=move |_| {
-                                    latch.set(false);
-                                    spawn_local(async move {
-                                        card_init(&state, &latch).await;
-                                    });
-                                }>"重試"</button>
+                                <button
+                                    class="btn-link"
+                                    disabled=busy
+                                    on:click=move |_| {
+                                        latch.set(false);
+                                        spawn_local({
+                                            let state = state;
+                                            let latch = latch;
+                                            let initing = initing;
+                                            async move {
+                                                card_init(&state, &latch, &initing).await;
+                                            }
+                                        });
+                                    }
+                                >"重試"</button>
                             }.into_any()
                         }
                         PState::Ready(_) => view! { <span></span> }.into_any(),
@@ -483,8 +530,10 @@ fn PredictionsCard() -> impl IntoView {
                                                                 let state = state;
                                                                 let pending_check = pending_check;
                                                                 let latch = latch;
+                                                                let initing = initing;
+                                                                let notice = notice;
                                                                 async move {
-                                                                    do_check(&state, &pending_check, &latch, t, SituationWire::Absent).await;
+                                                                    do_check(&state, &pending_check, &latch, &initing, &notice, t, SituationWire::Absent).await;
                                                                 }
                                                             });
                                                         }
@@ -497,8 +546,10 @@ fn PredictionsCard() -> impl IntoView {
                                                                 let state = state;
                                                                 let pending_check = pending_check;
                                                                 let latch = latch;
+                                                                let initing = initing;
+                                                                let notice = notice;
                                                                 async move {
-                                                                    do_check(&state, &pending_check, &latch, t, SituationWire::Occurred).await;
+                                                                    do_check(&state, &pending_check, &latch, &initing, &notice, t, SituationWire::Occurred).await;
                                                                 }
                                                             });
                                                         }
@@ -517,6 +568,9 @@ fn PredictionsCard() -> impl IntoView {
                         }.into_any()
                     } else if revealed {
                         view! {
+                            <p style="font-size:0.85rem;color:var(--silver-dim);margin-bottom:0.75rem">
+                                {format!("已收齊 {} 則預測 — 依你的反應回饋", preds.len())}
+                            </p>
                             <div style="display:grid;gap:0.75rem">
                                 <For
                                     each=move || preds.clone()
@@ -548,12 +602,20 @@ fn PredictionsCard() -> impl IntoView {
                                                 <div style="font-size:0.8rem;color:var(--silver-dim);margin-bottom:0.5rem">
                                                     {tc.question().to_string()}
                                                 </div>
-                                                {p.tendency.clone().map(|x| {
-                                                    view! { <p style="font-size:0.9rem;margin:0.2rem 0">{x}</p> }.into_any()
-                                                }).unwrap_or_else(|| view! { <span></span> }.into_any())}
-                                                {p.forecast.clone().map(|x| {
-                                                    view! { <p style="font-size:0.9rem;margin:0.2rem 0;color:var(--starlight)">{x}</p> }.into_any()
-                                                }).unwrap_or_else(|| view! { <span></span> }.into_any())}
+                                                {if absent {
+                                                    view! { <span></span> }.into_any()
+                                                } else {
+                                                    view! {
+                                                        <div>
+                                                            {p.tendency.clone().map(|x| {
+                                                                view! { <p style="font-size:0.9rem;margin:0.2rem 0">{x}</p> }.into_any()
+                                                            }).unwrap_or_else(|| view! { <span></span> }.into_any())}
+                                                            {p.forecast.clone().map(|x| {
+                                                                view! { <p style="font-size:0.9rem;margin:0.2rem 0;color:var(--starlight)">{x}</p> }.into_any()
+                                                            }).unwrap_or_else(|| view! { <span></span> }.into_any())}
+                                                        </div>
+                                                    }.into_any()
+                                                }}
                                                 {if absent {
                                                     view! { <p style="font-size:0.8rem;color:var(--silver-dim)">"情境未發生（不計入）"</p> }.into_any()
                                                 } else if fb_sent {
@@ -571,8 +633,10 @@ fn PredictionsCard() -> impl IntoView {
                                                                         let pending_feedback = pending_feedback;
                                                                         let latch = latch;
                                                                         let pid = pid_c1.clone();
+                                                                        let initing = initing;
+                                                                        let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, pid, ResponseWire::Hit).await;
+                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Hit).await;
                                                                         }
                                                                     });
                                                                 }
@@ -586,8 +650,10 @@ fn PredictionsCard() -> impl IntoView {
                                                                         let pending_feedback = pending_feedback;
                                                                         let latch = latch;
                                                                         let pid = pid_c2.clone();
+                                                                        let initing = initing;
+                                                                        let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, pid, ResponseWire::Miss).await;
+                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Miss).await;
                                                                         }
                                                                     });
                                                                 }
@@ -601,8 +667,10 @@ fn PredictionsCard() -> impl IntoView {
                                                                         let pending_feedback = pending_feedback;
                                                                         let latch = latch;
                                                                         let pid = pid_c3.clone();
+                                                                        let initing = initing;
+                                                                        let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, pid, ResponseWire::Other).await;
+                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Other).await;
                                                                         }
                                                                     });
                                                                 }
@@ -619,7 +687,19 @@ fn PredictionsCard() -> impl IntoView {
                             </div>
                         }.into_any()
                     } else {
-                        view! { <p class="muted">"載入全文..."</p> }.into_any()
+                        view! {
+                            <div>
+                                <p class="muted">"載入全文..."</p>
+                                <button class="btn-link" on:click=move |_| {
+                                    spawn_local({
+                                        let state = state;
+                                        async move {
+                                            card_refresh(&state).await;
+                                        }
+                                    });
+                                }>"重試"</button>
+                            </div>
+                        }.into_any()
                     }
                 }}
             </Show>
