@@ -60,6 +60,7 @@ gwebcdb-mint turso --tier write --db fortunet --export
 
 ```bash
 ./scripts/verify-deployment.sh  # verify production services are healthy
+./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
 ```
 
 ## Architecture
