@@ -25,6 +25,40 @@ fn hit(anchor: &crate::anchors::Anchor, display: [f64; 5]) -> bool {
     }
 }
 
+/// OceanScores → 取整後顯示分 `[f64;5]`（索引 0..4 對齊 `DIMENSION_NAMES`）。
+/// F1 §5 切點用「取整後顯示分」，避免 66.7 顯示 67 卻走中檔的錯位。
+pub fn display_rounded(s: &crate::api::OceanScores) -> [f64; 5] {
+    [
+        s.extraversion.round(),
+        s.agreeableness.round(),
+        s.conscientiousness.round(),
+        s.emotionalStability.round(),
+        s.intellectImagination.round(),
+    ]
+}
+
+/// ipip_answers `[15]`（1–5）→ 每維三題全距 `[u8;5]`（max−min）。
+/// 反向題不影響全距，故不翻轉。length != 15 → `None`（fail-closed：
+/// 不生成，而非無降級把該 `low` 的列標成 `high` — Grok P2）。
+pub fn dim_ranges(answers: &[u8]) -> Option<[u8; 5]> {
+    if answers.len() != crate::items::ITEMS.len() {
+        return None;
+    }
+    let mut mins = [255u8; 5];
+    let mut maxs = [0u8; 5];
+    for (i, item) in crate::items::ITEMS.iter().enumerate() {
+        let v = answers[i];
+        let dim = item.dimension;
+        mins[dim] = mins[dim].min(v);
+        maxs[dim] = maxs[dim].max(v);
+    }
+    let mut out = [0u8; 5];
+    for dim in 0..5 {
+        out[dim] = maxs[dim].saturating_sub(mins[dim]);
+    }
+    Some(out)
+}
+
 /// 對單一 domain 選出勝出 trigger 及其代表錨點
 /// `ranges` 為該使用者 IPIP-15 五維各自的三題全距（max-min），用於 `全距≥2 => low` 降級
 pub fn select_for_domain(
@@ -118,9 +152,35 @@ pub fn select_for_domain(
     })
 }
 
-/// per-week 負面不過半篩選：超過半數為 Negative 時，丟棄 valence 最負者直至 ≤半數
-/// `Neutral` 永不丟，`Positive` 亦不丟；僅丟 `Negative`，按 priority 高者先丟（可選，本文按出現順序）
+/// per-week 負面不過半篩選：超過半數為 Negative 時，丟棄 valence 最負者直至 ≤半數。
+/// `Neutral`/`Positive` 永不丟；僅丟 `Negative`，low-coverage 先丟，再按 priority 高者先丟。
+///
+/// v1 D2-A 例外（Grok 裁決，F8 登記「三領域落地後廢除」）：total==2 且兩條皆 Negative
+/// → 保留 1 條（coverage 較高者勝；同 coverage 比 priority 小者勝），接受該週 1/1 負面，
+/// 避免低 A/C/ES 特質的週被系統性清空。per-domain 語意不可取（1 條輸出任一 Negative 即 100% 違規）。
 pub fn filter_negative_half(mut selected: Vec<Selected<'static>>) -> Vec<Selected<'static>> {
+    if selected.len() == 2 && selected.iter().all(|s| s.valence == Valence::Negative) {
+        let keep = selected
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| {
+                let ac = if a.coverage == AnchorCoverage::High {
+                    1
+                } else {
+                    0
+                };
+                let bc = if b.coverage == AnchorCoverage::High {
+                    1
+                } else {
+                    0
+                };
+                ac.cmp(&bc)
+                    .then_with(|| b.anchor.priority.cmp(&a.anchor.priority))
+            })
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        return vec![selected.remove(keep)];
+    }
     loop {
         let total = selected.len();
         if total == 0 {
@@ -245,22 +305,92 @@ mod tests {
 
     #[test]
     fn per_week_negative_not_over_half() {
-        // 構造 3 條 selected，其中 2 負 1 中 => 過濾後應 1 負 1 中
-        let d_neg = display(50.0, 20.0, 20.0, 20.0, 50.0);
-        // 產生兩個 domain 的 selected 模擬 per-week
-        let s1 = select_for_domain(Domain::Work, d_neg, ranges_all(0)).unwrap();
-        let s2 = select_for_domain(Domain::Money, d_neg, ranges_all(0)).unwrap();
-        // 人工構造第三條負面
-        let mut vec = vec![s1, s2];
-        // 複製一個負面
-        let s3 = select_for_domain(Domain::Work, d_neg, ranges_all(0)).unwrap();
-        vec.push(s3);
-        // 此時可能 3 條皆負（因為 work/money T1 皆負），過濾後應 ≤1
-        let filtered = filter_negative_half(vec);
+        // 2 負 1 中 → 正常迴圈丟 1 負 → 1 負 1 中（負面不過半）
+        let neg = selected_with(neg_anchor(), AnchorCoverage::High);
+        let neu = selected_with(neutral_anchor(), AnchorCoverage::High);
+        let filtered = filter_negative_half(vec![neg.clone(), neg.clone(), neu.clone()]);
+        assert_eq!(filtered.len(), 2);
         let neg = filtered
             .iter()
             .filter(|s| s.valence == Valence::Negative)
             .count();
         assert!(neg * 2 <= filtered.len());
+    }
+
+    #[test]
+    fn two_negative_domains_keep_better_coverage() {
+        // D2-A：2 條皆負 → 保留 coverage 較高者（同 coverage 比 priority 小者勝）
+        let neg_lo = selected_with(neg_anchor(), AnchorCoverage::Low);
+        let neg_hi = selected_with(neg_anchor(), AnchorCoverage::High);
+        for v in [
+            vec![neg_lo.clone(), neg_hi.clone()],
+            vec![neg_hi.clone(), neg_lo.clone()],
+        ] {
+            let filtered = filter_negative_half(v);
+            assert_eq!(filtered.len(), 1);
+            assert_eq!(filtered[0].coverage, AnchorCoverage::High);
+        }
+    }
+
+    #[test]
+    fn all_neutral_unchanged() {
+        let neu = selected_with(neutral_anchor(), AnchorCoverage::High);
+        let filtered = filter_negative_half(vec![neu.clone(), neu.clone()]);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn empty_stays_empty() {
+        assert!(filter_negative_half(vec![]).is_empty());
+    }
+
+    #[test]
+    fn display_rounded_rounds_to_integer() {
+        use crate::api::OceanScores;
+        let o = OceanScores {
+            extraversion: 66.7,
+            agreeableness: 33.3,
+            conscientiousness: 50.0,
+            emotionalStability: 66.5,
+            intellectImagination: 100.0,
+        };
+        assert_eq!(display_rounded(&o), [67.0, 33.0, 50.0, 67.0, 100.0]);
+    }
+
+    #[test]
+    fn dim_ranges_computed_from_answers() {
+        // 維 0: 1,1,5 → 4；維 1: 3,3,3 → 0；維 2: 2,4,1 → 3；維 3: 5,5,5 → 0；維 4: 1,5,2 → 4
+        let answers = [1u8, 1, 5, 3, 3, 3, 2, 4, 1, 5, 5, 5, 1, 5, 2];
+        assert_eq!(dim_ranges(&answers), Some([4, 0, 3, 0, 4]));
+        assert_eq!(dim_ranges(&[1, 2, 3]), None);
+    }
+
+    // ── 測試輔助：手動建 Selected（anchor 取自目錄）──
+
+    fn selected_with(
+        anchor: &'static crate::anchors::Anchor,
+        coverage: AnchorCoverage,
+    ) -> Selected<'static> {
+        Selected {
+            trigger: anchor.trigger,
+            anchor,
+            anchor_ids: vec![anchor.id],
+            coverage,
+            valence: anchor.valence,
+        }
+    }
+
+    fn neg_anchor() -> &'static crate::anchors::Anchor {
+        ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Negative)
+            .unwrap()
+    }
+
+    fn neutral_anchor() -> &'static crate::anchors::Anchor {
+        ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Neutral)
+            .unwrap()
     }
 }

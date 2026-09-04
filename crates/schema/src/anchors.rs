@@ -382,6 +382,10 @@ pub const ANCHORS: &[Anchor] = &[
     },
 ];
 
+/// 規則版本（語意遞增）：目錄實質變更（增/改錨點、改切點）才 bump。
+/// 每列 `predictions.rules_version` 寫此值；F8 分析須按此分層。
+pub const RULES_VERSION: &str = "rules-1";
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -418,8 +418,11 @@ pub struct Prediction {
     pub cycleId: String,
     pub domain: DomainWire,
     pub trigger: TriggerWire,
-    pub tendency: String,
-    pub forecast: String,
+    /// F6 遮罩（Grok P0-2）：第 1 段未收齊前為 null；收齊後才吐全文。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tendency: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forecast: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub experiment: Option<String>,
     pub anchorIds: Vec<String>,
@@ -444,6 +447,38 @@ pub struct PredictionFeedback {
     pub predictionId: String,
     pub response: ResponseWire,
     pub createdAt: String,
+}
+
+// ── F5 API 層 DTO（docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md §4.2）──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckSituationRequest {
+    /// 省略 = 當週；提供時必須為當週（否則 STALE_CYCLE）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycleId: Option<String>,
+    pub trigger: TriggerWire,
+    pub situation: SituationWire,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackRequest {
+    pub response: ResponseWire,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListPredictionsResponse {
+    pub cycleId: String,
+    pub checks: Vec<SituationCheck>,
+    pub predictions: Vec<Prediction>,
+    pub feedback: Vec<PredictionFeedback>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratePredictionsResponse {
+    pub cycleId: String,
+    /// 本次呼叫是否真的跑了生成管線（false = 該週已凍結/已存在）。
+    pub generated: bool,
+    pub predictions: Vec<Prediction>,
 }
 
 #[cfg(test)]
@@ -474,8 +509,8 @@ mod f5_wire_tests {
             cycleId: "2026-09-01".into(),
             domain: DomainWire::Work,
             trigger: TriggerWire::T1,
-            tendency: "t".into(),
-            forecast: "f".into(),
+            tendency: Some("t".into()),
+            forecast: Some("f".into()),
             experiment: Some("e".into()),
             anchorIds: vec!["work-t1-agr-lo-1".into()],
             anchorCoverage: AnchorCoverageWire::High,
@@ -489,8 +524,40 @@ mod f5_wire_tests {
         assert_eq!(j["trigger"], "t1");
         assert_eq!(j["anchorCoverage"], "high");
         assert_eq!(j["source"], "rule_anchor");
+        assert_eq!(j["tendency"], "t");
         let back: Prediction = serde_json::from_value(j).unwrap();
         assert_eq!(back.domain, DomainWire::Work);
+    }
+
+    #[test]
+    fn prediction_redacted_omits_text_fields() {
+        // Grok P0-2：未收齊第 1 段 → tendency/forecast/experiment 為 null/缺省
+        let mut p = Prediction {
+            id: "p1".into(),
+            profileId: "prof1".into(),
+            cycleId: "2026-09-01".into(),
+            domain: DomainWire::Work,
+            trigger: TriggerWire::T1,
+            tendency: None,
+            forecast: None,
+            experiment: None,
+            anchorIds: vec!["work-t1-agr-lo-1".into()],
+            anchorCoverage: AnchorCoverageWire::High,
+            source: PredictionSourceWire::RuleAnchor,
+            rulesVersion: "rules-1".into(),
+            isControl: false,
+            createdAt: "2026-09-01T00:00:00Z".into(),
+        };
+        let j = serde_json::to_value(&p).unwrap();
+        assert!(j.get("tendency").is_none());
+        assert!(j.get("forecast").is_none());
+        // 缺省欄位反序列化回 None
+        let back: Prediction = serde_json::from_value(j).unwrap();
+        assert_eq!(back.tendency, None);
+        assert_eq!(back.forecast, None);
+        p.tendency = Some("t".into());
+        let j2 = serde_json::to_value(&p).unwrap();
+        assert_eq!(j2["tendency"], "t");
     }
 }
 

@@ -174,6 +174,9 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle ON predictions(user_id, cycle_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_profile ON predictions(profile_id);
+-- 防呆：一週一領域一列（Grok P0-4；冪等）
+CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_user_cycle_domain
+  ON predictions(user_id, cycle_id, domain);
 
 CREATE TABLE IF NOT EXISTS situation_checks (
   user_id     TEXT NOT NULL,
@@ -190,4 +193,14 @@ CREATE TABLE IF NOT EXISTS prediction_feedback (
   response      TEXT NOT NULL,
   created_at    TEXT NOT NULL,
   FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE
+);
+
+-- ── F5 API 層：cycle 級生成快照（2026-09-04 設計 §2）──
+-- Grok P0-4：一週一 profile 一快照；空週也寫（凍結），防週中重測混 profile
+CREATE TABLE IF NOT EXISTS prediction_generations (
+  user_id      TEXT NOT NULL,
+  cycle_id     TEXT NOT NULL,   -- Asia/Taipei 週一 YYYY-MM-DD
+  profile_id   TEXT NOT NULL,   -- 當時 personality_profiles.id 快照
+  generated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, cycle_id)
 );
