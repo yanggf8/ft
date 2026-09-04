@@ -21,6 +21,58 @@ pub enum TriggerClass {
     T6,
 }
 
+impl TriggerClass {
+    /// §5.3.3 標準問法（F6 第 1 段逐字；不得改寫，測試釘死）
+    pub const fn question(&self) -> &'static str {
+        match self {
+            TriggerClass::T1 => "這週有沒有跟人意見不合或起摩擦？",
+            TriggerClass::T2 => "這週有沒有事情趕不完、被期限追著？",
+            TriggerClass::T3 => "這週有沒有需要跟不熟的人、或一群人相處？",
+            TriggerClass::T4 => "這週有沒有被糾正、挑毛病或收到負面回饋？",
+            TriggerClass::T5 => "這週有沒有原本安排好的事突然變動？",
+            TriggerClass::T6 => "這週有沒有需要在幾個選項之間做決定？",
+        }
+    }
+
+    /// §5.3.3「類別」短名（Stage 2 列標用）
+    pub const fn label(&self) -> &'static str {
+        match self {
+            TriggerClass::T1 => "人際摩擦",
+            TriggerClass::T2 => "時限壓力",
+            TriggerClass::T3 => "生疏社交",
+            TriggerClass::T4 => "被指出問題",
+            TriggerClass::T5 => "計畫被打亂",
+            TriggerClass::T6 => "有選擇要做",
+        }
+    }
+}
+
+impl From<crate::api::TriggerWire> for TriggerClass {
+    fn from(w: crate::api::TriggerWire) -> Self {
+        match w {
+            crate::api::TriggerWire::T1 => TriggerClass::T1,
+            crate::api::TriggerWire::T2 => TriggerClass::T2,
+            crate::api::TriggerWire::T3 => TriggerClass::T3,
+            crate::api::TriggerWire::T4 => TriggerClass::T4,
+            crate::api::TriggerWire::T5 => TriggerClass::T5,
+            crate::api::TriggerWire::T6 => TriggerClass::T6,
+        }
+    }
+}
+
+impl From<TriggerClass> for crate::api::TriggerWire {
+    fn from(t: TriggerClass) -> Self {
+        match t {
+            TriggerClass::T1 => crate::api::TriggerWire::T1,
+            TriggerClass::T2 => crate::api::TriggerWire::T2,
+            TriggerClass::T3 => crate::api::TriggerWire::T3,
+            TriggerClass::T4 => crate::api::TriggerWire::T4,
+            TriggerClass::T5 => crate::api::TriggerWire::T5,
+            TriggerClass::T6 => crate::api::TriggerWire::T6,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
     High,
@@ -525,5 +577,60 @@ mod tests {
                 a.id
             );
         }
+    }
+    #[test]
+    fn trigger_question_matches_533_table_verbatim() {
+        // §5.3.3 定案值域表格逐字（Grok UI 審 P2-2：不得只 assert 關鍵字）
+        assert_eq!(
+            TriggerClass::T1.question(),
+            "這週有沒有跟人意見不合或起摩擦？"
+        );
+        assert_eq!(
+            TriggerClass::T2.question(),
+            "這週有沒有事情趕不完、被期限追著？"
+        );
+        assert_eq!(
+            TriggerClass::T3.question(),
+            "這週有沒有需要跟不熟的人、或一群人相處？"
+        );
+        assert_eq!(
+            TriggerClass::T4.question(),
+            "這週有沒有被糾正、挑毛病或收到負面回饋？"
+        );
+        assert_eq!(
+            TriggerClass::T5.question(),
+            "這週有沒有原本安排好的事突然變動？"
+        );
+        assert_eq!(
+            TriggerClass::T6.question(),
+            "這週有沒有需要在幾個選項之間做決定？"
+        );
+        assert_eq!(TriggerClass::T1.label(), "人際摩擦");
+        assert_eq!(TriggerClass::T2.label(), "時限壓力");
+        assert_eq!(TriggerClass::T3.label(), "生疏社交");
+        assert_eq!(TriggerClass::T4.label(), "被指出問題");
+        assert_eq!(TriggerClass::T5.label(), "計畫被打亂");
+        assert_eq!(TriggerClass::T6.label(), "有選擇要做");
+    }
+
+    #[test]
+    fn trigger_wire_roundtrip() {
+        use crate::api::TriggerWire;
+        for t in [
+            TriggerClass::T1,
+            TriggerClass::T2,
+            TriggerClass::T3,
+            TriggerClass::T4,
+            TriggerClass::T5,
+            TriggerClass::T6,
+        ] {
+            let w = TriggerWire::from(t);
+            assert_eq!(TriggerClass::from(w), t);
+        }
+        // wire 小寫語意不變
+        assert_eq!(
+            serde_json::to_value(TriggerWire::from(TriggerClass::T1)).unwrap(),
+            "t1"
+        );
     }
 }
