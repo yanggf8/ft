@@ -129,6 +129,33 @@ impl Turso {
         })
     }
 
+    /// POST one Hrana v2 pipeline body and return the decoded payload.
+    async fn post_payload(&self, body: &str) -> Result<Value> {
+        let headers = Headers::new();
+        headers.set("Content-Type", "application/json")?;
+        if let Some(token) = &self.auth {
+            headers.set("Authorization", &format!("Bearer {token}"))?;
+        }
+
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(JsValue::from_str(body)));
+        let request = Request::new_with_init(&self.endpoint, &init)?;
+
+        let mut response = Fetch::Request(request).send().await?;
+        let status = response.status_code();
+        if status != 200 {
+            let detail = response.text().await.unwrap_or_default();
+            return Err(err(format!("turso HTTP {status}: {detail}")));
+        }
+
+        response
+            .json::<Value>()
+            .await
+            .map_err(|e| err(format!("turso response parse: {e}")))
+    }
+
     /// POST one `execute` + `close` pipeline and return the statement result.
     async fn execute(&self, sql: &str, binds: &[&Param<'_>]) -> Result<StmtResult> {
         let args: Vec<Value> = binds.iter().map(|param| encode_value(param)).collect();
@@ -139,27 +166,7 @@ impl Turso {
             ]
         })
         .to_string();
-
-        let headers = Headers::new();
-        headers.set("Content-Type", "application/json")?;
-        if let Some(token) = &self.auth {
-            headers.set("Authorization", &format!("Bearer {token}"))?;
-        }
-
-        let mut init = RequestInit::new();
-        init.with_method(Method::Post)
-            .with_headers(headers)
-            .with_body(Some(JsValue::from_str(&body)));
-        let request = Request::new_with_init(&self.endpoint, &init)?;
-
-        let mut response = Fetch::Request(request).send().await?;
-        let status = response.status_code();
-        if status != 200 {
-            let detail = response.text().await.unwrap_or_default();
-            return Err(err(format!("turso HTTP {status}: {detail}")));
-        }
-
-        let payload = response.json::<Value>().await?;
+        let payload = self.post_payload(&body).await?;
         let step = payload
             .get("results")
             .and_then(Value::as_array)
@@ -268,6 +275,83 @@ pub async fn exec_changes(db: &Turso, sql: &str, bind: &[&Param<'_>]) -> Result<
     db.execute(sql, bind).await.map(|result| result.changes)
 }
 
+/// Acquire a step result's `affected_row_count`, tolerating both the plain
+/// StmtResult shape and a `response/result/...`-wrapped one.
+fn affected_count(item: &Value) -> usize {
+    let pull = |v: &Value| {
+        v.as_u64()
+            .or_else(|| v.as_str().and_then(|text| text.parse().ok()))
+            .unwrap_or(0) as usize
+    };
+    if let Some(n) = item.get("affected_row_count") {
+        return pull(n);
+    }
+    item.pointer("/response/result/affected_row_count")
+        .map(pull)
+        .unwrap_or(0)
+}
+
+/// Run several statements **atomically** in one Hrana v2 `batch` — a single
+/// HTTP round-trip executed in an implicit transaction; a failed step aborts
+/// and rolls back the whole batch (Grok P2: F7 data-rights delete must not
+/// leave ghost rows on mid-failure). Returns the affected-row count per step.
+///
+/// The batch result is `{"type":"success","results":[...]}` or
+/// `{"type":"error", ...}`; per-step entries parse through [`affected_count`].
+pub async fn batch(db: &Turso, stmts: &[(&str, &[&Param<'_>])]) -> Result<Vec<usize>, Error> {
+    if stmts.is_empty() {
+        return Ok(Vec::new());
+    }
+    let steps: Vec<Value> = stmts
+        .iter()
+        .map(|(sql, binds)| {
+            let args: Vec<Value> = binds.iter().map(|param| encode_value(param)).collect();
+            json!({ "type": "execute", "stmt": { "sql": sql, "args": args } })
+        })
+        .collect();
+    let body = json!({
+        "requests": [
+            { "type": "batch", "steps": steps },
+            { "type": "close" },
+        ]
+    })
+    .to_string();
+    let payload = db.post_payload(&body).await?;
+    let step = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .and_then(|results| results.first())
+        .ok_or_else(|| err("turso returned no result"))?;
+    if step.get("type").and_then(Value::as_str) != Some("ok") {
+        let message = step
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown error");
+        return Err(err(format!("turso: {message}")));
+    }
+    let result = step
+        .get("response")
+        .and_then(|response| response.get("result"))
+        .ok_or_else(|| err("batch result missing"))?;
+    let results = match result.get("type").and_then(Value::as_str) {
+        Some("success") => result
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or_else(|| err("batch success missing results"))?,
+        Some("error") => {
+            let message = result
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(Value::as_str)
+                .unwrap_or("batch failed and was rolled back");
+            return Err(err(format!("turso: {message}")));
+        }
+        _ => return Err(err("unexpected batch result type")),
+    };
+    Ok(results.iter().map(affected_count).collect())
+}
+
 /// Bind value → Hrana's tagged form. Integers go as strings, which is what the
 /// protocol requires.
 fn encode_value(param: &Param<'_>) -> Value {
@@ -334,6 +418,22 @@ fn http_base(url: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn affected_count_tolerates_plain_and_wrapped_shapes() {
+        use serde_json::json;
+        // 純 StmtResult
+        assert_eq!(affected_count(&json!({"affected_row_count": 3})), 3);
+        // 字串數字（Hrana 整數傳輸慣例）
+        assert_eq!(affected_count(&json!({"affected_row_count": "2"})), 2);
+        // wrapped: {"type":"execute","result":{"affected_row_count":1}}
+        assert_eq!(
+            affected_count(&json!({"response": {"result": {"affected_row_count": 1}}})),
+            1
+        );
+        // 缺欄位 → 0
+        assert_eq!(affected_count(&json!({})), 0);
+    }
 
     #[test]
     fn http_base_maps_libsql_scheme_to_https() {

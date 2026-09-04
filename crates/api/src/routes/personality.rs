@@ -299,34 +299,30 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };
-            if let Err(e) = db::exec(
-                &db,
-                "DELETE FROM personality_profiles WHERE user_id = ?1",
-                &[&db::text(&user_id)],
-            )
-            .await
-            {
+            // F7 資料刪除（Grok P1→二審 P2 修正）：全部 5 句一次 Hrana v2 `batch`——
+            // 隱式交易、任一失敗整批 rollback，幽靈列不得進 F8、也不留半刪狀態。
+            let uid = db::text(&user_id);
+            let one: [&db::Param<'_>; 1] = [&uid];
+            let stmts: [(&str, &[&db::Param<'_>]); 5] = [
+                (
+                    "DELETE FROM prediction_feedback WHERE prediction_id IN \
+                     (SELECT id FROM predictions WHERE user_id = ?1)",
+                    &one,
+                ),
+                ("DELETE FROM predictions WHERE user_id = ?1", &one),
+                ("DELETE FROM situation_checks WHERE user_id = ?1", &one),
+                (
+                    "DELETE FROM prediction_generations WHERE user_id = ?1",
+                    &one,
+                ),
+                ("DELETE FROM personality_profiles WHERE user_id = ?1", &one),
+            ];
+            if let Err(e) = db::batch(&db, &stmts).await {
                 return Ok(error::error_code(
                     format!("db error: {}", e),
                     "DB_ERROR",
                     500,
                 ));
-            }
-            // F7 資料刪除（Grok P1）：連帶清 F5 predictions 系列，幽靈列不得進 F8。
-            // prediction_feedback 先於 predictions 刪（無 FK 強制；順序無關但明確）。
-            for sql in [
-                "DELETE FROM prediction_feedback WHERE prediction_id IN                      (SELECT id FROM predictions WHERE user_id = ?1)",
-                "DELETE FROM predictions WHERE user_id = ?1",
-                "DELETE FROM situation_checks WHERE user_id = ?1",
-                "DELETE FROM prediction_generations WHERE user_id = ?1",
-            ] {
-                if let Err(e) = db::exec(&db, sql, &[&db::text(&user_id)]).await {
-                    return Ok(error::error_code(
-                        format!("db error: {}", e),
-                        "DB_ERROR",
-                        500,
-                    ));
-                }
             }
             Ok(ok_json(
                 &to_json(&PersonalityDeleteResponse { success: true }),
