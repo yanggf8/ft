@@ -30,7 +30,7 @@ service = "fortunet-engine"
 
 # Environment variables
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 # Turso (libSQL) database, replacing the former D1 `DB` binding. The URL is not
 # a secret; the matching TURSO_AUTH_TOKEN is (`wrangler secret put`). Mint one
 # with `gwebcdb-mint turso --tier write --db fortunet --export` — a group token

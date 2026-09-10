@@ -27,6 +27,21 @@ pub fn client_ip(req: &Request) -> String {
 }
 
 /// Auth middleware — validates Bearer token against SESSION_DO, returns userId.
+/// P3: request body 上限(bytes)。合法 payload 最大者(IPIP-15 quiz JSON)遠小於
+/// 此值;超過即 413,防 oversized body 燒 isolate CPU/記憶體。
+pub const MAX_BODY_BYTES: u64 = 65_536;
+
+/// Content-Length 超過 [`MAX_BODY_BYTES`](上限)(缺 header — chunked — 時放行,
+/// 交給平台上限)。
+pub fn body_too_large(req: &Request) -> bool {
+    req.headers()
+        .get("content-length")
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse::<u64>().ok())
+        .is_some_and(|n| n > MAX_BODY_BYTES)
+}
+
 pub async fn auth_user(req: &Request, ctx: &RouteContext<()>) -> Result<String, Response> {
     let auth = req
         .headers()

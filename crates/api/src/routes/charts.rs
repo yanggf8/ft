@@ -64,7 +64,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             let u = db::text(&user);
             let rows: Vec<serde_json::Value> = match db::all(&db, "SELECT * FROM interpretations WHERE user_id = ?1 ORDER BY created_at DESC", &[&u]).await {
                 Ok(v) => v,
-                Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                Err(_) => return Ok(error::error("db error", 500)),
             };
             let interpretations: Vec<serde_json::Value> = rows
                 .into_iter()
@@ -109,7 +109,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 &[&u, &bh],
             ).await {
                 Ok(r) => r,
-                Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                Err(_) => return Ok(error::error("db error", 500)),
             };
             let row = match row {
                 Some(r) => r,
@@ -221,7 +221,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         &[&u, &bh],
                     ).await {
                         Ok(r) => r,
-                        Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                        Err(_) => return Ok(error::error("db error", 500)),
                     };
                     if let Some(ex) = existing {
                         if let Some(ai) = &ex.ai_interpretation {
@@ -348,7 +348,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         "INSERT INTO interpretations (id, user_id, divination_type, chart_data, ai_interpretation, birth_data_hash) VALUES (?1, ?2, 'story', ?3, ?4, ?5) ON CONFLICT(user_id, divination_type) DO UPDATE SET chart_data = excluded.chart_data, ai_interpretation = excluded.ai_interpretation, birth_data_hash = excluded.birth_data_hash, updated_at = datetime('now')",
                         &[&id_t, &uid_t, &chart_t, &ai_t, &bh_t],
                     ).await {
-                        return Ok(error::error(format!("db error: {}", e), 500));
+                        return Ok(error::error("db error", 500));
                     }
                     let mut res = ok_json(&serde_json::json!({
                         "story": ai_resp.interpretation, "provider": ai_resp.provider, "model": ai_resp.model, "fromCache": false,
@@ -412,7 +412,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 &[&u, &dt, &bh],
             ).await {
                 Ok(r) => r,
-                Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                Err(_) => return Ok(error::error("db error", 500)),
             };
             let etag = create_etag(
                 format!("{}-{}-{}", hash, expected_version, CHART_SCHEMA_VERSION),
@@ -499,7 +499,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 "INSERT INTO interpretations (id, user_id, divination_type, chart_data, birth_data_hash) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(user_id, divination_type) DO UPDATE SET chart_data = excluded.chart_data, birth_data_hash = excluded.birth_data_hash, ai_interpretation = NULL, updated_at = datetime('now')",
                 &[&id_t, &uid_t, &dt_t, &chart_t, &bh_t],
             ).await {
-                return Ok(error::error(format!("db error: {}", e), 500));
+                return Ok(error::error("db error", 500));
             }
 
             let response = serde_json::json!({
@@ -571,7 +571,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         &[&u, &dt],
                     ).await {
                         Ok(r) => r,
-                        Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                        Err(_) => return Ok(error::error("db error", 500)),
                     };
                     let interp = match interp {
                         Some(i) => i,
@@ -643,7 +643,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     let id_t = db::text(&interp.id);
                     let ai_t = db::text(&ai_resp.interpretation);
                     if let Err(e) = db::exec(&db, "UPDATE interpretations SET ai_interpretation = ?1, updated_at = datetime('now') WHERE id = ?2", &[&ai_t, &id_t]).await {
-                        return Ok(error::error(format!("db error: {}", e), 500));
+                        return Ok(error::error("db error", 500));
                     }
                     let mut res = ok_json(&serde_json::json!({
                         "interpretation": ai_resp.interpretation, "provider": ai_resp.provider, "model": ai_resp.model, "fromCache": false,
@@ -707,7 +707,7 @@ async fn get_birth_data(db: &db::Turso, user: &str) -> Result<UserBirthRow, Resp
         db,
         "SELECT birth_year, birth_month, birth_day, birth_hour, birth_minute, gender, timezone, latitude, longitude, birth_data_hash, generation_tags FROM users WHERE id = ?1",
         &[&u],
-    ).await.map_err(|e| error::error(format!("db error: {}", e), 500))?;
+    ).await.map_err(|_| error::error("db error", 500))?;
     row.ok_or_else(|| error::error("User not found", 404))
 }
 

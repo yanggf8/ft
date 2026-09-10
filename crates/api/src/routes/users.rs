@@ -5,7 +5,7 @@ use worker::*;
 
 use super::super::error;
 use super::super::services::{billing, birth_hash, db};
-use super::common::{apply_cache_headers, auth_user, ok_json};
+use super::common::{apply_cache_headers, auth_user, body_too_large, ok_json};
 use super::R;
 
 #[derive(Debug, serde::Deserialize)]
@@ -90,7 +90,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 &[&u],
             ).await {
                 Ok(r) => r,
-                Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                Err(_) => return Ok(error::error("db error", 500)),
             };
             let row = match row {
                 Some(r) => r,
@@ -144,6 +144,9 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(resp) => return Ok(resp),
             };
+            if body_too_large(&req) {
+                return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413));
+            }
             let body: BirthBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
@@ -212,11 +215,11 @@ pub fn register(router: R<'static>) -> R<'static> {
                 "UPDATE users SET birth_year = ?1, birth_month = ?2, birth_day = ?3, birth_hour = ?4, birth_minute = ?5, gender = ?6, timezone = ?7, latitude = ?8, longitude = ?9, birth_data_hash = ?10, generation_tags = ?11, updated_at = datetime('now') WHERE id = ?12",
                 &[&by_t, &bm_t, &bd_t, &bh_t, &bmi_t, &g_t, &tz_t, &lat_t, &lon_t, &h_t, &gen_t, &u_t],
             ).await {
-                return Ok(error::error(format!("db error: {}", e), 500));
+                return Ok(error::error("db error", 500));
             }
             let du_t = db::text(&user);
             if let Err(e) = db::exec(&db, "DELETE FROM interpretations WHERE user_id = ?1", &[&du_t]).await {
-                return Ok(error::error(format!("db error: {}", e), 500));
+                return Ok(error::error("db error", 500));
             }
             let mut res = ok_json(&serde_json::json!({ "success": true, "birth_data_hash": hash }), 200);
             apply_cache_headers(&mut res, 0, false);
@@ -227,6 +230,9 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(resp) => return Ok(resp),
             };
+            if body_too_large(&req) {
+                return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413));
+            }
             let body: ProfileBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
@@ -257,7 +263,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 "UPDATE users SET full_name = ?1, avatar_url = ?2, updated_at = datetime('now') WHERE id = ?3",
                 &[&name_t, &avatar_t, &u_t],
             ).await {
-                return Ok(error::error(format!("db error: {}", e), 500));
+                return Ok(error::error("db error", 500));
             }
             let u2_t = db::text(&user);
             let row: Option<MinimalUser> = match db::first(
@@ -266,7 +272,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 &[&u2_t],
             ).await {
                 Ok(r) => r,
-                Err(e) => return Ok(error::error(format!("db error: {}", e), 500)),
+                Err(_) => return Ok(error::error("db error", 500)),
             };
             let row = match row {
                 Some(r) => r,

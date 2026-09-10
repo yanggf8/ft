@@ -16,7 +16,7 @@ use super::super::services::db;
 use super::super::services::email;
 use super::super::services::login_token;
 use super::super::services::uuid;
-use super::common::{client_ip, ok_json, rate_limit};
+use super::common::{body_too_large, client_ip, ok_json, rate_limit};
 use super::R;
 
 /// Per-window limits: 10 requests/min per IP, 5 per email address.
@@ -33,6 +33,9 @@ const LINK_SENT_BODY: &str = "If that email exists, a login link has been sent";
 pub fn register(router: R<'static>) -> R<'static> {
     router
         .post_async("/api/auth/register", |mut req, ctx| async move {
+            if body_too_large(&req) {
+                return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413));
+            }
             let body: RegisterBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
@@ -71,6 +74,9 @@ pub fn register(router: R<'static>) -> R<'static> {
             issue_login_link(&ctx, &email_addr, body.full_name.as_deref(), invite_code).await
         })
         .post_async("/api/auth/login", |mut req, ctx| async move {
+            if body_too_large(&req) {
+                return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413));
+            }
             let body: LoginBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
@@ -99,6 +105,9 @@ pub fn register(router: R<'static>) -> R<'static> {
             let ip = client_ip(&req);
             if !rate_limited(&ctx, &[(format!("verify:ip:{}", ip), RATE_LIMIT_IP)]).await {
                 return Ok(error::error("Too many requests", 429));
+            }
+            if body_too_large(&req) {
+                return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413));
             }
             let body: VerifyBody = match req.json().await {
                 Ok(b) => b,

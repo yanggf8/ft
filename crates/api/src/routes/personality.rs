@@ -9,7 +9,9 @@ use ft_schema::api::{
 
 use super::super::error;
 use super::super::services::{chart_resolver, clock, db, uuid};
-use super::common::{apply_cache_headers, auth_user, client_ip, ok_json, rate_limit};
+use super::common::{
+    apply_cache_headers, auth_user, body_too_large, client_ip, ok_json, rate_limit,
+};
 use super::R;
 use ft_schema::symbolic;
 
@@ -122,6 +124,13 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(u) => u,
                 Err(e) => return Ok(e),
             };
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
+            }
             let body: QuizSubmission = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error_code("Invalid JSON", "INVALID_JSON", 400)),
@@ -190,11 +199,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                                     Ok(r) => r,
                                     // Grok 審 #2：讀失敗不得當「無記錄」——Err → 500。
                                     Err(e) => {
-                                        return Ok(error::error_code(
-                                            format!("db error: {}", e),
-                                            "DB_ERROR",
-                                            500,
-                                        ))
+                                        return Ok(error::error_code("db error", "DB_ERROR", 500))
                                     }
                                 };
                             let escalated = latest
@@ -258,11 +263,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             )
             .await
             {
-                return Ok(error::error_code(
-                    format!("db error: {}", e),
-                    "DB_ERROR",
-                    500,
-                ));
+                return Ok(error::error_code("db error", "DB_ERROR", 500));
             }
 
             // 首次亂答 → 422，前端提示重測一次（code 由前端分流中文訊息）。
@@ -296,13 +297,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             let latest: Option<ProfileRow> =
                 match db::first(&db, SELECT_LATEST, &[&db::text(&user_id)]).await {
                     Ok(r) => r,
-                    Err(e) => {
-                        return Ok(error::error_code(
-                            format!("db error: {}", e),
-                            "DB_ERROR",
-                            500,
-                        ))
-                    }
+                    Err(e) => return Ok(error::error_code("db error", "DB_ERROR", 500)),
                 };
             let complete: Option<ProfileRow> = match db::first(
                 &db,
@@ -314,13 +309,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             .await
             {
                 Ok(r) => r,
-                Err(e) => {
-                    return Ok(error::error_code(
-                        format!("db error: {}", e),
-                        "DB_ERROR",
-                        500,
-                    ))
-                }
+                Err(e) => return Ok(error::error_code("db error", "DB_ERROR", 500)),
             };
             let resp = PersonalityMeResponse {
                 profile: complete.and_then(row_to_profile),
@@ -359,11 +348,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 ("DELETE FROM personality_profiles WHERE user_id = ?1", &one),
             ];
             if let Err(e) = db::batch(&db, &stmts).await {
-                return Ok(error::error_code(
-                    format!("db error: {}", e),
-                    "DB_ERROR",
-                    500,
-                ));
+                return Ok(error::error_code("db error", "DB_ERROR", 500));
             }
             Ok(ok_json(
                 &to_json(&PersonalityDeleteResponse { success: true }),

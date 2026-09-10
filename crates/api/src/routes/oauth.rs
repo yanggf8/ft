@@ -20,7 +20,7 @@ use crate::services::oauth::{
 use crate::services::uuid;
 
 use super::super::error;
-use super::common::{client_ip, ok_json, rate_limit};
+use super::common::{body_too_large, client_ip, ok_json, rate_limit};
 use super::R;
 
 /// The Google callback redirects with `?oauth_code=` — a single-use code with
@@ -120,6 +120,13 @@ pub fn register(router: R<'static>) -> R<'static> {
             .await
             {
                 return Ok(error::error("Too many requests", 429));
+            }
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
             }
             let body: ExchangeBody = match req.json().await {
                 Ok(b) => b,

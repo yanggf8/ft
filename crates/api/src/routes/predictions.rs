@@ -8,7 +8,9 @@ use ft_schema::cycle::is_monday_cycle_id;
 
 use super::super::error;
 use super::super::services::{db, predictions};
-use super::common::{apply_cache_headers, auth_user, client_ip, ok_json, rate_limit};
+use super::common::{
+    apply_cache_headers, auth_user, body_too_large, client_ip, ok_json, rate_limit,
+};
 use super::R;
 
 const RATE_LIMIT: u32 = 10;
@@ -54,7 +56,7 @@ fn to_err(e: predictions::PredictionsError) -> worker::Response {
             "UNKNOWN_TRIGGER",
             400,
         ),
-        Db(e) => error::error_code(format!("db error: {e}"), "DB_ERROR", 500),
+        Db(_) => error::error_code("db error", "DB_ERROR", 500),
     }
 }
 
@@ -175,6 +177,13 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
+            }
             let body: CheckSituationRequest = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error_code("Invalid JSON", "INVALID_JSON", 400)),
@@ -240,6 +249,13 @@ pub fn register(router: R<'static>) -> R<'static> {
             let id = ctx.param("id").cloned().unwrap_or_default();
             if id.is_empty() {
                 return Ok(error::error_code("Prediction not found", "NOT_FOUND", 404));
+            }
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
             }
             let body: FeedbackRequest = match req.json().await {
                 Ok(b) => b,

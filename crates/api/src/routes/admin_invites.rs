@@ -7,7 +7,7 @@ use worker::*;
 
 use super::super::error;
 use super::super::services::{clock, db, invite};
-use super::common::{auth_user, ok_json};
+use super::common::{auth_user, body_too_large, ok_json};
 use super::R;
 
 /// Admin decision, pure for testing: unset var = nobody, else case-insensitive.
@@ -106,6 +106,13 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(e) => e,
                 Err(r) => return Ok(r),
             };
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
+            }
             let body: CreateBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
