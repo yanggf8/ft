@@ -7,8 +7,13 @@
 
 use crate::services::uuid::secure_bytes;
 
-/// Beta gate: true = register demands a valid invite code.
-pub const INVITE_REQUIRED: bool = true;
+/// Registration gate: true = signup (magic-link AND Google OAuth) demands a
+/// valid invite code. Flipped to false on 2026-09-06 — the business model is
+/// not settled, so gate management is deferred; when it is, flip this back to
+/// re-arm BOTH doors at once (the OAuth consume lives in
+/// routes/oauth.rs::resolve_google_user, keyed off this constant). A supplied
+/// code is still validated + consumed as channel attribution either way.
+pub const INVITE_REQUIRED: bool = false;
 
 pub const CODE_LEN: usize = 10;
 
@@ -43,6 +48,58 @@ pub fn is_usable(row: &InviteRow, now_iso: &str) -> bool {
     row.revoked_at.is_none()
         && row.used_count < row.max_uses
         && row.expires_at.as_deref().is_none_or(|e| e > now_iso)
+}
+
+/// Strict shape check for an admin-supplied `expires_at` before it is stored:
+/// exactly `YYYY-MM-DDTHH:MM:SS.mmmZ` — the shape `clock::now_iso()` emits — so
+/// `is_usable`'s plain string comparison stays chronologically correct (uneven
+/// fraction lengths break lexicographic ordering). Calendar-aware: month
+/// lengths and leap years are checked.
+pub fn valid_expires_iso(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 24
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+        || b[19] != b'.'
+        || b[23] != b'Z'
+    {
+        return false;
+    }
+    let f = |r: std::ops::Range<usize>| s.get(r).and_then(|p| p.parse::<u32>().ok());
+    let (Some(y), Some(mo), Some(d), Some(h), Some(mi), Some(se), Some(_ms)) = (
+        f(0..4),
+        f(5..7),
+        f(8..10),
+        f(11..13),
+        f(14..16),
+        f(17..19),
+        f(20..23),
+    ) else {
+        return false;
+    };
+    if !(1..=12).contains(&mo) || d == 0 || d > days_in_month(y, mo) {
+        return false;
+    }
+    h < 24 && mi < 60 && se < 60
+}
+
+/// Days in a month, Gregorian leap rules.
+fn days_in_month(y: u32, m: u32) -> u32 {
+    match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
@@ -95,6 +152,37 @@ mod tests {
     fn null_expiry_never_expires() {
         let row = row(0, 1, None, None);
         assert!(is_usable(&row, "2099-01-01T00:00:00.000Z"));
+    }
+
+    #[test]
+    fn accepts_canonical_iso_with_millis() {
+        assert!(valid_expires_iso("2026-09-30T23:59:59.999Z"));
+        assert!(valid_expires_iso("2026-01-01T00:00:00.000Z"));
+        assert!(valid_expires_iso("2024-02-29T12:00:00.000Z")); // leap year
+    }
+
+    #[test]
+    fn rejects_wrong_shapes() {
+        assert!(!valid_expires_iso(""));
+        assert!(!valid_expires_iso("2026-09-30")); // date only
+        assert!(!valid_expires_iso("2026-09-30T23:59")); // no seconds
+        assert!(!valid_expires_iso("2026-09-30T23:59:59")); // no fraction, no Z
+        assert!(!valid_expires_iso("2026-09-30T23:59:59Z")); // missing .mmm
+        assert!(!valid_expires_iso("2026-09-30 23:59:59.000Z")); // space, not T
+        assert!(!valid_expires_iso("2026-9-3T0:0:0.000Z")); // unpadded
+        assert!(!valid_expires_iso("2026-09-30T23:59:59.999+08:00")); // not Z
+    }
+
+    #[test]
+    fn rejects_impossible_calendar_dates() {
+        assert!(!valid_expires_iso("2026-13-01T00:00:00.000Z")); // month 13
+        assert!(!valid_expires_iso("2026-00-10T00:00:00.000Z")); // month 0
+        assert!(!valid_expires_iso("2026-02-30T00:00:00.000Z")); // Feb 30
+        assert!(!valid_expires_iso("2025-02-29T00:00:00.000Z")); // non-leap
+        assert!(!valid_expires_iso("2026-09-31T00:00:00.000Z")); // Sep 31
+        assert!(!valid_expires_iso("2026-09-30T24:00:00.000Z")); // hour 24
+        assert!(!valid_expires_iso("2026-09-30T23:60:00.000Z")); // minute 60
+        assert!(!valid_expires_iso("2026-09-30T23:59:60.000Z")); // second 60
     }
 
     fn row(used: i64, max: i64, exp: Option<String>, rev: Option<String>) -> InviteRow {

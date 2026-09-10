@@ -153,3 +153,63 @@ pub fn success_redirect_url(frontend_origin: &str, token: &str) -> String {
 pub fn failure_redirect_url(frontend_origin: &str, error: &str) -> String {
     format!("{frontend_origin}/login?error={error}")
 }
+
+pub const INVITE_COOKIE_NAME: &str = "google_oauth_invite";
+pub const INVITE_COOKIE_MAX_AGE_SECONDS: u64 = 600;
+
+/// The invite code rides its own short-lived cookie (same Path and lifetime
+/// discipline as the CSRF state cookie) from `GET /api/auth/google?invite=`
+/// into the callback — the OAuth round-trip is a full-page redirect chain, so
+/// a query parameter would not survive Google's redirects.
+pub fn invite_set_cookie(code: &str) -> String {
+    format!(
+        "{INVITE_COOKIE_NAME}={code}; Path={STATE_COOKIE_PATH}; HttpOnly; Secure; SameSite=Lax; Max-Age={INVITE_COOKIE_MAX_AGE_SECONDS}"
+    )
+}
+
+pub fn invite_clear_cookie() -> String {
+    format!(
+        "{INVITE_COOKIE_NAME}=; Path={STATE_COOKIE_PATH}; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+    )
+}
+
+/// Normalize an invite code from user input: trim, uppercase, bound the
+/// length — the same shape check the magic-link register applies before its
+/// DB check. `None` = not even shape-plausible; the authoritative verdict is
+/// always the atomic DB consume at the callback.
+pub fn normalize_invite(code: &str) -> Option<String> {
+    let code = code.trim();
+    if code.is_empty() || code.len() > 16 {
+        return None;
+    }
+    Some(code.to_ascii_uppercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_trims_and_uppercases() {
+        assert_eq!(
+            normalize_invite(" abcd2345fg "),
+            Some("ABCD2345FG".to_string())
+        );
+        assert_eq!(
+            normalize_invite("abcd2345fg"),
+            Some("ABCD2345FG".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_rejects_empty_and_oversized() {
+        assert_eq!(normalize_invite(""), None);
+        assert_eq!(normalize_invite("   "), None);
+        assert_eq!(normalize_invite(&"A".repeat(17)), None);
+    }
+
+    #[test]
+    fn normalize_allows_boundary_length() {
+        assert_eq!(normalize_invite(&"A".repeat(16)), Some("A".repeat(16)));
+    }
+}

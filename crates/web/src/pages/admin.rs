@@ -8,6 +8,24 @@ use leptos::task::spawn_local;
 
 use crate::api::{self, AdminInvite};
 
+/// `type="date"` yields a bare `YYYY-MM-DD`. Interpret it as that calendar day
+/// in Taipei time (UTC+8, no DST) through 23:59:59, so the invite stays usable
+/// for the whole chosen day, and store canonical UTC ISO — the only shape the
+/// API accepts (`invite::valid_expires_iso`). `Ok(None)` = field left empty
+/// (never expires); `Err(())` = unparseable input.
+fn iso_from_date_input(s: &str) -> Result<Option<String>, ()> {
+    if s.is_empty() {
+        return Ok(None);
+    }
+    let d = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(&format!(
+        "{s}T23:59:59+08:00"
+    )));
+    if d.get_time().is_nan() {
+        return Err(());
+    }
+    Ok(Some(d.to_iso_string().as_string().unwrap_or_default()))
+}
+
 #[component]
 pub fn AdminPage() -> impl IntoView {
     let invites = RwSignal::new(Option::<Vec<AdminInvite>>::None);
@@ -40,8 +58,16 @@ pub fn AdminPage() -> impl IntoView {
         creating.set(true);
         spawn_local(async move {
             let uses = max_uses.get_untracked().parse::<i64>().unwrap_or(20);
-            let exp = expires_at.get_untracked();
-            match api::create_invite(&label.get_untracked(), uses, Some(exp.as_str())).await {
+            let exp_input = expires_at.get_untracked();
+            let exp_iso = match iso_from_date_input(&exp_input) {
+                Ok(v) => v,
+                Err(()) => {
+                    error.set("過期日格式不正確".to_string());
+                    creating.set(false);
+                    return;
+                }
+            };
+            match api::create_invite(&label.get_untracked(), uses, exp_iso.as_deref()).await {
                 Ok(created) => {
                     new_url.set(Some(created.url));
                     copied.set(false);

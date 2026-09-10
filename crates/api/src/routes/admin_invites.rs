@@ -100,9 +100,12 @@ pub fn register(router: R<'static>) -> R<'static> {
         })
         // Create a named invite link (admin).
         .post_async("/api/admin/invites", |mut req, ctx| async move {
-            if let Err(r) = require_admin(&ctx, &req).await {
-                return Ok(r);
-            }
+            // require_admin yields the acting session email — recorded as
+            // created_by, not the whole ADMIN_EMAIL allowlist.
+            let admin_email = match require_admin(&ctx, &req).await {
+                Ok(e) => e,
+                Err(r) => return Ok(r),
+            };
             let body: CreateBody = match req.json().await {
                 Ok(b) => b,
                 Err(_) => return Ok(error::error("Invalid JSON", 400)),
@@ -112,8 +115,10 @@ pub fn register(router: R<'static>) -> R<'static> {
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_else(|| "邀請".into());
             let max_uses = body.max_uses.unwrap_or(20).clamp(1, 500);
+            // Stored only in the exact shape `clock::now_iso()` emits, so the
+            // ISO-vs-ISO comparison in invite::is_usable stays correct.
             if let Some(e) = body.expires_at.as_deref() {
-                if e.len() > 32 {
+                if !invite::valid_expires_iso(e) {
                     return Ok(error::error("Validation failed", 400));
                 }
             }
@@ -121,11 +126,6 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error("db unavailable", 500)),
             };
-            let admin_email = ctx
-                .env
-                .var("ADMIN_EMAIL")
-                .map(|v| v.to_string())
-                .unwrap_or_default();
             // Mint + insert; retry once on PK collision (probability ~0).
             for _ in 0..2 {
                 let code = match invite::new_code() {
@@ -136,11 +136,12 @@ pub fn register(router: R<'static>) -> R<'static> {
                 let l = db::text(&label);
                 let mu = db::int(max_uses as i32);
                 let by = db::text(&admin_email);
+                let exp = db::opt_text(body.expires_at.as_deref());
                 if db::exec(
                     &db,
-                    "INSERT INTO invites (code, label, max_uses, created_by) \
-                     VALUES (?1, ?2, ?3, ?4)",
-                    &[&c, &l, &mu, &by],
+                    "INSERT INTO invites (code, label, max_uses, created_by, expires_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    &[&c, &l, &mu, &by, &exp],
                 )
                 .await
                 .is_ok()

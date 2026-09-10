@@ -1,6 +1,7 @@
 //! Magic-link login / register — step 1 only. The form asks for the address,
 //! the API answers 202, and the session is created exclusively by the emailed
-//! link, which lands on the `/auth/verify` route (see `lib.rs`).
+//! link (`/auth/verify`) or by exchanging the one-time OAuth redirect code via
+//! `POST /api/auth/oauth/exchange` — never from a URL parameter.
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -9,15 +10,6 @@ use crate::api;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
-    // OAuth callback: ?sessionId= from Google flow — store and go home.
-    if let Some(sid) = crate::query_param("sessionId") {
-        if !sid.is_empty() {
-            crate::api::set_session(Some(&sid));
-            if let Some(win) = web_sys::window() {
-                let _ = win.location().set_href("/");
-            }
-        }
-    }
     let is_register = RwSignal::new(false);
     let email = RwSignal::new(String::new());
     let full_name = RwSignal::new(String::new());
@@ -31,6 +23,40 @@ pub fn LoginPage() -> impl IntoView {
     // check-your-inbox state. There is no session yet and nothing to navigate
     // to; the emailed link completes the flow.
     let sent_to = RwSignal::new(Option::<String>::None);
+
+    // OAuth callback: ?oauth_code= — a one-time 60-second code from the Google
+    // flow. It is exchanged (POST) for the session, so the session id itself
+    // never rides any URL. Failure reads as "link expired": show the form with
+    // a hint and let the user retry.
+    if let Some(code) = crate::query_param("oauth_code") {
+        if !code.is_empty() {
+            spawn_local(async move {
+                match api::exchange_oauth_code(&code).await {
+                    Ok(_) => {
+                        if let Some(win) = web_sys::window() {
+                            let _ = win.location().set_href("/");
+                        }
+                    }
+                    Err(_) => error.set("Google 登入連結已過期或已使用，請重新登入".to_string()),
+                }
+            });
+        }
+    }
+
+    // OAuth failure redirects land here with ?error=<code> (no code present).
+    if let Some(err_code) = crate::query_param("error") {
+        let msg = match err_code.as_str() {
+            "invite_required" => {
+                Some("此 Google 帳號尚未註冊：首次使用 Google 登入需要邀請碼。".to_string())
+            }
+            "invite_invalid" => Some("邀請碼無效、過期或已用完，請重新取得後再試。".to_string()),
+            "oauth_failed" | "oauth_error" => Some("Google 登入失敗，請重試。".to_string()),
+            _ => None,
+        };
+        if let Some(m) = msg {
+            error.set(m);
+        }
+    }
 
     // Prefill from `?invite=` (the link the admin copies in /admin).
     if let Some(code) = crate::query_param("invite") {
@@ -58,12 +84,6 @@ pub fn LoginPage() -> impl IntoView {
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         error.set(String::new());
-        // Beta gate: the register tab demands a code up front so the user does
-        // not wait for an email that will never be sent.
-        if is_register.get_untracked() && invite.get_untracked().trim().is_empty() {
-            error.set("請填邀請碼".to_string());
-            return;
-        }
         loading.set(true);
         spawn_local(async move {
             let email_v = email.get_untracked();
@@ -109,7 +129,7 @@ pub fn LoginPage() -> impl IntoView {
                             </div>
                             <Show when=move || is_register.get()>
                                 <div class="field">
-                                    <label>"邀請碼"</label>
+                                    <label>"邀請碼 (選填)"</label>
                                     <input
                                         type="text"
                                         placeholder="例:ABCD2345FG"
@@ -185,7 +205,14 @@ pub fn LoginPage() -> impl IntoView {
                             class="btn-primary"
                             style="width:100%;background:#fff;color:#111827;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;gap:0.5rem"
                             on:click=move |_| {
-                                let url = format!("{}/api/auth/google", crate::api::API_URL);
+                                let mut url = format!("{}/api/auth/google", crate::api::API_URL);
+                                // 首次 Google 註冊需要邀請碼——把（可能填在註冊
+                                // 分頁的）邀請碼一併帶上；既有帳號登入不受影響。
+                                let inv = invite.get_untracked().trim().to_string();
+                                if !inv.is_empty() {
+                                    url.push_str("?invite=");
+                                    url.push_str(&inv);
+                                }
                                 if let Some(win) = web_sys::window() {
                                     let _ = win.location().set_href(&url);
                                 }
@@ -194,6 +221,9 @@ pub fn LoginPage() -> impl IntoView {
                             <span>"G"</span>
                             "使用 Google 登入"
                         </button>
+                        <p style="margin-top:0.5rem;font-size:0.75rem;color:#9aa3b2;text-align:center">
+                            "有邀請碼的話，可先在「註冊」分頁填入（選填）。"
+                        </p>
                         <div style="margin-top:1.5rem;text-align:center">
                             <button
                                 class="btn-link"

@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS users (
     -- Subscription
     subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'premium', 'professional')),
     trial_ends_at TEXT,              -- 試用期結束時間，NULL = 無試用
+
+    -- Access role (hesocial-style): 'admin' / 'super_admin' bypass the
+    -- ADMIN_EMAIL allowlist for invite management (routes/admin_invites.rs,
+    -- routes/users.rs). NULL = regular user. Column already exists in
+    -- production (added with the admin-invite rollout); restored here
+    -- 2026-09-06 so schema.sql is the single source of truth again.
+    role TEXT,
     
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
@@ -126,6 +133,22 @@ CREATE TABLE IF NOT EXISTS login_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email);
+
+-- ── OAuth redirect exchange (one-time codes, 2026-09-06) ──
+-- The Google callback redirects to the SPA with `?oauth_code=` carrying a
+-- single-use code; POST /api/auth/oauth/exchange consumes it atomically and
+-- only then mints the session — the 7-day session id never rides any URL
+-- (history / Referer / access logs). Same discipline as login_tokens: only the
+-- SHA-256 hash is stored; expires_at is app-written ISO (clock::now_plus_ms)
+-- and compared `expires_at > :now_iso`, never against `datetime('now')`.
+CREATE TABLE IF NOT EXISTS oauth_exchanges (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
 
 -- ── Beta invite links (spec: docs/superpowers/specs/2026-08-30-invite-links-design.md) ──
 -- expires_at / revoked_at are app-written ISO strings; compare ISO to ISO only.

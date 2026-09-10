@@ -9,15 +9,28 @@ use worker::{Fetch, Headers, Method, Request, RequestInit, Response, Result, Rou
 use crate::services::billing;
 use crate::services::clock;
 use crate::services::db;
+use crate::services::login_token;
 use crate::services::oauth::{
-    evaluate_callback, failure_redirect_url, google_consent_url, parse_google_userinfo,
-    random_oauth_state, read_cookie, state_clear_cookie, state_set_cookie, token_exchange_body,
-    CallbackAction, GoogleProfile, GOOGLE_CALLBACK_PATH, GOOGLE_TOKEN_URL, GOOGLE_USERINFO_URL,
+    evaluate_callback, failure_redirect_url, google_consent_url, invite_clear_cookie,
+    invite_set_cookie, normalize_invite, parse_google_userinfo, random_oauth_state, read_cookie,
+    state_clear_cookie, state_set_cookie, token_exchange_body, CallbackAction, GoogleProfile,
+    GOOGLE_CALLBACK_PATH, GOOGLE_TOKEN_URL, GOOGLE_USERINFO_URL, INVITE_COOKIE_NAME,
     STATE_COOKIE_NAME,
 };
 use crate::services::uuid;
 
+use super::super::error;
+use super::common::{client_ip, ok_json, rate_limit};
 use super::R;
+
+/// The Google callback redirects with `?oauth_code=` — a single-use code with
+/// this TTL — instead of the session id itself. URLs persist in browser
+/// history, Referer headers and access logs, so the 7-day session id moves
+/// only in the exchange endpoint's response body.
+const EXCHANGE_TTL_MS: f64 = 60_000.0;
+/// Per-window limit for the exchange endpoint (mirrors `/api/auth/verify`).
+const EXCHANGE_RATE_LIMIT_IP: u32 = 10;
+const EXCHANGE_WINDOW_MS: f64 = 60000.0;
 
 fn env_var(ctx: &RouteContext<()>, name: &str) -> Option<String> {
     ctx.env
@@ -52,18 +65,18 @@ fn google_oauth_unavailable() -> Result<Response> {
     .map(|r| r.with_status(503))
 }
 
-fn redirect_with_cookie(location: &str, cookie: Option<String>) -> Result<Response> {
-    let mut headers = Headers::new();
+fn redirect_with_cookies(location: &str, cookies: &[String]) -> Result<Response> {
+    let headers = Headers::new();
     headers.set("Location", location)?;
-    if let Some(c) = cookie {
-        headers.set("Set-Cookie", &c)?;
+    for c in cookies {
+        headers.append("Set-Cookie", c)?;
     }
     Ok(Response::empty()?.with_status(302).with_headers(headers))
 }
 
 fn failure_redirect(frontend_origin: &str, error: &str) -> Result<Response> {
     let location = failure_redirect_url(frontend_origin, error);
-    redirect_with_cookie(&location, Some(state_clear_cookie()))
+    redirect_with_cookies(&location, &[state_clear_cookie(), invite_clear_cookie()])
 }
 
 fn callback_url(req: &Request) -> Option<String> {
@@ -96,6 +109,82 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Err(e) => Response::error(e.to_string(), 500),
             }
         })
+        .post_async("/api/auth/oauth/exchange", |mut req, ctx| async move {
+            let ip = client_ip(&req);
+            if !rate_limit(
+                &ctx,
+                &format!("oauthx:ip:{ip}"),
+                EXCHANGE_RATE_LIMIT_IP,
+                EXCHANGE_WINDOW_MS,
+            )
+            .await
+            {
+                return Ok(error::error("Too many requests", 429));
+            }
+            let body: ExchangeBody = match req.json().await {
+                Ok(b) => b,
+                Err(_) => return Ok(error::error("Invalid JSON", 400)),
+            };
+            let code = match body.code {
+                Some(c) if !c.is_empty() && c.len() <= 256 => c,
+                _ => return Ok(error::error("Validation failed", 400)),
+            };
+            let db = match db::Turso::from_env(&ctx.env) {
+                Ok(d) => d,
+                Err(_) => return Ok(error::error("db unavailable", 500)),
+            };
+            let hash = login_token::hash_token(&code);
+            let h = db::text(&hash);
+            let now = clock::now_iso();
+            let n = db::text(&now);
+            // Opportunistic cleanup of expired codes (ISO-vs-ISO comparison —
+            // never `datetime('now')`, whose space format breaks ordering).
+            let _ = db::exec(
+                &db,
+                "DELETE FROM oauth_exchanges WHERE expires_at <= ?1",
+                &[&n],
+            )
+            .await;
+            // Single-use atomic consume: only a valid, unused, unexpired hash
+            // is marked used. 0 rows affected = invalid, expired or replayed.
+            let consumed = match db::exec_changes(
+                &db,
+                "UPDATE oauth_exchanges SET used_at = datetime('now') \
+                 WHERE token_hash = ?1 AND used_at IS NULL AND expires_at > ?2",
+                &[&h, &n],
+            )
+            .await
+            {
+                Ok(changes) => changes,
+                Err(_) => return Ok(error::error("db error", 500)),
+            };
+            if consumed == 0 {
+                return Ok(error::error("Invalid or expired code", 401));
+            }
+            let row = match db::first::<ExchangeRow>(
+                &db,
+                "SELECT user_id, email FROM oauth_exchanges WHERE token_hash = ?1",
+                &[&h],
+            )
+            .await
+            {
+                Ok(Some(r)) => r,
+                Ok(None) => return Ok(error::error("Invalid or expired code", 401)),
+                Err(_) => return Ok(error::error("db error", 500)),
+            };
+            let Some(session_id) = create_session(&ctx, &row.user_id, &row.email).await else {
+                worker::console_log!("oauth/exchange: create_session failed for {}", row.user_id);
+                return Ok(error::error("oauth_error", 500));
+            };
+            Ok(ok_json(
+                &serde_json::json!({
+                    "sessionId": session_id,
+                    "userId": row.user_id,
+                    "email": row.email
+                }),
+                200,
+            ))
+        })
 }
 
 async fn google_start(ctx: &RouteContext<()>, req: &Request) -> Result<Response> {
@@ -111,7 +200,24 @@ async fn google_start(ctx: &RouteContext<()>, req: &Request) -> Result<Response>
         return failure_redirect(&origin, "oauth_error");
     };
     let consent_url = google_consent_url(&client_id, &redirect_uri, &oauth_state);
-    redirect_with_cookie(&consent_url, Some(state_set_cookie(&oauth_state)))
+    // An invite code forwarded by the register page rides a short-lived cookie
+    // through Google's redirects; it is only trusted at the callback's atomic
+    // consume, never here.
+    let mut cookies = vec![state_set_cookie(&oauth_state)];
+    if let Some(invite) = req
+        .url()
+        .ok()
+        .and_then(|u| {
+            u.query_pairs()
+                .find(|(k, _)| k == "invite")
+                .map(|(_, v)| v.to_string())
+        })
+        .as_deref()
+        .and_then(normalize_invite)
+    {
+        cookies.push(invite_set_cookie(&invite));
+    }
+    redirect_with_cookies(&consent_url, &cookies)
 }
 
 async fn google_callback(ctx: &RouteContext<()>, req: &Request) -> Result<Response> {
@@ -166,20 +272,57 @@ async fn google_callback(ctx: &RouteContext<()>, req: &Request) -> Result<Respon
         worker::console_log!("oauth/callback: userinfo fetch failed");
         return failure_redirect(&origin, "oauth_error");
     };
-    let Some(user) = upsert_google_user(ctx, &profile).await else {
-        worker::console_log!(
-            "oauth/callback: upsert_google_user failed for {}",
-            profile.email
-        );
-        return failure_redirect(&origin, "oauth_error");
+    let invite_code = read_cookie(&cookie_header, INVITE_COOKIE_NAME).and_then(normalize_invite);
+    let user = match resolve_google_user(ctx, &profile, invite_code.as_deref()).await {
+        Ok(user) => user,
+        Err(code) => {
+            worker::console_log!("oauth/callback: resolve_google_user -> {}", code);
+            return failure_redirect(&origin, code);
+        }
     };
-    let Some(session_id) = create_session(ctx, &user.id, &user.email).await else {
-        worker::console_log!("oauth/callback: create_session failed for {}", user.id);
+    let Some(exchange_code) = create_exchange(ctx, &user.id, &user.email).await else {
+        worker::console_log!("oauth/callback: create_exchange failed for {}", user.id);
         return failure_redirect(&origin, "oauth_error");
     };
 
-    let location = format!("{origin}/login?sessionId={session_id}");
-    redirect_with_cookie(&location, Some(state_clear_cookie()))
+    // The redirect carries a one-time short-lived exchange code, never the
+    // session id itself (see EXCHANGE_TTL_MS above).
+    let location = format!("{origin}/login?oauth_code={exchange_code}");
+    redirect_with_cookies(&location, &[state_clear_cookie(), invite_clear_cookie()])
+}
+
+/// Mint a one-time exchange code for a just-authenticated Google user. Only
+/// the SHA-256 hash is stored (`oauth_exchanges` — same discipline as
+/// `login_tokens`); the plain value rides the redirect URL exactly once and
+/// dies in 60 seconds or on first use, whichever comes first.
+async fn create_exchange(ctx: &RouteContext<()>, user_id: &str, email: &str) -> Option<String> {
+    let db = db::Turso::from_env(&ctx.env).ok()?;
+    let (plain, hash) = login_token::new_token()?;
+    let expires = clock::now_plus_ms(EXCHANGE_TTL_MS);
+    let h = db::text(&hash);
+    let uid = db::text(user_id);
+    let em = db::text(email);
+    let n = db::text(&expires);
+    db::exec(
+        &db,
+        "INSERT INTO oauth_exchanges (token_hash, user_id, email, expires_at) \
+         VALUES (?1, ?2, ?3, ?4)",
+        &[&h, &uid, &em, &n],
+    )
+    .await
+    .ok()?;
+    Some(plain)
+}
+
+#[derive(serde::Deserialize)]
+struct ExchangeBody {
+    code: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ExchangeRow {
+    user_id: String,
+    email: String,
 }
 
 async fn exchange_code(
@@ -232,8 +375,19 @@ struct UserRow {
     email: String,
 }
 
-async fn upsert_google_user(ctx: &RouteContext<()>, profile: &GoogleProfile) -> Option<UserRow> {
-    let db = db::Turso::from_env(&ctx.env).ok()?;
+/// Find-or-create the Google user. Existing addresses sign in untouched; NEW
+/// addresses must present a valid invite while `INVITE_REQUIRED` holds (beta
+/// gate, spec 2026-08-30 — the magic-link path enforces the same rule; this
+/// was the unguarded second door). The invite is consumed atomically here,
+/// immediately before INSERT, mirroring routes/auth.rs verify, so a stale
+/// register-time check cannot let one code overshoot its `max_uses`. `Err`
+/// carries the failure_redirect error code.
+async fn resolve_google_user(
+    ctx: &RouteContext<()>,
+    profile: &GoogleProfile,
+    invite_code: Option<&str>,
+) -> std::result::Result<UserRow, &'static str> {
+    let db = db::Turso::from_env(&ctx.env).map_err(|_| "oauth_error")?;
     let email = db::text(&profile.email);
     let existing: Option<UserRow> = db::first(
         &db,
@@ -241,15 +395,16 @@ async fn upsert_google_user(ctx: &RouteContext<()>, profile: &GoogleProfile) -> 
         &[&email],
     )
     .await
-    .ok()?;
+    .ok()
+    .flatten();
 
-    if let Some(existing) = existing {
+    if let Some(user) = existing {
         if let Some(picture) = &profile.picture {
             if !picture.is_empty() {
                 let pic = db::text(picture);
                 let now_str = clock::now_iso();
                 let now = db::text(&now_str);
-                let uid = db::text(&existing.id);
+                let uid = db::text(&user.id);
                 let _ = db::exec(
                     &db,
                     "UPDATE users SET avatar_url = COALESCE(?1, avatar_url), updated_at = ?2 WHERE id = ?3",
@@ -258,28 +413,64 @@ async fn upsert_google_user(ctx: &RouteContext<()>, profile: &GoogleProfile) -> 
                 .await;
             }
         }
-        return Some(existing);
+        return Ok(user);
     }
+
+    let invited_by = match invite_code {
+        // A supplied code is always validated + consumed (channel
+        // attribution), whether or not the beta gate demands one — mirroring
+        // the magic-link verify path.
+        Some(code) => {
+            let c = db::text(code);
+            let now_str = clock::now_iso();
+            let n = db::text(&now_str);
+            let consumed = db::exec_changes(
+                &db,
+                "UPDATE invites SET used_count = used_count + 1 \
+                 WHERE code = ?1 AND used_count < max_uses \
+                 AND (expires_at IS NULL OR expires_at > ?2) \
+                 AND revoked_at IS NULL",
+                &[&c, &n],
+            )
+            .await
+            .map_err(|_| "oauth_error")?;
+            if consumed == 0 {
+                worker::console_log!("oauth/callback: invite unusable for {}", profile.email);
+                return Err("invite_invalid");
+            }
+            Some(code)
+        }
+        None if crate::services::invite::INVITE_REQUIRED => {
+            worker::console_log!(
+                "oauth/callback: unknown address {} without invite",
+                profile.email
+            );
+            return Err("invite_required");
+        }
+        None => None,
+    };
 
     let user_id = uuid::random_uuid();
     let trial_ends_at = billing::get_trial_end_date();
-    let now_str = clock::now_iso();
     let uid = db::text(&user_id);
     let em = db::text(&profile.email);
     let name = db::opt_text(Some(&profile.full_name));
     let avatar = db::opt_text(profile.picture.as_deref());
     let trial = db::text(&trial_ends_at);
+    let ib = db::opt_text(invited_by);
+    let now_str = clock::now_iso();
     let now_text = db::text(&now_str);
 
     db::exec(
         &db,
-        "INSERT INTO users (id, email, full_name, avatar_url, trial_ends_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        &[&uid, &em, &name, &avatar, &trial, &now_text, &now_text],
+        "INSERT INTO users (id, email, full_name, avatar_url, trial_ends_at, invited_by, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        &[&uid, &em, &name, &avatar, &trial, &ib, &now_text],
     )
     .await
-    .ok()?;
+    .map_err(|_| "oauth_error")?;
 
-    Some(UserRow {
+    Ok(UserRow {
         id: user_id,
         email: profile.email.clone(),
     })

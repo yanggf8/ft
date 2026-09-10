@@ -184,6 +184,17 @@ pub async fn verify_email(token: &str) -> Result<SessionResponse, ApiErr> {
     Ok(res)
 }
 
+/// `POST /api/auth/oauth/exchange` — exchange the one-time OAuth redirect code
+/// for the session. The session id is stored here exactly the way
+/// `verify_email` stores it; the plain code itself is never persisted.
+pub async fn exchange_oauth_code(code: &str) -> Result<SessionResponse, ApiErr> {
+    let body = serde_json::json!({ "code": code });
+    let res: SessionResponse =
+        send_json(Request::post(&url("/api/auth/oauth/exchange")), &body).await?;
+    set_session(Some(&res.sessionId));
+    Ok(res)
+}
+
 /// `GET /api/invites/:code` — public preflight for the register page. A
 /// network/transport failure reads as "invalid" (the register submit will get
 /// the authoritative answer from the backend anyway).
