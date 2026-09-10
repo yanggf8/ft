@@ -26,8 +26,8 @@ cargo clippy --target wasm32-unknown-unknown   # lints (report only, not gating)
 ### Backend Worker (crates/api) — deploy
 
 ```bash
-cd crates/api && worker-build --release && wrangler deploy   # requires OAuth, no API token
-# or: scripts/deploy-engine.sh (engine worker) / manual for api
+./scripts/deploy-api.sh   # worker-build --release + wrangler deploy + route sanity; requires OAuth
+# manual equivalent: cd crates/api && worker-build --release && wrangler deploy
 ```
 
 ### Engine Worker (crates/worker) — deploy
