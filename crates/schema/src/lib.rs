@@ -8,6 +8,7 @@ pub mod cycle;
 pub mod items;
 pub mod predict;
 pub mod storage;
+pub mod symbolic;
 
 use serde::{Deserialize, Serialize};
 

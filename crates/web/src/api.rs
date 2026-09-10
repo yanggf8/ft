@@ -195,6 +195,12 @@ pub async fn exchange_oauth_code(code: &str) -> Result<SessionResponse, ApiErr> 
     Ok(res)
 }
 
+/// `GET /api/personality/overlay` — F3 疊圖(spec 2026-09-07-f2-f3)。409 三態
+/// (NO_MEASUREMENT / F3_DISABLED / MEASUREMENT_PENDING)由呼叫端以 ApiErr::is_code 分流。
+pub async fn fetch_overlay() -> Result<ft_schema::symbolic::OverlayResponse, ApiErr> {
+    get_json("/api/personality/overlay", true).await
+}
+
 /// `GET /api/invites/:code` — public preflight for the register page. A
 /// network/transport failure reads as "invalid" (the register submit will get
 /// the authoritative answer from the backend anyway).

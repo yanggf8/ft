@@ -114,6 +114,53 @@ pub fn PersonalityPage() -> impl IntoView {
     let submitting = RwSignal::new(false);
     let deleting = RwSignal::new(false);
     let quiz_started_at = RwSignal::new(js_sys::Date::now());
+    // ── F3 疊圖(spec 2026-09-07-f2-f3 §2.3):一律 opt-in,不自動顯示 ──
+    let overlay = RwSignal::new(Option::<ft_schema::symbolic::OverlayResponse>::None);
+    let overlay_error = RwSignal::new(String::new());
+    let overlay_stage = RwSignal::new(0u8); // 0=未展開 1=說明頁 2=疊圖
+                                            // 世代計數:重測/刪除後遲到的 overlay 回應不得覆寫新狀態(Codex 二輪 #3)
+    let overlay_request_gen = RwSignal::new(0u32);
+    let reset_overlay = move || {
+        overlay_request_gen.set(overlay_request_gen.get() + 1);
+        overlay.set(None);
+        overlay_error.set(String::new());
+        overlay_stage.set(0);
+    };
+    let open_overlay = move |_| {
+        // 進入前固定說明(此文案為禁用詞白名單,經 owner 核可)
+        overlay_stage.set(1);
+    };
+    let load_overlay = move |_| {
+        let gen = overlay_request_gen.get() + 1;
+        overlay_request_gen.set(gen);
+        spawn_local(async move {
+            match api::fetch_overlay().await {
+                Ok(v) => {
+                    overlay_error.set(String::new()); // 重試成功要清掉舊錯誤(Codex 二輪 #4)
+                    if overlay_request_gen.get() == gen {
+                        overlay.set(Some(v));
+                        overlay_stage.set(2);
+                    }
+                }
+                Err(e) => {
+                    if overlay_request_gen.get() != gen {
+                        return; // 遲到的舊回應,不覆寫(Codex 二輪 #3)
+                    }
+                    overlay_error.set(if e.is_code("F3_DISABLED") {
+                        "你目前選擇僅使用命盤象徵、未完成人格測驗，對照功能未開啟。".to_string()
+                    } else if e.is_code("MEASUREMENT_PENDING") {
+                        "測驗結果尚待確認，完成有效測驗後即可對照。".to_string()
+                    } else if e.is_code("NO_MEASUREMENT") {
+                        "完成人格測驗後即可對照。".to_string()
+                    } else {
+                        // 500/網路錯：固定中文文案，不外洩伺服器訊息(Kimi 終審 #4)
+                        "暫時無法載入，請稍後再試。".to_string()
+                    });
+                    overlay_stage.set(2);
+                }
+            }
+        });
+    };
 
     Effect::new(move |_| {
         spawn_local(async move {
@@ -360,7 +407,10 @@ pub fn PersonalityPage() -> impl IntoView {
                                 <div class="actions">
                                     <button
                                         class="btn-primary"
-                                        on:click=move |_| reset_quiz(state, answers, error, quiz_started_at)
+                                        on:click=move |_| {
+                                            reset_overlay();
+                                            reset_quiz(state, answers, error, quiz_started_at);
+                                        }
                                     >
                                     "重測"
                                 </button>
@@ -381,7 +431,10 @@ pub fn PersonalityPage() -> impl IntoView {
                                         error.set(String::new());
                                         spawn_local(async move {
                                             match api::delete_personality().await {
-                                                Ok(_) => reset_quiz(state, answers, error, quiz_started_at),
+                                                Ok(_) => {
+                                                    reset_overlay();
+                                                    reset_quiz(state, answers, error, quiz_started_at);
+                                                }
                                                 Err(_) => error.set("刪除失敗，請稍後再試".to_string()),
                                             }
                                             deleting.set(false);
@@ -391,6 +444,178 @@ pub fn PersonalityPage() -> impl IntoView {
                                     {move || if deleting.get() { "刪除中..." } else { "刪除人格資料" }}
                                 </button>
                                 </div>
+                            </div>
+
+                            <div class="card" style="margin-top:1.5rem">
+                                <h2 style="margin-bottom:0.5rem">"命盤象徵對照"</h2>
+                                <Show when=move || overlay_stage.get() == 0 fallback=|| ()>
+                                    <button class="btn-link" on:click=open_overlay>
+                                        "查看命盤象徵對照"
+                                    </button>
+                                </Show>
+                                <Show when=move || overlay_stage.get() == 1 fallback=|| ()>
+                                    <p class="muted" style="line-height:1.9">
+                                        "「命盤象徵傾向」來自出生盤的傳統星性對照，"
+                                        "「實測人格」來自你剛完成的人格測驗。兩條線來源不同，"
+                                        "不一致很常見；不一致不代表你有缺陷，也不代表你需要改變。"
+                                        "只有兩者差距夠大時，我們才會描述那個落差。"
+                                    </p>
+                                    <button class="btn-primary" on:click=load_overlay>
+                                        "我知道了，看對照"
+                                    </button>
+                                </Show>
+                                <Show when=move || overlay_stage.get() == 2 fallback=|| ()>
+                                    {move || {
+                                        let err = overlay_error.get();
+                                        if !err.is_empty() {
+                                            return view! {
+                                                <div>
+                                                    <p class="error">{err}</p>
+                                                    <button class="btn-link" on:click=load_overlay>
+                                                        "重試"
+                                                    </button>
+                                                </div>
+                                            }.into_any();
+                                        }
+                                        let Some(v) = overlay.get() else {
+                                            return view! { <div/> }.into_any();
+                                        };
+                                        let missing_note = if !v.birth_known {
+                                            Some("填寫生辰後即可和命盤對照。".to_string())
+                                        } else if v.prior_source.is_none() {
+                                            Some("命盤暫時無法計算，請稍後再試。".to_string())
+                                        } else {
+                                            None
+                                        };
+                                        let note_view = missing_note.map(|n| view! {
+                                            <p class="muted">{n}</p>
+                                        });
+                                        // 雷達:五軸 E,A,C,S,O;實線=實測、虛線=命盤象徵;
+                                        // 軸上不標裸分;0 分就在圓心,不外推
+                                        let pts = |vals: Vec<f64>| -> String {
+                                            vals.iter().enumerate().map(|(i, s)| {
+                                                let ang = -90.0f64 + 72.0 * i as f64;
+                                                let r = 80.0 * (s / 100.0).clamp(0.0, 1.0);
+                                                let (x, y) = (
+                                                    100.0 + r * ang.to_radians().cos(),
+                                                    100.0 + r * ang.to_radians().sin(),
+                                                );
+                                                format!("{x:.1},{y:.1}")
+                                            }).collect::<Vec<_>>().join(" ")
+                                        };
+                                        let measured_pts =
+                                            pts(v.dims.iter().map(|d| d.measured).collect());
+                                        let prior_pts = pts(
+                                            v.dims.iter().map(|d| d.prior.unwrap_or(50.0)).collect(),
+                                        );
+                                        let axis_labels = [
+                                            "E 外向",
+                                            "A 友善",
+                                            "C 嚴謹",
+                                            "S 情緒穩定(高=穩)",
+                                            "O 智性開放",
+                                        ];
+                                        let dim_label = |code: &str| -> &'static str {
+                                            let i = ft_schema::symbolic::DIM_CODES
+                                                .iter()
+                                                .position(|&c| c == code)
+                                                .unwrap_or(0);
+                                            ft_schema::symbolic::DIM_LABELS[i]
+                                        };
+                                        let band_label =
+                                            |code: &str| ft_schema::symbolic::band_label(code);
+                                        let basis_label = |b: Option<&str>| match b {
+                                            Some("classical") => "依據:古典星性",
+                                            Some("designer") => "依據:設計裁量",
+                                            Some("mixed") => "依據:古典星性 + 設計裁量",
+                                            _ => "—",
+                                        };
+                                        let radar = if v.prior_source.is_some() {
+                                            view! {
+                                                <svg viewBox="0 0 200 200"
+                                                    style="width:min(320px,80%);display:block;margin:0 auto"
+                                                >
+                                                    <polygon
+                                                        points={pts(vec![100.0; 5])}
+                                                        fill="none"
+                                                        stroke="#e5e7eb"
+                                                    />
+                                                    <polygon
+                                                        points={measured_pts.clone()}
+                                                        fill="rgba(59,130,246,0.12)"
+                                                        stroke="#3b82f6"
+                                                        stroke-width="2"
+                                                    />
+                                                    <polygon
+                                                        points={prior_pts.clone()}
+                                                        fill="none"
+                                                        stroke="#9aa3b2"
+                                                        stroke-width="2"
+                                                        stroke-dasharray="5,4"
+                                                    />
+                                                    {axis_labels.iter().enumerate().map(|(i, label)| {
+                                                        let ang = -90.0f64 + 72.0 * i as f64;
+                                                        let (x, y) = (
+                                                            100.0 + 92.0 * ang.to_radians().cos(),
+                                                            100.0 + 92.0 * ang.to_radians().sin(),
+                                                        );
+                                                        view! {
+                                                            <text
+                                                                x={x.to_string()}
+                                                                y={y.to_string()}
+                                                                text-anchor="middle"
+                                                                style="font-size:7px;fill:#6b7280"
+                                                            >{*label}</text>
+                                                        }
+                                                    }).collect_view()}
+                                                </svg>
+                                                <p class="muted" style="text-align:center">
+                                                    "實線 = 你的實測;虛線 = 命盤象徵傾向"
+                                                </p>
+                                            }.into_any()
+                                        } else {
+                                            view! { <div/> }.into_any()
+                                        };
+                                        view! {
+                                            {note_view}
+                                            {radar}
+                                            {v.dims.iter().map(|d| view! {
+                                                <div style="padding:0.4rem 0;border-top:1px solid #f3f4f6">
+                                                    <div style="display:flex;justify-content:space-between">
+                                                        <span>{dim_label(&d.dim)}</span>
+                                                        <span class="muted">
+                                                            {format!(
+                                                                "命盤象徵 {} · 你的實測 {}",
+                                                                d.prior_band.as_deref().map(band_label).unwrap_or("—"),
+                                                                band_label(&d.measured_band),
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <details>
+                                                        <summary
+                                                            class="muted"
+                                                            style="font-size:0.75rem"
+                                                        >"來源"</summary>
+                                                        <span
+                                                            class="muted"
+                                                            style="font-size:0.75rem"
+                                                        >
+                                                            {format!(
+                                                                "{};與人格測驗分數無關。",
+                                                                basis_label(d.basis.as_deref()),
+                                                            )}
+                                                        </span>
+                                                    </details>
+                                                </div>
+                                            }).collect_view()}
+                                            {v.dims.iter().filter(|d| d.narrative_ok).map(|d| view! {
+                                                <p style="line-height:1.9;margin-top:0.8rem">
+                                                    {d.text.clone().unwrap_or_default()}
+                                                </p>
+                                            }).collect_view()}
+                                        }.into_any()
+                                        }}
+                                    </Show>
                             </div>
                         </div>
                     }.into_any()
@@ -402,7 +627,10 @@ pub fn PersonalityPage() -> impl IntoView {
                         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1.5rem">
                             <button
                                 class="btn-primary"
-                                on:click=move |_| reset_quiz(state, answers, error, quiz_started_at)
+                                on:click=move |_| {
+                                            reset_overlay();
+                                            reset_quiz(state, answers, error, quiz_started_at);
+                                        }
                             >
                                 "重測"
                             </button>

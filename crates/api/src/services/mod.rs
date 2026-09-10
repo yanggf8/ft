@@ -6,6 +6,7 @@ pub mod uuid;
 pub mod ai;
 pub mod billing;
 pub mod birth_hash;
+pub mod chart_resolver;
 pub mod db;
 pub mod email;
 pub mod engine;

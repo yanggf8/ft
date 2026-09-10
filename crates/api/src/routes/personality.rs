@@ -8,9 +8,10 @@ use ft_schema::api::{
 };
 
 use super::super::error;
-use super::super::services::{clock, db, uuid};
+use super::super::services::{chart_resolver, clock, db, uuid};
 use super::common::{apply_cache_headers, auth_user, client_ip, ok_json, rate_limit};
 use super::R;
+use ft_schema::symbolic;
 
 const RATE_LIMIT: u32 = 10;
 const WINDOW_MS: f64 = 60000.0;
@@ -30,6 +31,46 @@ fn status_to_wire(s: &str) -> String {
         "skipped_prior_only" => "skippedPriorOnly".to_string(),
         other => other.to_string(), // "complete"
     }
+}
+
+/// spec §2.3 資格判定矩陣:最新一列 profile(`created_at DESC, rowid DESC`)的
+/// 狀態治理;歷史結果的重新查看不改變判定(Codex [2])。未知狀態 fail-closed。
+pub(crate) enum OverlayEligibility {
+    Allowed,
+    F3Disabled,
+    MeasurementPending,
+    NoMeasurement,
+}
+
+pub(crate) fn overlay_eligibility(latest_status: Option<&str>) -> OverlayEligibility {
+    match latest_status {
+        Some("complete") => OverlayEligibility::Allowed,
+        Some("skipped_prior_only") => OverlayEligibility::F3Disabled,
+        Some("careless_suspected") => OverlayEligibility::MeasurementPending,
+        _ => OverlayEligibility::NoMeasurement,
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct LatestProfileRow {
+    measurement_status: Option<String>,
+    ocean_measured: Option<String>,
+}
+
+/// ocean_measured JSON -> [f64;5],順序 E,A,C,S,O(spec §3)。
+/// 欄位對照 `ft_schema::api::OceanScores` 單點映射
+/// (`emotionalStability`->stability、`intellectImagination`->openness);
+/// 缺欄/壞 JSON/非有限值 -> None。
+fn parse_ocean(raw: Option<&str>) -> Option<[f64; 5]> {
+    let v: ft_schema::api::OceanScores = serde_json::from_str(raw?).ok()?;
+    let out = [
+        v.extraversion,
+        v.agreeableness,
+        v.conscientiousness,
+        v.emotionalStability,
+        v.intellectImagination,
+    ];
+    out.iter().all(|x| x.is_finite()).then_some(out)
 }
 
 #[derive(serde::Deserialize)]
@@ -329,4 +370,123 @@ pub fn register(router: R<'static>) -> R<'static> {
                 200,
             ))
         })
+        // F3 疊圖(spec 2026-09-07-f2-f3 §2.3/§3)— 資格判定(Task 5 矩陣)先於
+        // 命盤解析;量測與資格同一列(Codex [P9]);錯誤一律 match + Ok(error),
+        // 不得用 `?`(worker 0.8 路由簽名)。
+        .get_async("/api/personality/overlay", |req, ctx| async move {
+            let user_id = match auth_user(&req, &ctx).await {
+                Ok(u) => u,
+                Err(r) => return Ok(r),
+            };
+            let db = match db::Turso::from_env(&ctx.env) {
+                Ok(d) => d,
+                Err(_) => return Ok(error::error("db unavailable", 500)),
+            };
+            let uid = db::text(&user_id);
+            let latest: Option<LatestProfileRow> = match db::first(
+                &db,
+                "SELECT measurement_status, ocean_measured FROM personality_profiles \
+                 WHERE user_id = ?1 ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                &[&uid],
+            )
+            .await
+            {
+                Ok(Some(r)) => Some(r),
+                Ok(None) => None,
+                Err(_) => return Ok(error::error("db error", 500)),
+            };
+            let row = match latest {
+                Some(r) => r,
+                None => return Ok(error::error_code("no measurement", "NO_MEASUREMENT", 409)),
+            };
+            match overlay_eligibility(row.measurement_status.as_deref()) {
+                OverlayEligibility::F3Disabled => {
+                    return Ok(error::error_code("f3 disabled", "F3_DISABLED", 409));
+                }
+                OverlayEligibility::MeasurementPending => {
+                    return Ok(error::error_code(
+                        "measurement pending",
+                        "MEASUREMENT_PENDING",
+                        409,
+                    ));
+                }
+                OverlayEligibility::NoMeasurement => {
+                    return Ok(error::error_code("no measurement", "NO_MEASUREMENT", 409));
+                }
+                OverlayEligibility::Allowed => {}
+            }
+            let Some(measured) = parse_ocean(row.ocean_measured.as_deref()) else {
+                // complete 列缺/壞量測 = 資料異常 — 500 但不外洩細節
+                return Ok(error::error("db error", 500));
+            };
+            let charts = match chart_resolver::resolve_chart(&ctx, &user_id).await {
+                Ok(c) => c,
+                Err(_) => return Ok(error::error("db unavailable", 500)),
+            };
+            let prior = symbolic::symbolic_vector(
+                charts
+                    .ziwei
+                    .as_ref()
+                    .map(|c| (c.palaces.as_slice(), c.life_palace_index)),
+                charts.western.as_ref().map(|c| {
+                    (
+                        symbolic::western_sign_name(&c.sun_sign),
+                        symbolic::western_sign_name(&c.moon_sign),
+                        c.ascendant.sign.as_str(),
+                    )
+                }),
+            );
+            let prior_source = prior.as_ref().map(|v| match v.source {
+                symbolic::PriorSource::Ziwei => "ziwei",
+                symbolic::PriorSource::Western => "western",
+            });
+            let dims = symbolic::dim_outcomes(measured, prior.as_ref());
+            Ok(ok_json(
+                &serde_json::json!({
+                    "rulesetVersion": symbolic::SYMBOLIC_RULES_VERSION,
+                    "priorSource": prior_source,
+                    "birthKnown": charts.birth_known,
+                    "dims": dims,
+                }),
+                200,
+            ))
+        })
+}
+
+#[cfg(test)]
+mod overlay_eligibility_tests {
+    use super::*;
+
+    #[test]
+    fn matrix_matches_spec() {
+        assert!(matches!(
+            overlay_eligibility(Some("complete")),
+            OverlayEligibility::Allowed
+        ));
+        assert!(matches!(
+            overlay_eligibility(Some("skipped_prior_only")),
+            OverlayEligibility::F3Disabled
+        ));
+        assert!(matches!(
+            overlay_eligibility(Some("careless_suspected")),
+            OverlayEligibility::MeasurementPending
+        ));
+        assert!(matches!(
+            overlay_eligibility(None),
+            OverlayEligibility::NoMeasurement
+        ));
+        // 未知狀態 fail-closed(Codex [2])
+        assert!(matches!(
+            overlay_eligibility(Some("??")),
+            OverlayEligibility::NoMeasurement
+        ));
+    }
+
+    #[test]
+    fn parse_ocean_maps_five_dims_in_order() {
+        let raw = r#"{"extraversion":61.7,"agreeableness":50.0,"conscientiousness":40.0,"emotionalStability":30.0,"intellectImagination":62.0}"#;
+        assert_eq!(parse_ocean(Some(raw)), Some([61.7, 50.0, 40.0, 30.0, 62.0]));
+        assert!(parse_ocean(Some("not json")).is_none());
+        assert!(parse_ocean(None).is_none());
+    }
 }

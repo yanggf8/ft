@@ -413,4 +413,78 @@ mod tests {
             .find(|a| a.valence == Valence::Neutral)
             .unwrap()
     }
+
+    #[test]
+    fn f5_selection_outputs_are_pinned_against_chart_side_effects() {
+        // 紅線(spec 2026-09-07-f2-f3 §0.4):命盤/F2 相關改動若改變了 F5 選則
+        // 輸出,這裡必炸。golden 值 2026-09-07 由 --nocapture 實跑抄錄;更新必須
+        // 在 code review 中說明「為何 F5 輸出會變」。
+        const SCORES: [f64; 5] = [70.0, 40.0, 55.0, 30.0, 62.0];
+        let work = select_for_domain(Domain::Work, SCORES, [0; 5]).expect("work 應有選則");
+        assert_eq!(work.trigger, TriggerClass::T4);
+        assert_eq!(work.anchor.id, "work-t4-emo-lo-1");
+        assert_eq!(work.anchor.domain, Domain::Work);
+        assert_eq!(work.anchor.tendency, "被糾正時較易往心裡去、需要時間消化");
+        assert_eq!(
+            work.anchor.forecast,
+            "這週被指出問題時，更可能先沉默而非立刻回應"
+        );
+        assert_eq!(
+            work.anchor.experiment,
+            Some("先複述對方的重點，確認理解再回應")
+        );
+        assert_eq!(work.anchor_ids, vec!["work-t4-emo-lo-1"]);
+        assert_eq!(work.coverage, AnchorCoverage::Low);
+        assert_eq!(work.valence, Valence::Negative);
+
+        let money = select_for_domain(Domain::Money, SCORES, [0; 5]).expect("money 應有選則");
+        assert_eq!(money.trigger, TriggerClass::T4);
+        assert_eq!(money.anchor.id, "money-t4-emo-lo-1");
+        assert_eq!(money.anchor.domain, Domain::Money);
+        assert_eq!(money.anchor.tendency, "被指出花費問題時較易感到在意");
+        assert_eq!(
+            money.anchor.forecast,
+            "這週被提醒花費時，更可能先解釋而非立刻調整"
+        );
+        assert_eq!(
+            money.anchor.experiment,
+            Some("先記錄提醒的內容，隔天再檢視")
+        );
+        assert_eq!(money.anchor_ids, vec!["money-t4-emo-lo-1"]);
+        assert_eq!(money.coverage, AnchorCoverage::Low);
+        assert_eq!(money.valence, Valence::Negative);
+
+        // 全負面週:D2-A 例外 — 保留較佳 1 條(golden:money 勝出)
+        let filtered = filter_negative_half(vec![work, money]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].anchor.id, "money-t4-emo-lo-1");
+        assert_eq!(filtered[0].coverage, AnchorCoverage::Low);
+        assert_eq!(filtered[0].valence, Valence::Negative);
+    }
+
+    #[test]
+    fn f5_all_negative_low_fixture_pinned() {
+        const LOW: [f64; 5] = [20.0; 5];
+        let work = select_for_domain(Domain::Work, LOW, [0; 5]).expect("work-low 應有選則");
+        assert_eq!(work.trigger, TriggerClass::T1);
+        assert_eq!(work.anchor.id, "work-t1-agr-lo-1");
+        assert_eq!(
+            work.anchor_ids,
+            vec!["work-t1-agr-lo-1", "work-t1-emo-lo-1"]
+        );
+        assert_eq!(work.coverage, AnchorCoverage::High);
+        assert_eq!(work.valence, Valence::Negative);
+
+        let money = select_for_domain(Domain::Money, LOW, [0; 5]).expect("money-low 應有選則");
+        assert_eq!(money.trigger, TriggerClass::T1);
+        assert_eq!(money.anchor.id, "money-t1-agr-lo-1");
+        assert_eq!(
+            money.anchor_ids,
+            vec!["money-t1-agr-lo-1", "money-t1-emo-lo-1"]
+        );
+
+        let filtered = filter_negative_half(vec![work, money]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].anchor.id, "money-t1-agr-lo-1");
+    }
 }
