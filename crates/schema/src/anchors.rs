@@ -1,6 +1,8 @@
-//! 規則錨點目錄 — work+money × T1–T6（v1 縱深 12 格，每格 ≥2 條）
+//! 規則錨點目錄 — work+money+love × T1–T6（縱深 18 格，每格 ≥2 條）
 //! 與 `items.rs` 同體例：`ft-schema` 靜態真相，`crates/web` 可讀，`ft-big5` 不動
 //! Trigger 封閉列舉 T1–T6 見 `2026-09-03-f4-f5-if-then-design-note.md` §5.3.3
+//! love 擴充（2026-09-11）：跳過 §285 擴張閘門的 owner 裁決與內容紅線見
+//! `2026-09-11-f4-love-expansion-design.md`
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Domain {
@@ -432,11 +434,175 @@ pub const ANCHORS: &[Anchor] = &[
         valence: Valence::Neutral,
         source: Source::DesignerJudgment,
     },
+    // ── Love × T1 人際摩擦（負）主維 友善性 / 情緒穩定 ──
+    Anchor {
+        id: "love-t1-agr-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T1,
+        dimension: 1,
+        level: Level::Low,
+        priority: 1,
+        tendency: "在感情摩擦中傾向先退開、把話留到氣消再說",
+        forecast: "這週和伴侶意見不合時，更可能先擱置話題而非當場講開",
+        experiment: Some("和對方約好暫停暗號，睡前再花 10 分鐘把話說完"),
+        valence: Valence::Negative,
+        source: Source::DesignerJudgment,
+    },
+    Anchor {
+        id: "love-t1-emo-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T1,
+        dimension: 3,
+        level: Level::Low,
+        priority: 2,
+        tendency: "被親近的人指出問題時較易往心裡去、需要時間消化",
+        forecast: "這週和伴侶起摩擦後，更可能反覆回想對話內容",
+        experiment: None,
+        valence: Valence::Negative,
+        source: Source::Literature,
+    },
+    // ── Love × T2 時限壓力（負/中）主維 嚴謹性 / 情緒穩定 ──
+    // T2-p2 取 Neutral 為目錄保留負面頭寸（17/36；v1 貼著上限 12/24）——文案審核可改回
+    Anchor {
+        id: "love-t2-con-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T2,
+        dimension: 2,
+        level: Level::Low,
+        priority: 1,
+        tendency: "約會與紀念日的安排容易被行程擠壓、臨時改期",
+        forecast: "這週忙碌時，更可能把和伴侶的約定往後排而非提前說清楚",
+        experiment: Some("把重要約定寫進行事曆並設提醒；要改期時先問過對方"),
+        valence: Valence::Negative,
+        source: Source::DesignerJudgment,
+    },
+    Anchor {
+        id: "love-t2-emo-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T2,
+        dimension: 3,
+        level: Level::Low,
+        priority: 2,
+        tendency: "時間壓力大時對親密互動的耐心較容易下降",
+        forecast: "這週被期限追著時，更可能對伴侶的訊息回得較慢",
+        experiment: None,
+        valence: Valence::Neutral,
+        source: Source::Literature,
+    },
+    // ── Love × T3 生疏社交（中）主維 外向性 / 友善性 ──
+    Anchor {
+        id: "love-t3-ext-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T3,
+        dimension: 0,
+        level: Level::Low,
+        priority: 1,
+        tendency: "在伴侶的親友圈場合傾向安靜觀察、較慢熱",
+        forecast: "這週遇到對象的親友聚會時，更可能待在熟悉的人身邊而非到處打招呼",
+        experiment: Some("聚會前先跟對方講好待多久，給自己一個明確界線"),
+        valence: Valence::Neutral,
+        source: Source::DesignerJudgment,
+    },
+    Anchor {
+        id: "love-t3-agr-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T3,
+        dimension: 1,
+        level: Level::High,
+        priority: 2,
+        tendency: "在伴侶的社交場合傾向配合氣氛、照顧在場的人",
+        forecast: "這週參加伴侶的聚會時，更可能主動幫忙招呼而非只當客人",
+        experiment: None,
+        valence: Valence::Neutral,
+        source: Source::Literature,
+    },
+    // ── Love × T4 被指出問題（負）主維 情緒穩定 / 嚴謹性 ──
+    Anchor {
+        id: "love-t4-emo-lo-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T4,
+        dimension: 3,
+        level: Level::Low,
+        priority: 1,
+        tendency: "被伴侶糾正時較易往心裡去、需要時間消化",
+        forecast: "這週被對象指出問題時，更可能先安靜而非當場討論",
+        experiment: Some("先複述對方說的重點，確認理解後再表達自己的感受"),
+        valence: Valence::Negative,
+        source: Source::Literature,
+    },
+    Anchor {
+        id: "love-t4-con-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T4,
+        dimension: 2,
+        level: Level::High,
+        priority: 2,
+        tendency: "被指出感情中的問題時傾向具體檢視自己的做法",
+        forecast: "這週和伴侶檢討問題時，更可能逐條核對而非含糊帶過",
+        experiment: None,
+        valence: Valence::Negative,
+        source: Source::DesignerJudgment,
+    },
+    // ── Love × T5 計畫被打亂（中）主維 嚴謹性 / 智性 ──
+    Anchor {
+        id: "love-t5-con-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T5,
+        dimension: 2,
+        level: Level::High,
+        priority: 1,
+        tendency: "共同行程突變時傾向先重排計畫、把影響降到最小",
+        forecast: "這週和伴侶的安排有變動時，更可能先提出替代方案",
+        experiment: Some("變動發生時先給對方兩個可選的新時間，再一起決定"),
+        valence: Valence::Neutral,
+        source: Source::DesignerJudgment,
+    },
+    Anchor {
+        id: "love-t5-int-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T5,
+        dimension: 4,
+        level: Level::High,
+        priority: 2,
+        tendency: "共同計畫被打亂時較能看到其他可行的玩法",
+        forecast: "這週約會計畫突變時，更可能即興提出新去處而非取消",
+        experiment: None,
+        valence: Valence::Neutral,
+        source: Source::Literature,
+    },
+    // ── Love × T6 有選擇要做（中/正）主維 智性 / 嚴謹性 ──
+    Anchor {
+        id: "love-t6-int-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T6,
+        dimension: 4,
+        level: Level::High,
+        priority: 1,
+        tendency: "和伴侶做選擇時傾向先盤點各選項的新意與可能",
+        forecast: "這週一起決定去處或安排時，更可能提出大家沒想過的選項",
+        experiment: Some("輪流各提一個新選項再一起評分，讓決定變成小遊戲"),
+        valence: Valence::Positive,
+        source: Source::Literature,
+    },
+    Anchor {
+        id: "love-t6-con-hi-1",
+        domain: Domain::Love,
+        trigger: TriggerClass::T6,
+        dimension: 2,
+        level: Level::High,
+        priority: 2,
+        tendency: "感情中的共同決定傾向列清單、逐項比較後再選",
+        forecast: "這週和伴侶需要做決定時，更可能先列出優缺點再討論",
+        experiment: None,
+        valence: Valence::Neutral,
+        source: Source::DesignerJudgment,
+    },
 ];
 
 /// 規則版本（語意遞增）：目錄實質變更（增/改錨點、改切點）才 bump。
 /// 每列 `predictions.rules_version` 寫此值；F8 分析須按此分層。
-pub const RULES_VERSION: &str = "rules-1";
+/// rules-2（2026-09-11）：love 領域 ×T1–T6 上線。
+pub const RULES_VERSION: &str = "rules-2";
 
 #[cfg(test)]
 mod tests {
@@ -444,12 +610,13 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     #[test]
-    fn every_v1_cell_has_at_least_two() {
+    fn catalog_depth_matches_rules_version() {
+        // rules-2：work+money+love 每格 ≥2；family/health 尚無目錄，恆 0
         let mut counts: HashMap<(Domain, TriggerClass), usize> = HashMap::new();
         for a in ANCHORS {
             *counts.entry((a.domain, a.trigger)).or_default() += 1;
         }
-        for domain in [Domain::Work, Domain::Money] {
+        for domain in [Domain::Work, Domain::Money, Domain::Love] {
             for trigger in [
                 TriggerClass::T1,
                 TriggerClass::T2,
@@ -462,7 +629,7 @@ mod tests {
                 assert!(c >= 2, "cell {:?}/{:?} has {} <2", domain, trigger, c);
             }
         }
-        for domain in [Domain::Love, Domain::Family, Domain::Health] {
+        for domain in [Domain::Family, Domain::Health] {
             for trigger in [
                 TriggerClass::T1,
                 TriggerClass::T2,
@@ -472,7 +639,11 @@ mod tests {
                 TriggerClass::T6,
             ] {
                 let c = counts.get(&(domain, trigger)).copied().unwrap_or(0);
-                assert_eq!(c, 0, "v1 should have 0 for {:?}/{:?}", domain, trigger);
+                assert_eq!(
+                    c, 0,
+                    "family/health should have 0 for {:?}/{:?}",
+                    domain, trigger
+                );
             }
         }
     }
@@ -555,6 +726,26 @@ mod tests {
                 a.id,
                 f
             );
+        }
+    }
+
+    #[test]
+    fn love_has_no_low_base_rate_event_forecast() {
+        // rev.4 §F5：禁止把低基率事件寫成 7 天 forecast（分手、離婚、出軌…）——
+        // forecast 只能是高基率、使用者自己可觀察的行為傾向比較
+        const BANNED: [&str; 6] = ["分手", "離婚", "出軌", "劈腿", "求婚", "復合"];
+        for a in ANCHORS.iter().filter(|a| a.domain == Domain::Love) {
+            for f in [a.forecast, a.tendency] {
+                for word in BANNED {
+                    assert!(
+                        !f.contains(word),
+                        "love text contains low-base-rate event '{}': {} => {}",
+                        word,
+                        a.id,
+                        f
+                    );
+                }
+            }
         }
     }
 

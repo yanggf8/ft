@@ -59,6 +59,44 @@ pub fn dim_ranges(answers: &[u8]) -> Option<[u8; 5]> {
     Some(out)
 }
 
+/// 閘門迭代順序 = F4 強度 ≥1 的領域生成順序，**同時**決定：
+/// ① `gated_domains` 輸出序（→ `filter_negative_half` 的平手丟棄方向依此輸入序定義）；
+/// ② `list_cycle` 的 SQL `ORDER BY` 順位（work 0 / money 1 / love 2 / 其餘 3，見
+/// `crates/api/src/services/predictions.rs`）。改動此順序必須三處同步並重跑紅線 golden。
+pub const GATE_ORDER: [Domain; 5] = [
+    Domain::Work,
+    Domain::Money,
+    Domain::Love,
+    Domain::Family,
+    Domain::Health,
+];
+
+fn strength_of(s: &crate::api::DomainStrengths, d: Domain) -> u8 {
+    match d {
+        Domain::Work => s.work,
+        Domain::Money => s.money,
+        Domain::Love => s.love,
+        Domain::Family => s.family,
+        Domain::Health => s.health,
+    }
+}
+
+/// F4 五領域強度值域檢查（0–3）。wire 層不做數值限制（serde 只鎖型別），
+/// 由 route 層以此把關：不在範圍 → 400 `INVALID_STRENGTHS`。
+pub fn strengths_in_range(s: &crate::api::DomainStrengths) -> bool {
+    GATE_ORDER.iter().all(|d| strength_of(s, *d) <= 3)
+}
+
+/// F4 領域閘門：回傳強度 ≥1 的領域（`GATE_ORDER` 序）。強度 0 不建列；
+/// family/health 目錄尚空，`select_for_domain` 恆回 `None`（前瞻擴充用）。
+pub fn gated_domains(s: &crate::api::DomainStrengths) -> Vec<Domain> {
+    GATE_ORDER
+        .iter()
+        .copied()
+        .filter(|d| strength_of(s, *d) >= 1)
+        .collect()
+}
+
 /// 對單一 domain 選出勝出 trigger 及其代表錨點
 /// `ranges` 為該使用者 IPIP-15 五維各自的三題全距（max-min），用於 `全距≥2 => low` 降級
 pub fn select_for_domain(
@@ -152,38 +190,22 @@ pub fn select_for_domain(
     })
 }
 
-/// per-week 負面不過半篩選：超過半數為 Negative 時，丟棄 valence 最負者直至 ≤半數。
+/// per-week 負面不過半篩選：Negative 超過半數時，逐條丟棄「最劣」負面直至 ≤半數。
 /// `Neutral`/`Positive` 永不丟；僅丟 `Negative`，low-coverage 先丟，再按 priority 高者先丟。
 ///
-/// v1 D2-A 例外（Grok 裁決，F8 登記「三領域落地後廢除」）：total==2 且兩條皆 Negative
-/// → 保留 1 條（coverage 較高者勝；同 coverage 比 priority 小者勝），接受該週 1/1 負面，
-/// 避免低 A/C/ES 特質的週被系統性清空。per-domain 語意不可取（1 條輸出任一 Negative 即 100% 違規）。
+/// floor：永不丟最後一條——全負週保留最佳 1 條，接受 1/1 負面。這是 v1 D2-A 例外
+/// （Grok 裁決：避免低 A/C/ES 特質的週被系統性清空）的**推廣版**：原 n==2 特例已廢除
+/// （F8 登記「三領域落地後廢除」），由任何 n 的 floor 語意涵蓋；見
+/// `docs/superpowers/specs/2026-09-11-f4-love-expansion-design.md`。
+/// per-domain 語意不可取（1 條輸出任一 Negative 即 100% 違規）。
+///
+/// 平手方向：同 (coverage, priority) 丟鍵時**丟較前者**——本函數輸入序為 `gated_domains`
+/// 的 `GATE_ORDER`（work 先、money 後），平手時後者存活。v1 紅線 golden 釘死此方向
+/// （money 勝出）；`f5_*_pinned` 測試守護，不得改用 `max_by_key`（同分取最後，方向相反）。
 pub fn filter_negative_half(mut selected: Vec<Selected<'static>>) -> Vec<Selected<'static>> {
-    if selected.len() == 2 && selected.iter().all(|s| s.valence == Valence::Negative) {
-        let keep = selected
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| {
-                let ac = if a.coverage == AnchorCoverage::High {
-                    1
-                } else {
-                    0
-                };
-                let bc = if b.coverage == AnchorCoverage::High {
-                    1
-                } else {
-                    0
-                };
-                ac.cmp(&bc)
-                    .then_with(|| b.anchor.priority.cmp(&a.anchor.priority))
-            })
-            .map(|(i, _)| i)
-            .unwrap_or(0);
-        return vec![selected.remove(keep)];
-    }
     loop {
         let total = selected.len();
-        if total == 0 {
+        if total <= 1 {
             break;
         }
         let neg = selected
@@ -193,26 +215,39 @@ pub fn filter_negative_half(mut selected: Vec<Selected<'static>>) -> Vec<Selecte
         if neg * 2 <= total {
             break;
         }
-        let idx = selected
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.valence == Valence::Negative)
-            .max_by_key(|(_, s)| {
-                let low_bonus = if s.coverage == AnchorCoverage::Low {
-                    10
-                } else {
-                    0
-                };
-                low_bonus + s.anchor.priority as i32
-            })
-            .map(|(i, _)| i);
-        if let Some(i) = idx {
-            selected.remove(i);
-        } else {
-            break;
+        // 丟鍵 argmax，**首同分勝**：手動掃描、嚴格 `>` 才替換（Rust `max_by_key` 同分取
+        // 最後，方向會翻轉紅線 golden 的勝出者）。
+        let mut drop_idx: Option<usize> = None;
+        for (i, s) in selected.iter().enumerate() {
+            if s.valence != Valence::Negative {
+                continue;
+            }
+            let better = match drop_idx {
+                None => true,
+                Some(d) => drop_key(s) > drop_key(&selected[d]),
+            };
+            if better {
+                drop_idx = Some(i);
+            }
+        }
+        match drop_idx {
+            Some(i) => {
+                selected.remove(i);
+            }
+            None => break,
         }
     }
     selected
+}
+
+/// 丟棄優先鍵：low-coverage 加權 + priority（大者先丟）。
+fn drop_key(s: &Selected<'_>) -> i32 {
+    let low_bonus = if s.coverage == AnchorCoverage::Low {
+        10
+    } else {
+        0
+    };
+    low_bonus + s.anchor.priority as i32
 }
 
 #[cfg(test)]
@@ -365,6 +400,52 @@ mod tests {
     }
 
     #[test]
+    fn three_negative_keep_single_best() {
+        // D2-A 推廣：n=3 全負 → 驅逐 2 條，保留 (High, 最小 priority) 的 1 條
+        let hi1 = selected_with(neg_anchor_p1(), AnchorCoverage::High);
+        let lo1 = selected_with(neg_anchor_p2(), AnchorCoverage::Low);
+        let lo2 = selected_with(neg_anchor_p2(), AnchorCoverage::Low);
+        let filtered = filter_negative_half(vec![lo1, lo2, hi1]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].coverage, AnchorCoverage::High);
+        assert_eq!(filtered[0].anchor.priority, 1);
+    }
+
+    #[test]
+    fn single_negative_week_is_kept() {
+        // 推廣後的行為變更（設計文件登記 #1）：單一負面條目不再丟至空
+        let neg = selected_with(neg_anchor(), AnchorCoverage::Low);
+        let filtered = filter_negative_half(vec![neg]);
+        assert_eq!(filtered.len(), 1);
+    }
+
+    #[test]
+    fn mixed_two_neg_two_neu_unchanged() {
+        // 2 負 2 中：4<=4 已過半數規則 → 原樣保留
+        let neg = selected_with(neg_anchor(), AnchorCoverage::High);
+        let neu = selected_with(neutral_anchor(), AnchorCoverage::High);
+        let filtered = filter_negative_half(vec![neg.clone(), neg, neu.clone(), neu]);
+        assert_eq!(filtered.len(), 4);
+    }
+
+    #[test]
+    fn drop_tie_keeps_later_domain() {
+        // 平手方向釘死：同 (coverage, priority) 鍵時丟較前者 → 後者（money）存活。
+        // 紅線 golden（f5_*_pinned）依賴此方向；改用 max_by_key（同分取最後）會炸 golden。
+        let a1 = ANCHORS.iter().find(|a| a.id == "work-t1-agr-lo-1").unwrap();
+        let a2 = ANCHORS
+            .iter()
+            .find(|a| a.id == "money-t1-agr-lo-1")
+            .unwrap();
+        let filtered = filter_negative_half(vec![
+            selected_with(a1, AnchorCoverage::High),
+            selected_with(a2, AnchorCoverage::High),
+        ]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].anchor.id, "money-t1-agr-lo-1");
+    }
+
+    #[test]
     fn display_rounded_rounds_to_integer() {
         use crate::api::OceanScores;
         let o = OceanScores {
@@ -383,6 +464,60 @@ mod tests {
         let answers = [1u8, 1, 5, 3, 3, 3, 2, 4, 1, 5, 5, 5, 1, 5, 2];
         assert_eq!(dim_ranges(&answers), Some([4, 0, 3, 0, 4]));
         assert_eq!(dim_ranges(&[1, 2, 3]), None);
+    }
+
+    #[test]
+    fn gated_domains_order_and_filter() {
+        use crate::api::DomainStrengths;
+        let all = DomainStrengths {
+            work: 1,
+            love: 1,
+            family: 0,
+            money: 1,
+            health: 0,
+        };
+        // GATE_ORDER 序（work → money → love → …），強度 0 剔除
+        assert_eq!(
+            gated_domains(&all),
+            vec![Domain::Work, Domain::Money, Domain::Love]
+        );
+        let zeros = DomainStrengths {
+            work: 0,
+            love: 0,
+            family: 0,
+            money: 0,
+            health: 0,
+        };
+        assert!(gated_domains(&zeros).is_empty());
+        let maxed = DomainStrengths {
+            work: 3,
+            love: 3,
+            family: 3,
+            money: 3,
+            health: 3,
+        };
+        assert_eq!(gated_domains(&maxed), GATE_ORDER.to_vec());
+    }
+
+    #[test]
+    fn strengths_in_range_bounds() {
+        use crate::api::DomainStrengths;
+        let ok = DomainStrengths {
+            work: 3,
+            love: 0,
+            family: 3,
+            money: 1,
+            health: 2,
+        };
+        assert!(strengths_in_range(&ok));
+        let bad = DomainStrengths {
+            work: 4,
+            love: 0,
+            family: 0,
+            money: 0,
+            health: 0,
+        };
+        assert!(!strengths_in_range(&bad));
     }
 
     // ── 測試輔助：手動建 Selected（anchor 取自目錄）──
@@ -404,6 +539,20 @@ mod tests {
         ANCHORS
             .iter()
             .find(|a| a.valence == Valence::Negative)
+            .unwrap()
+    }
+
+    fn neg_anchor_p1() -> &'static crate::anchors::Anchor {
+        ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Negative && a.priority == 1)
+            .unwrap()
+    }
+
+    fn neg_anchor_p2() -> &'static crate::anchors::Anchor {
+        ANCHORS
+            .iter()
+            .find(|a| a.valence == Valence::Negative && a.priority == 2)
             .unwrap()
     }
 

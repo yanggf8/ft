@@ -4,8 +4,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use ft_schema::api::{
-    CheckSituationRequest, DomainWire, FeedbackRequest, ListPredictionsResponse, ResponseWire,
-    SituationWire, TriggerWire,
+    CheckSituationRequest, DomainStrengths, DomainWire, FeedbackRequest,
+    GeneratePredictionsRequest, ListPredictionsResponse, ResponseWire, SituationWire, TriggerWire,
 };
 use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
@@ -196,15 +196,22 @@ fn PersonalityCard() -> impl IntoView {
 
 // ── F5 本週預測卡 ──
 // Spec: docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md §3
-// 動線閘門（Grok UI 審 P0-1/P0-2）：Stage 2 綁 stage1_complete ∧ 已 refetch ∧ forecast.is_some()；
-// generate 每 mount 一次（latch）；STALE_CYCLE → 清 latch 重跑。
+//       + 2026-09-11 F4 情境輸入切片
+// 動線閘門（Grok UI 審 P0-1/P0-2）：Stage 2 綁 stage1_complete ∧ 已 refetch ∧ forecast.is_some()。
+// F4（2026-09-11）：未生成週顯示五領域強度輸入，使用者按送出才 generate（不再自動生成）；
+// 換週偵測改走 cycle_seen（任何狀態下都比對，NeedStrengths 中也會重置）。
 
 #[derive(Clone)]
 enum PState {
     Loading,
     Error(String),
     NoProfile,
-    Empty,
+    /// 本週尚未生成 → 顯示 F4 五領域強度輸入
+    NeedStrengths,
+    /// 已凍結但本週無預測；all_zero = 使用者全留 0（文案須與「無錨點命中」區分）
+    Empty {
+        all_zero: bool,
+    },
     Ready(Box<ListPredictionsResponse>),
 }
 
@@ -226,37 +233,98 @@ fn domain_label(d: DomainWire) -> &'static str {
     }
 }
 
-/// 初始載入動線：GET → 空且未 generate → POST 一次 → 再 GET。
+fn zeros() -> DomainStrengths {
+    DomainStrengths {
+        work: 0,
+        love: 0,
+        family: 0,
+        money: 0,
+        health: 0,
+    }
+}
+
+fn is_all_zero(s: &DomainStrengths) -> bool {
+    s.work == 0 && s.love == 0 && s.family == 0 && s.money == 0 && s.health == 0
+}
+
+/// F4 五領域 0–3 列（沿用人格測驗的 quiz-choice radio 體例；預設 0，只點有感的）。
+/// `get`/`set` 為欄位存取器 — Leptos view 無法動態索引結構體欄位。
+fn strength_row(
+    label: &'static str,
+    field: &'static str,
+    strengths: RwSignal<DomainStrengths>,
+    pending_gen: RwSignal<bool>,
+    get: fn(&DomainStrengths) -> u8,
+    set: fn(&mut DomainStrengths, u8),
+) -> impl IntoView {
+    let input_name = format!("f4-{field}");
+    let choices = [0u8, 1, 2, 3];
+    view! {
+        <fieldset class="quiz-item" style="margin:0">
+            <legend style="font-size:0.85rem">{label}</legend>
+            <div class="quiz-choices" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+                {choices.iter().map(|v| {
+                    let v = *v;
+                    view! {
+                        <label class="quiz-choice">
+                            <input
+                                type="radio"
+                                name=input_name.clone()
+                                value=v
+                                prop:checked=move || get(&strengths.get()) == v
+                                prop:disabled=move || pending_gen.get()
+                                on:change=move |_| strengths.update(|s| set(s, v))
+                            />
+                            <span class="quiz-choice-n" aria-hidden="true">{v}</span>
+                        </label>
+                    }
+                }).collect_view()}
+            </div>
+        </fieldset>
+    }
+}
+
+/// 初始載入動線：GET → 非空 Ready / 未生成 NeedStrengths / 凍結空 Empty。
 /// `initing` 重入鎖：mount/重試/focus 並發時只跑一趟（Grok UI 二審 P2-3）。
-async fn card_init(state: &RwSignal<PState>, latch: &RwSignal<bool>, initing: &RwSignal<bool>) {
+async fn card_init(
+    state: &RwSignal<PState>,
+    initing: &RwSignal<bool>,
+    strengths: &RwSignal<DomainStrengths>,
+    cycle_seen: &RwSignal<Option<String>>,
+) {
     if initing.get_untracked() {
         return;
     }
     initing.set(true);
-    card_init_inner(state, latch).await;
+    card_init_inner(state, strengths, cycle_seen).await;
     initing.set(false);
 }
 
-async fn card_init_inner(state: &RwSignal<PState>, latch: &RwSignal<bool>) {
+async fn card_init_inner(
+    state: &RwSignal<PState>,
+    strengths: &RwSignal<DomainStrengths>,
+    cycle_seen: &RwSignal<Option<String>>,
+) {
     state.set(PState::Loading);
     match crate::api::get_predictions(true).await {
-        Ok(resp) if !resp.predictions.is_empty() => state.set(PState::Ready(Box::new(resp))),
-        Ok(_) => {
-            if latch.get_untracked() {
-                state.set(PState::Empty);
-                return;
+        Ok(resp) => {
+            // 換週偵測：跨週一長駐時任何狀態下 cycleId 變了就重置本週輸入
+            let rollover = cycle_seen
+                .get_untracked()
+                .map(|c| c != resp.cycleId)
+                .unwrap_or(false);
+            cycle_seen.set(Some(resp.cycleId.clone()));
+            if rollover {
+                strengths.set(zeros());
             }
-            latch.set(true);
-            match crate::api::generate_predictions().await {
-                Ok(_) => match crate::api::get_predictions(true).await {
-                    Ok(resp) if !resp.predictions.is_empty() => {
-                        state.set(PState::Ready(Box::new(resp)))
-                    }
-                    Ok(_) => state.set(PState::Empty),
-                    Err(e) => state.set(PState::Error(friendly(&e))),
-                },
-                Err(e) if e.is_code("PROFILE_INCOMPLETE") => state.set(PState::NoProfile),
-                Err(e) => state.set(PState::Error(friendly(&e))),
+            if !resp.predictions.is_empty() {
+                state.set(PState::Ready(Box::new(resp)));
+            } else if !resp.generated {
+                // 尚未生成 → F4 情境輸入（使用者送出才 generate）
+                state.set(PState::NeedStrengths);
+            } else {
+                let all_zero = resp.strengths.map(|s| is_all_zero(&s)).unwrap_or(false);
+                state.set(PState::Empty { all_zero });
             }
         }
         Err(e) => state.set(PState::Error(friendly(&e))),
@@ -268,17 +336,44 @@ async fn card_refresh(state: &RwSignal<PState>) {
     state.set(PState::Loading);
     match crate::api::get_predictions(true).await {
         Ok(resp) if !resp.predictions.is_empty() => state.set(PState::Ready(Box::new(resp))),
-        Ok(_) => state.set(PState::Empty),
+        Ok(resp) => {
+            let all_zero = resp.strengths.map(|s| is_all_zero(&s)).unwrap_or(false);
+            state.set(PState::Empty { all_zero });
+        }
         Err(e) => state.set(PState::Error(friendly(&e))),
     }
+}
+
+/// F4 情境輸入送出：generate（帶五領域強度）→ refetch（伺服器為真相）。
+async fn do_generate(
+    state: &RwSignal<PState>,
+    strengths: &RwSignal<DomainStrengths>,
+    pending_gen: &RwSignal<bool>,
+    notice: &RwSignal<Option<String>>,
+) {
+    pending_gen.set(true);
+    let body = GeneratePredictionsRequest {
+        strengths: Some(strengths.get_untracked()),
+    };
+    match crate::api::generate_predictions(&body).await {
+        Ok(_) => {
+            // 全 0 → 凍結誠實空週 → Empty{all_zero}; 有命中 → Ready
+            card_refresh(state).await;
+            notice.set(None);
+        }
+        Err(e) if e.is_code("PROFILE_INCOMPLETE") => state.set(PState::NoProfile),
+        Err(e) => notice.set(Some(friendly(&e))),
+    }
+    pending_gen.set(false);
 }
 
 /// F6 第 1 段提交：成功後若收齊 → refetch 全文；否則 patch local；鎖定類錯誤 → 同步。
 async fn do_check(
     state: &RwSignal<PState>,
     pending: &RwSignal<Option<TriggerWire>>,
-    latch: &RwSignal<bool>,
     initing: &RwSignal<bool>,
+    strengths: &RwSignal<DomainStrengths>,
+    cycle_seen: &RwSignal<Option<String>>,
     notice: &RwSignal<Option<String>>,
     t: TriggerWire,
     s: SituationWire,
@@ -307,8 +402,7 @@ async fn do_check(
             card_refresh(state).await;
         }
         Err(e) if e.is_code("STALE_CYCLE") => {
-            latch.set(false);
-            card_init(state, latch, initing).await;
+            card_init(state, initing, strengths, cycle_seen).await;
         }
         Err(e) => notice.set(Some(friendly(&e))),
     }
@@ -319,8 +413,9 @@ async fn do_check(
 async fn do_feedback(
     state: &RwSignal<PState>,
     pending: &RwSignal<Option<String>>,
-    latch: &RwSignal<bool>,
     initing: &RwSignal<bool>,
+    strengths: &RwSignal<DomainStrengths>,
+    cycle_seen: &RwSignal<Option<String>>,
     notice: &RwSignal<Option<String>>,
     id: String,
     r: ResponseWire,
@@ -347,8 +442,7 @@ async fn do_feedback(
             card_refresh(state).await;
         }
         Err(e) if e.is_code("STALE_CYCLE") => {
-            latch.set(false);
-            card_init(state, latch, initing).await;
+            card_init(state, initing, strengths, cycle_seen).await;
         }
         Err(e) => notice.set(Some(friendly(&e))),
     }
@@ -358,42 +452,47 @@ async fn do_feedback(
 #[component]
 fn PredictionsCard() -> impl IntoView {
     let state = RwSignal::new(PState::Loading);
-    let latch = RwSignal::new(false);
     let initing = RwSignal::new(false);
     let pending_check = RwSignal::new(None::<TriggerWire>);
     let pending_feedback = RwSignal::new(None::<String>);
     let notice = RwSignal::new(None::<String>);
+    let strengths = RwSignal::new(zeros());
+    let pending_gen = RwSignal::new(false);
+    let cycle_seen = RwSignal::new(None::<String>);
 
     {
         let state = state;
-        let latch = latch;
         let initing = initing;
+        let strengths = strengths;
+        let cycle_seen = cycle_seen;
         spawn_local(async move {
-            card_init(&state, &latch, &initing).await;
+            card_init(&state, &initing, &strengths, &cycle_seen).await;
         });
     }
 
-    // P1-2（Grok 二審）：跨週一長駐 /profile — window focus 時重比 cycleId，
-    // 變了就清 latch 重跑初始動線（STALE_CYCLE 對 checks 走不到，不能只靠它）。
+    // P1-2（Grok 二審）：跨週一長駐 /profile — window focus 時重比 cycleId
+    // （經 cycle_seen，任何狀態下都比對，NeedStrengths 中也會重置），
+    // 變了就重跑初始動線（STALE_CYCLE 對 checks 走不到，不能只靠它）。
     {
         let state = state;
-        let latch = latch;
         let initing = initing;
+        let strengths = strengths;
+        let cycle_seen = cycle_seen;
         Effect::new(move |_| {
             if let Some(win) = web_sys::window() {
                 let cb = Closure::<dyn FnMut()>::new(move || {
                     let state = state;
-                    let latch = latch;
                     let initing = initing;
+                    let strengths = strengths;
+                    let cycle_seen = cycle_seen;
                     spawn_local(async move {
                         if let Ok(resp) = crate::api::get_predictions(true).await {
-                            let changed = match state.get_untracked() {
-                                PState::Ready(r) => r.cycleId != resp.cycleId,
-                                _ => false,
-                            };
+                            let changed = cycle_seen
+                                .get_untracked()
+                                .map(|c| c != resp.cycleId)
+                                .unwrap_or(false);
                             if changed {
-                                latch.set(false);
-                                card_init(&state, &latch, &initing).await;
+                                card_init(&state, &initing, &strengths, &cycle_seen).await;
                             }
                         }
                     });
@@ -430,9 +529,50 @@ fn PredictionsCard() -> impl IntoView {
                             <p class="muted">"完成人格測驗後，這裡會產生每週可驗證的情境預測。"</p>
                             <a href="/personality" class="btn-link" style="text-decoration:none">"前往測驗 →"</a>
                         }.into_any(),
-                        PState::Empty => view! {
-                            <p class="muted">"本週沒有明顯傾向可寫成可驗證的預測。"</p>
-                        }.into_any(),
+                        PState::NeedStrengths => {
+                            let busy = move || pending_gen.get();
+                            view! {
+                                <p class="muted" style="font-size:0.85rem;margin-bottom:0.6rem">
+                                    "這週哪些領域特別有感？沒有的留 0。"
+                                </p>
+                                <div style="display:grid;gap:0.4rem;margin-bottom:0.6rem">
+                                    {strength_row("工作", "work", strengths, pending_gen, |s| s.work, |s, v| s.work = v)}
+                                    {strength_row("感情", "love", strengths, pending_gen, |s| s.love, |s, v| s.love = v)}
+                                    {strength_row("家庭", "family", strengths, pending_gen, |s| s.family, |s, v| s.family = v)}
+                                    {strength_row("金錢", "money", strengths, pending_gen, |s| s.money, |s, v| s.money = v)}
+                                    {strength_row("健康", "health", strengths, pending_gen, |s| s.health, |s, v| s.health = v)}
+                                </div>
+                                <p class="muted" style="font-size:0.75rem;margin-bottom:0.75rem">
+                                    "目前會產生預測的領域：工作、金錢、感情。全部留 0 表示本週不會產生預測。"
+                                </p>
+                                <button
+                                    class="btn-primary"
+                                    disabled=busy
+                                    on:click=move |_| {
+                                        spawn_local({
+                                            let state = state;
+                                            let strengths = strengths;
+                                            let pending_gen = pending_gen;
+                                            let notice = notice;
+                                            async move {
+                                                do_generate(&state, &strengths, &pending_gen, &notice).await;
+                                            }
+                                        });
+                                    }
+                                >"產生本週預測"</button>
+                            }.into_any()
+                        }
+                        PState::Empty { all_zero } => {
+                            if all_zero {
+                                view! {
+                                    <p class="muted">"本週你沒有標記有感的領域，所以沒有產生預測；下週有感的時候再標記就好。"</p>
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <p class="muted">"本週沒有明顯傾向可寫成可驗證的預測。"</p>
+                                }.into_any()
+                            }
+                        }
                         PState::Error(msg) => {
                             let msg = msg;
                             let busy = move || initing.get();
@@ -442,13 +582,13 @@ fn PredictionsCard() -> impl IntoView {
                                     class="btn-link"
                                     disabled=busy
                                     on:click=move |_| {
-                                        latch.set(false);
                                         spawn_local({
                                             let state = state;
-                                            let latch = latch;
                                             let initing = initing;
+                                            let strengths = strengths;
+                                            let cycle_seen = cycle_seen;
                                             async move {
-                                                card_init(&state, &latch, &initing).await;
+                                                card_init(&state, &initing, &strengths, &cycle_seen).await;
                                             }
                                         });
                                     }
@@ -529,11 +669,13 @@ fn PredictionsCard() -> impl IntoView {
                                                             spawn_local({
                                                                 let state = state;
                                                                 let pending_check = pending_check;
-                                                                let latch = latch;
+                                                                let initing = initing;
+                                                                let strengths = strengths;
+                                                                let cycle_seen = cycle_seen;
                                                                 let initing = initing;
                                                                 let notice = notice;
                                                                 async move {
-                                                                    do_check(&state, &pending_check, &latch, &initing, &notice, t, SituationWire::Absent).await;
+                                                                    do_check(&state, &pending_check, &initing, &strengths, &cycle_seen, &notice, t, SituationWire::Absent).await;
                                                                 }
                                                             });
                                                         }
@@ -545,11 +687,13 @@ fn PredictionsCard() -> impl IntoView {
                                                             spawn_local({
                                                                 let state = state;
                                                                 let pending_check = pending_check;
-                                                                let latch = latch;
+                                                                let initing = initing;
+                                                                let strengths = strengths;
+                                                                let cycle_seen = cycle_seen;
                                                                 let initing = initing;
                                                                 let notice = notice;
                                                                 async move {
-                                                                    do_check(&state, &pending_check, &latch, &initing, &notice, t, SituationWire::Occurred).await;
+                                                                    do_check(&state, &pending_check, &initing, &strengths, &cycle_seen, &notice, t, SituationWire::Occurred).await;
                                                                 }
                                                             });
                                                         }
@@ -631,12 +775,14 @@ fn PredictionsCard() -> impl IntoView {
                                                                     spawn_local({
                                                                         let state = state;
                                                                         let pending_feedback = pending_feedback;
-                                                                        let latch = latch;
+                                                                        let initing = initing;
+                                                                let strengths = strengths;
+                                                                let cycle_seen = cycle_seen;
                                                                         let pid = pid_c1.clone();
                                                                         let initing = initing;
                                                                         let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Hit).await;
+                                                                            do_feedback(&state, &pending_feedback, &initing, &strengths, &cycle_seen, &notice, pid, ResponseWire::Hit).await;
                                                                         }
                                                                     });
                                                                 }
@@ -648,12 +794,14 @@ fn PredictionsCard() -> impl IntoView {
                                                                     spawn_local({
                                                                         let state = state;
                                                                         let pending_feedback = pending_feedback;
-                                                                        let latch = latch;
+                                                                        let initing = initing;
+                                                                let strengths = strengths;
+                                                                let cycle_seen = cycle_seen;
                                                                         let pid = pid_c2.clone();
                                                                         let initing = initing;
                                                                         let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Miss).await;
+                                                                            do_feedback(&state, &pending_feedback, &initing, &strengths, &cycle_seen, &notice, pid, ResponseWire::Miss).await;
                                                                         }
                                                                     });
                                                                 }
@@ -665,12 +813,14 @@ fn PredictionsCard() -> impl IntoView {
                                                                     spawn_local({
                                                                         let state = state;
                                                                         let pending_feedback = pending_feedback;
-                                                                        let latch = latch;
+                                                                        let initing = initing;
+                                                                let strengths = strengths;
+                                                                let cycle_seen = cycle_seen;
                                                                         let pid = pid_c3.clone();
                                                                         let initing = initing;
                                                                         let notice = notice;
                                                                         async move {
-                                                                            do_feedback(&state, &pending_feedback, &latch, &initing, &notice, pid, ResponseWire::Other).await;
+                                                                            do_feedback(&state, &pending_feedback, &initing, &strengths, &cycle_seen, &notice, pid, ResponseWire::Other).await;
                                                                         }
                                                                     });
                                                                 }

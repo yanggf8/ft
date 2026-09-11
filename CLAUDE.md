@@ -92,8 +92,9 @@ gwebcdb-mint turso --tier write --db fortunet --export
   `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers),
   `predictions` (F5: 週期生成/遮罩/鎖定), `clock`, `uuid`, `db` (Turso client over Hrana HTTP +
   `batch` 原子批次 + the bind helpers).
-- **Database** — `users`, `interpretations`, `personality_profiles` + F5 四表
-  (`predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations`) live.
+- **Database** — `users`, `interpretations`, `personality_profiles` + F5 五表
+  (`predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` /
+  `prediction_strengths`) live.
   `subscriptions`/`usage_tracking`/`ai_quota` are provisioned but unused. `services/db.rs` speaks
   Hrana over `worker::Fetch`; the `libsql` crate's own `cloudflare` feature is unusable here
   because it pins `worker ^0.6` against our 0.8.
@@ -123,27 +124,37 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 ## F5 Predictions (2026-09)
 
 - **端點**（`routes/predictions.rs` → `services/predictions.rs`）：
-  `GET /api/predictions?cycleId=`（列當週，含 checks/feedback）、`POST /api/predictions/generate`
-  （冪等週期生成）、`PUT /api/predictions/checks`（F6 第 1 段 absent|occurred）、
+  `GET /api/predictions?cycleId=`（列當週，含 checks/feedback/`generated`/`strengths`）、
+  `POST /api/predictions/generate`（冪等週期生成；**F4 起必帶 body** `{"strengths":{五域 0–3}}`，
+  缺/越界 → 400 `INVALID_STRENGTHS`）、`PUT /api/predictions/checks`（F6 第 1 段 absent|occurred）、
   `POST /api/predictions/:id/feedback`（F6 第 2 段 hit|miss|other）。
 - **`cycle_id`**：Asia/Taipei 週一起算（`crates/schema/src/cycle.rs` 純函數，毫秒 ISO 解析、週一格式驗證）。
-- **週期生成冪等**：`prediction_generations` 一週一 profile 快照；`generate` **先寫 freeze 再插 predictions**
-  （單寫者 + `UNIQUE(user_id, cycle_id, domain)` 防呆）；空週也凍結；週中重測不補 domain（防混 profile）。
+- **週期生成冪等**：`prediction_generations` 一週一 profile 快照；generate 的寫入是**單一 `db::batch`
+  原子交易**（steps[0]=`prediction_strengths` 快照、steps[1]=freeze、steps[2..]=predictions
+  `WHERE NOT EXISTS`）；併發敗者以 steps[1] affected==0 偵測回現況；空週也凍結；週中重測不補
+  domain、strengths 凍結後不改（防混 profile）。
+- **F4 領域閘門（2026-09-11）**：`predict::GATE_ORDER=[Work,Money,Love,Family,Health]` 同時決定
+  `gated_domains()` 順序與 list SQL ORDER BY（work 0/money 1/love 2/else 3）——三處耦合，doc 釘死。
+  強度 ≥1 且該領域有錨點才生成（D1 佔位已退役）。目錄：work+money+love 每格 ≥2（`rules-2`）；
+  family/health 恆 0。
 - **F6 測量保護（API 強制）**：forecast 遮罩（`redact_view`：`distinct(trigger) ⊆ checks` 才吐全文；
   GET/generate 共用）；第 2 段僅 `occurred` 後、一次性（`FEEDBACK_EXISTS`）；有 feedback 後情境鎖定
   （`SITUATION_LOCKED`，單句原子 `INSERT…SELECT…WHERE NOT EXISTS`）；寫入僅限當週（409 `STALE_CYCLE`）。
-- **`filter_negative_half` D2-A 例外**：v1 僅 2 領域，全負面週保留較佳 1 條（coverage 高者勝、同則 priority 小者）；
-  F8 登記「三領域落地後廢除」。`RULES_VERSION="rules-1"`（`anchors.rs`）。
-- **Web**：`我的命格` PredictionsCard — Stage 1 全收齊才 refetch 全文進 Stage 2；按鈕閘門
-  `stage1_complete ∧ 已 refetch ∧ forecast.is_some()`；回饋三句用 §5.4.1 措辭；generate per-mount latch；
-  window focus 重比 `cycleId` 偵測換週。
-- **F7 資料刪除**：`DELETE /api/personality/me` 五句一次 `db::batch`（Hrana v2 隱式交易，失敗整批 rollback；
+- **`filter_negative_half` 已推廣（2026-09-11，D2-A 特例廢除）**：嚴格「負面不過半」+ floor
+  「永不丟最後一條」（全負週保留最佳 1 條，任何 n）。**tie 方向是承重牆**：drop-argmax 首同分勝
+  （手動掃描嚴格 `>`），不得改用 `max_by_key`（同分取最後、方向反轉會炸兩條 F5 紅線 golden）。
+- **Web**：`我的命格` PredictionsCard — 未生成週顯示 F4 五領域 0–3 輸入（`NeedStrengths`），
+  使用者送出才 generate（**無自動生成**；`latch` 已移除）；Stage 1 全收齊才 refetch 全文進 Stage 2；
+  按鈕閘門 `stage1_complete ∧ 已 refetch ∧ forecast.is_some()`；回饋三句用 §5.4.1 措辭；
+  換週偵測走 `cycle_seen`（任何狀態比對，rollover 重置 strengths）。
+- **F7 資料刪除**：`DELETE /api/personality/me` 六句一次 `db::batch`（Hrana v2 隱式交易，失敗整批 rollback；
   請求形狀 `{"type":"batch","batch":{"steps":[...]}}`，回應解析支援 `step_results`/`step_errors` —— 2026-09-04
   由 predictions-e2e.sh 實測抓到並修正）。
-- **E2E**：`scripts/predictions-e2e.sh -t <session>` 半自動整鏈（generate→checks→feedback，含遮罩閘門①②驗證）；
-  已實測通過（2026-09-04，測試帳號用完即清，F8 零污染）。
+- **E2E**：`scripts/predictions-e2e.sh -t <session>` 半自動整鏈（generate 带 F4 strengths→checks→feedback，
+  含遮罩閘門①②驗證）；已實測通過（2026-09-04，測試帳號用完即清，F8 零污染）。
 - 設計文件：`docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md`、
-  `docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md`。
+  `docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md`、
+  `docs/superpowers/specs/2026-09-11-f4-love-expansion-design.md`（F4/love/rules-2/部署順序 web 先）。
 
 ## F2/F3 Symbolic Overlay (2026-09)
 

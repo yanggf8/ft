@@ -227,3 +227,18 @@ CREATE TABLE IF NOT EXISTS prediction_generations (
   generated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, cycle_id)
 );
+
+-- ── F4 情境輸入：週期凍結時的五領域強度標記（2026-09-11 設計 §2）──
+-- 與 prediction_generations 同一批次原子寫入（db::batch）；凍結後週中不改。
+-- 0–3 由 app 層驗證（route 層 INVALID_STRENGTHS），無 CHECK，沿 repo 慣例。
+CREATE TABLE IF NOT EXISTS prediction_strengths (
+  user_id    TEXT NOT NULL,
+  cycle_id   TEXT NOT NULL,   -- Asia/Taipei 週一 YYYY-MM-DD
+  work       INTEGER NOT NULL,  -- 0–3，強度 ≥1 才生成該領域（F4 閘門）
+  love       INTEGER NOT NULL,
+  family     INTEGER NOT NULL,
+  money      INTEGER NOT NULL,
+  health     INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, cycle_id)
+);

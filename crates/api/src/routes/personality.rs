@@ -329,11 +329,11 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(d) => d,
                 Err(_) => return Ok(error::error_code("db unavailable", "DB_UNAVAILABLE", 500)),
             };
-            // F7 資料刪除（Grok P1→二審 P2 修正）：全部 5 句一次 Hrana v2 `batch`——
+            // F7 資料刪除（Grok P1→二審 P2 修正）：全部 6 句一次 Hrana v2 `batch`——
             // 隱式交易、任一失敗整批 rollback，幽靈列不得進 F8、也不留半刪狀態。
             let uid = db::text(&user_id);
             let one: [&db::Param<'_>; 1] = [&uid];
-            let stmts: [(&str, &[&db::Param<'_>]); 5] = [
+            let stmts: [(&str, &[&db::Param<'_>]); 6] = [
                 (
                     "DELETE FROM prediction_feedback WHERE prediction_id IN \
                      (SELECT id FROM predictions WHERE user_id = ?1)",
@@ -345,6 +345,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                     "DELETE FROM prediction_generations WHERE user_id = ?1",
                     &one,
                 ),
+                ("DELETE FROM prediction_strengths WHERE user_id = ?1", &one),
                 ("DELETE FROM personality_profiles WHERE user_id = ?1", &one),
             ];
             if let Err(e) = db::batch(&db, &stmts).await {

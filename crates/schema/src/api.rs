@@ -451,6 +451,17 @@ pub struct PredictionFeedback {
 
 // ── F5 API 層 DTO（docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md §4.2）──
 
+/// F4 五領域強度（0–3，rev.4 §F4）。值域由 app 層把關
+/// （`predict::strengths_in_range`），serde 只鎖型別。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DomainStrengths {
+    pub work: u8,
+    pub love: u8,
+    pub family: u8,
+    pub money: u8,
+    pub health: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckSituationRequest {
     /// 省略 = 當週；提供時必須為當週（否則 STALE_CYCLE）。
@@ -465,12 +476,27 @@ pub struct FeedbackRequest {
     pub response: ResponseWire,
 }
 
+/// F4 情境輸入隨 generate 送出。`Option` + `#[serde(default)]`：缺欄時由 route 層
+/// 回 400 `INVALID_STRENGTHS`（語意比 serde 的 `INVALID_JSON` 準）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratePredictionsRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strengths: Option<DomainStrengths>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPredictionsResponse {
     pub cycleId: String,
     pub checks: Vec<SituationCheck>,
     pub predictions: Vec<Prediction>,
     pub feedback: Vec<PredictionFeedback>,
+    /// 該週是否已凍結（prediction_generations 有列）。false = 尚未生成，
+    /// 前端據此顯示 F4 強度輸入而非預測列表。
+    #[serde(default)]
+    pub generated: bool,
+    /// 凍結時的 F4 強度快照；未生成或舊週（rules-1 時期）為 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strengths: Option<DomainStrengths>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -479,6 +505,9 @@ pub struct GeneratePredictionsResponse {
     /// 本次呼叫是否真的跑了生成管線（false = 該週已凍結/已存在）。
     pub generated: bool,
     pub predictions: Vec<Prediction>,
+    /// 凍結時的 F4 強度快照（echo；含併發敗者路徑）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strengths: Option<DomainStrengths>,
 }
 
 #[cfg(test)]
@@ -559,6 +588,45 @@ mod f5_wire_tests {
         p.tendency = Some("t".into());
         let j2 = serde_json::to_value(&p).unwrap();
         assert_eq!(j2["tendency"], "t");
+    }
+
+    #[test]
+    fn domain_strengths_roundtrip_and_default() {
+        let s = DomainStrengths {
+            work: 1,
+            love: 2,
+            family: 0,
+            money: 3,
+            health: 0,
+        };
+        let j = serde_json::to_value(&s).unwrap();
+        assert_eq!(j["work"], 1);
+        assert_eq!(j["love"], 2);
+        let back: DomainStrengths = serde_json::from_value(j).unwrap();
+        assert_eq!(back, s);
+        // generate request：缺 strengths 欄 → None（值域由 app 層把關）
+        let req: GeneratePredictionsRequest = serde_json::from_str(r#"{}"#).unwrap();
+        assert!(req.strengths.is_none());
+        let req2: GeneratePredictionsRequest = serde_json::from_str(
+            r#"{"strengths":{"work":1,"love":0,"family":0,"money":1,"health":0}}"#,
+        )
+        .unwrap();
+        assert_eq!(req2.strengths.unwrap().work, 1);
+    }
+
+    #[test]
+    fn list_response_defaults_for_legacy_json() {
+        // rules-1 時期的舊形 JSON（無 generated/strengths）必須照樣反序列化
+        let r: ListPredictionsResponse = serde_json::from_str(
+            r#"{"cycleId":"2026-09-07","checks":[],"predictions":[],"feedback":[]}"#,
+        )
+        .unwrap();
+        assert!(!r.generated);
+        assert!(r.strengths.is_none());
+        // strengths 缺省時不序列化（skip_serializing_if）
+        let j = serde_json::to_value(&r).unwrap();
+        assert!(j.get("strengths").is_none());
+        assert_eq!(j["generated"], false);
     }
 }
 

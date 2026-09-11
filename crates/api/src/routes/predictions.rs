@@ -2,9 +2,11 @@
 //! Spec: docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md §3–§4
 
 use ft_schema::api::{
-    CheckSituationRequest, FeedbackRequest, GeneratePredictionsResponse, ListPredictionsResponse,
+    CheckSituationRequest, FeedbackRequest, GeneratePredictionsRequest,
+    GeneratePredictionsResponse, ListPredictionsResponse,
 };
 use ft_schema::cycle::is_monday_cycle_id;
+use ft_schema::predict::strengths_in_range;
 
 use super::super::error;
 use super::super::services::{db, predictions};
@@ -117,12 +119,14 @@ pub fn register(router: R<'static>) -> R<'static> {
                 checks: view.checks,
                 predictions: view.predictions,
                 feedback: view.feedback,
+                generated: view.generated,
+                strengths: view.strengths,
             };
             let mut res = ok_json(&to_json(&resp), 200);
             apply_cache_headers(&mut res, 0, true);
             Ok(res)
         })
-        .post_async("/api/predictions/generate", |req, ctx| async move {
+        .post_async("/api/predictions/generate", |mut req, ctx| async move {
             if !rate_limit(
                 &ctx,
                 &format!("predictions:ip:{}", client_ip(&req)),
@@ -145,7 +149,29 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(c) => c,
                 Err(e) => return Ok(to_err(e)),
             };
-            let outcome = match predictions::generate(&db, &user_id, &cycle).await {
+            if body_too_large(&req) {
+                return Ok(error::error_code(
+                    "payload too large",
+                    "PAYLOAD_TOO_LARGE",
+                    413,
+                ));
+            }
+            let body: GeneratePredictionsRequest = match req.json().await {
+                Ok(b) => b,
+                Err(_) => return Ok(error::error_code("Invalid JSON", "INVALID_JSON", 400)),
+            };
+            // F4 情境輸入：五領域強度必填、值域 0–3（缺欄/越界 → 400，語意比 INVALID_JSON 準）
+            let strengths = match body.strengths {
+                Some(s) if strengths_in_range(&s) => s,
+                _ => {
+                    return Ok(error::error_code(
+                        "strengths must be present with all five domains 0-3",
+                        "INVALID_STRENGTHS",
+                        400,
+                    ))
+                }
+            };
+            let outcome = match predictions::generate(&db, &user_id, &cycle, &strengths).await {
                 Ok(o) => o,
                 Err(e) => return Ok(to_err(e)),
             };
@@ -155,6 +181,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 cycleId: cycle,
                 generated: outcome.generated,
                 predictions: view.predictions,
+                strengths: view.strengths,
             };
             Ok(ok_json(&to_json(&resp), 200))
         })

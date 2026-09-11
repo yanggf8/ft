@@ -5,12 +5,13 @@
 
 use ft_schema::anchors::{Domain, TriggerClass, RULES_VERSION};
 use ft_schema::api::{
-    AnchorCoverageWire, DomainWire, OceanScores, Prediction, PredictionFeedback,
+    AnchorCoverageWire, DomainStrengths, DomainWire, OceanScores, Prediction, PredictionFeedback,
     PredictionSourceWire, ResponseWire, SituationCheck, SituationWire, TriggerWire,
 };
 use ft_schema::cycle::week_start_asia_taipei;
 use ft_schema::predict::{
-    dim_ranges, display_rounded, filter_negative_half, select_for_domain, AnchorCoverage, Selected,
+    dim_ranges, display_rounded, filter_negative_half, gated_domains, select_for_domain,
+    AnchorCoverage, Selected,
 };
 
 use super::{clock, db, uuid};
@@ -133,6 +134,29 @@ struct GenRow {
 }
 
 #[derive(serde::Deserialize)]
+struct StrengthsRow {
+    work: i64,
+    love: i64,
+    family: i64,
+    money: i64,
+    health: i64,
+}
+
+impl StrengthsRow {
+    /// 寫入端已驗證 0–3；讀回異常（不該存在）→ None，當作無快照。
+    fn to_wire(&self) -> Option<DomainStrengths> {
+        let cvt = |v: i64| u8::try_from(v).ok().filter(|b| *b <= 3);
+        Some(DomainStrengths {
+            work: cvt(self.work)?,
+            love: cvt(self.love)?,
+            family: cvt(self.family)?,
+            money: cvt(self.money)?,
+            health: cvt(self.health)?,
+        })
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct ProfileRow {
     id: String,
     ipip_answers: Option<String>,
@@ -246,11 +270,15 @@ fn to_feedback(r: FeedbackRow) -> Option<PredictionFeedback> {
     })
 }
 
-/// 一週的完整視圖（predictions + checks + feedback）。
+/// 一週的完整視圖（predictions + checks + feedback + 凍結狀態 + F4 強度快照）。
 pub struct CycleView {
     pub predictions: Vec<Prediction>,
     pub checks: Vec<SituationCheck>,
     pub feedback: Vec<PredictionFeedback>,
+    /// 該週是否已凍結（prediction_generations 有列）。
+    pub generated: bool,
+    /// 凍結時的 F4 強度快照；未生成或 rules-1 時期的舊週為 None。
+    pub strengths: Option<DomainStrengths>,
 }
 
 /// 生成結果：`generated` = 本次真的跑了生成管線（false = 該週已凍結/已存在）。
@@ -259,7 +287,7 @@ pub struct GenOutcome {
     pub view: CycleView,
 }
 
-/// 列一週（固定領域序 work→money）。
+/// 列一週（固定領域序 work→money→love；順序與 `predict::GATE_ORDER` 耦合，見該處 doc）。
 pub async fn list_cycle(
     db: &Turso,
     user_id: &str,
@@ -270,7 +298,7 @@ pub async fn list_cycle(
         "SELECT id, profile_id, cycle_id, domain, trigger, tendency, forecast, experiment, \
                 anchor_ids, anchor_coverage, source, rules_version, is_control, created_at \
          FROM predictions WHERE user_id = ?1 AND cycle_id = ?2 \
-         ORDER BY CASE domain WHEN 'work' THEN 0 WHEN 'money' THEN 1 ELSE 2 END, trigger",
+         ORDER BY CASE domain WHEN 'work' THEN 0 WHEN 'money' THEN 1 WHEN 'love' THEN 2 ELSE 3 END, trigger",
         &[&db::text(user_id), &db::text(cycle_id)],
     )
     .await
@@ -315,10 +343,31 @@ pub async fn list_cycle(
         );
     }
 
+    let generated = db::first::<GenRow>(
+        db,
+        "SELECT profile_id FROM prediction_generations WHERE user_id = ?1 AND cycle_id = ?2",
+        &[&db::text(user_id), &db::text(cycle_id)],
+    )
+    .await
+    .map_err(db_err)?
+    .is_some();
+
+    let strengths = db::first::<StrengthsRow>(
+        db,
+        "SELECT work, love, family, money, health FROM prediction_strengths \
+         WHERE user_id = ?1 AND cycle_id = ?2",
+        &[&db::text(user_id), &db::text(cycle_id)],
+    )
+    .await
+    .map_err(db_err)?
+    .and_then(|r| r.to_wire());
+
     Ok(CycleView {
         predictions,
         checks,
         feedback,
+        generated,
+        strengths,
     })
 }
 
@@ -340,10 +389,12 @@ pub fn redact_view(view: &mut CycleView) {
 
 /// 週期生成（cycle 級凍結冪等）。Grok P0-4：一週一 profile 一快照；
 /// 已有 generations 列 → 整次只回現況，絕不補 domain（防週中重測混 profile）。
+/// F4：`strengths` 為本週情境輸入（route 層已驗證 0–3），隨 freeze 凍結，週中不改。
 pub async fn generate(
     db: &Turso,
     user_id: &str,
     cycle_id: &str,
+    strengths: &DomainStrengths,
 ) -> Result<GenOutcome, PredictionsError> {
     // 1. cycle 已凍結？
     let frozen: Option<GenRow> = db::first(
@@ -387,74 +438,101 @@ pub async fn generate(
         .ok_or_else(|| PredictionsError::Db("ipip_answers length invalid".into()))?;
     let display = display_rounded(&ocean);
 
-    // 3. 命中 → 擇一 → 負面不過半（v1：work + money）
+    // 3. F4 閘門（強度 ≥1）→ 命中 → 擇一 → 負面不過半。
+    //    family/health 目錄尚空，select_for_domain 恆 None（前瞻擴充）。
     let mut sel: Vec<Selected<'static>> = Vec::new();
-    for domain in [Domain::Work, Domain::Money] {
+    for domain in gated_domains(strengths) {
         if let Some(s) = select_for_domain(domain, display, ranges) {
             sel.push(s);
         }
     }
     let sel = filter_negative_half(sel);
 
-    // 4. 先寫 cycle 凍結快照（Grok 二審 P0 #1：freeze 先於 predictions）。
-    //    Turso 每句 execute 是獨立 HTTP，無交易；freeze 先拿者才有資格插 predictions，
-    //    重試/並發只會早退，不會「補 domain」混 profile；空週也凍結。
+    // 4. 凍結 + 插入（單一 Hrana batch = 原子隱含交易；F7 同款）。
+    //    steps[0]=F4 強度快照、steps[1]=cycle 凍結快照、steps[2..]=predictions。
+    //    兩個快照皆 INSERT OR IGNORE：併發敗者的整個 batch 是結構性 no-op
+    //    （predictions 另有 WHERE NOT EXISTS 原子防呆），以 steps[1] 的 affected==0
+    //    偵測「他人已凍結」→ 只回現況，絕不補 domain。空週也凍結。
     let created = clock::now_iso();
     if created.is_empty() {
         return Err(PredictionsError::Db("clock unavailable".into()));
     }
-    let gen_changes = db::exec_changes(
-        db,
-        "INSERT OR IGNORE INTO prediction_generations (user_id, cycle_id, profile_id, generated_at) \
-         VALUES (?1, ?2, ?3, ?4)",
-        &[
-            &db::text(user_id),
-            &db::text(cycle_id),
-            &db::text(&profile.id),
-            &db::text(&created),
-        ],
-    )
-    .await
-    .map_err(db_err)?;
-    if gen_changes == 0 {
+    const STRENGTHS_INSERT_SQL: &str = "INSERT OR IGNORE INTO prediction_strengths \
+         (user_id, cycle_id, work, love, family, money, health, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)";
+    const GEN_INSERT_SQL: &str = "INSERT OR IGNORE INTO prediction_generations \
+         (user_id, cycle_id, profile_id, generated_at) VALUES (?1, ?2, ?3, ?4)";
+    const PRED_INSERT_SQL: &str = "INSERT INTO predictions \
+         (id, user_id, profile_id, cycle_id, domain, trigger, tendency, forecast, \
+          experiment, anchor_ids, anchor_coverage, source, rules_version, is_control, created_at) \
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'rule_anchor', ?12, 0, ?13 \
+         WHERE NOT EXISTS (SELECT 1 FROM predictions \
+                           WHERE user_id = ?2 AND cycle_id = ?4 AND domain = ?5)";
+
+    let uid = db::text(user_id);
+    let cyc = db::text(cycle_id);
+    let pid = db::text(&profile.id);
+    let ts = db::text(&created);
+    let s_work = db::int(strengths.work as i32);
+    let s_love = db::int(strengths.love as i32);
+    let s_family = db::int(strengths.family as i32);
+    let s_money = db::int(strengths.money as i32);
+    let s_health = db::int(strengths.health as i32);
+
+    // predictions 的擁有參數（id/anchor_ids 字串須活到 batch 呼叫）
+    let preds: Vec<(String, String, &Selected<'static>)> = sel
+        .iter()
+        .map(|s| {
+            let anchor_ids =
+                serde_json::to_string(&s.anchor_ids).unwrap_or_else(|_| "[]".to_string());
+            (uuid::random_uuid(), anchor_ids, s)
+        })
+        .collect();
+
+    let mut pred_param_lists: Vec<Vec<&db::Param<'_>>> = Vec::with_capacity(preds.len());
+    // 先收「擁有的」Param（借用 preds 字串與 &'static str，活到 batch 呼叫為止），
+    // 再第二輪取 `&Param` — 迴圈內區域變數不能被推入外層存活的向量。
+    let mut owned_lists: Vec<Vec<db::Param<'_>>> = Vec::with_capacity(preds.len());
+    for (id, anchor_ids, s) in &preds {
+        owned_lists.push(vec![
+            db::text(id),
+            db::text(user_id),
+            db::text(&profile.id),
+            db::text(cycle_id),
+            db::text(domain_to_str(s.anchor.domain)),
+            db::text(trigger_class_to_str(s.trigger)),
+            db::text(s.anchor.tendency),
+            db::text(s.anchor.forecast),
+            db::opt_text(s.anchor.experiment),
+            db::text(anchor_ids),
+            db::text(coverage_to_str(s.coverage)),
+            db::text(RULES_VERSION),
+            db::text(&created),
+        ]);
+    }
+    for l in &owned_lists {
+        pred_param_lists.push(l.iter().collect());
+    }
+
+    let strengths_params: [&db::Param<'_>; 8] = [
+        &uid, &cyc, &s_work, &s_love, &s_family, &s_money, &s_health, &ts,
+    ];
+    let gen_params: [&db::Param<'_>; 4] = [&uid, &cyc, &pid, &ts];
+    let mut stmts: Vec<(&'static str, &[&db::Param<'_>])> = Vec::with_capacity(2 + preds.len());
+    stmts.push((STRENGTHS_INSERT_SQL, &strengths_params));
+    stmts.push((GEN_INSERT_SQL, &gen_params));
+    for params in &pred_param_lists {
+        stmts.push((PRED_INSERT_SQL, params));
+    }
+
+    let counts = db::batch(db, &stmts).await.map_err(db_err)?;
+    if counts.get(1).copied().unwrap_or(0) == 0 {
         // 併發/重試：他人已凍結 → 只回現況（絕不補 domain）
         let view = list_cycle(db, user_id, cycle_id).await?;
         return Ok(GenOutcome {
             generated: false,
             view,
         });
-    }
-
-    // 5. 只有自己拿到 freeze 才插 predictions（每 domain 原子 WHERE NOT EXISTS，UNIQUE 當防呆）
-    for s in &sel {
-        let id = uuid::random_uuid();
-        let anchor_ids = serde_json::to_string(&s.anchor_ids).unwrap_or_else(|_| "[]".to_string());
-        db::exec_changes(
-            db,
-            "INSERT INTO predictions \
-                    (id, user_id, profile_id, cycle_id, domain, trigger, tendency, forecast, \
-                     experiment, anchor_ids, anchor_coverage, source, rules_version, is_control, created_at) \
-             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'rule_anchor', ?12, 0, ?13 \
-             WHERE NOT EXISTS (SELECT 1 FROM predictions \
-                               WHERE user_id = ?2 AND cycle_id = ?4 AND domain = ?5)",
-            &[
-                &db::text(&id),
-                &db::text(user_id),
-                &db::text(&profile.id),
-                &db::text(cycle_id),
-                &db::text(domain_to_str(s.anchor.domain)),
-                &db::text(trigger_class_to_str(s.trigger)),
-                &db::text(s.anchor.tendency),
-                &db::text(s.anchor.forecast),
-                &db::opt_text(s.anchor.experiment),
-                &db::text(&anchor_ids),
-                &db::text(coverage_to_str(s.coverage)),
-                &db::text(RULES_VERSION),
-                &db::text(&created),
-            ],
-        )
-        .await
-        .map_err(db_err)?;
     }
 
     let view = list_cycle(db, user_id, cycle_id).await?;

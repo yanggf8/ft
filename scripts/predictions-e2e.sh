@@ -109,18 +109,25 @@ preds = body.get("predictions", [])
 checks = body.get("checks", [])
 step("GET 當週列表", True, f"cycleId={cycle} predictions={len(preds)} checks={len(checks)}")
 
-# ── 2. 空則 generate（冪等）──
+# ── 2. 空則 generate（冪等；F4 起必帶五領域強度 0–3）──
 if not preds:
-    status, body = call("POST", "/api/predictions/generate")
+    strengths = {"work": 1, "love": 1, "family": 0, "money": 1, "health": 0}
+    status, body = call("POST", "/api/predictions/generate", {"strengths": strengths})
     check_auth(status, body)
+    if status == 400 and (body or {}).get("code") == "INVALID_STRENGTHS":
+        sys.exit("❌ generate 被拒 INVALID_STRENGTHS — API 尚未升級或 body 形狀不符")
     if status == 409 and (body or {}).get("code") == "PROFILE_INCOMPLETE":
         sys.exit("❌ 尚無 complete 人格測驗 — 請先到 /personality 完成測驗再跑")
     if status not in (200, 409):
         sys.exit(f"❌ POST generate → {status} {body}")
-    step("POST generate", status == 200, f"code={status}")
+    echo = (body or {}).get("strengths")
+    step("POST generate（F4 strengths）", status == 200,
+         f"code={status}" + (f" strengths echo={echo}" if echo else ""))
     status, body = call("GET", "/api/predictions")
     preds = body.get("predictions", [])
     checks = body.get("checks", [])
+    gen_flag = body.get("generated")
+    step("GET 後 generated 旗標", gen_flag is True, f"generated={gen_flag}")
 
 if not preds:
     print("\nℹ️  本週沒有預測（誠實空週）— 鏈結到此結束，此為正常空狀態而非錯誤。")

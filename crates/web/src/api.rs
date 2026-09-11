@@ -374,9 +374,12 @@ pub async fn get_predictions(no_cache: bool) -> Result<ListPredictionsResponse, 
     get_json("/api/predictions", no_cache).await
 }
 
-/// `POST /api/predictions/generate` — 冪等（cycle 凍結）。空 body。
-pub async fn generate_predictions() -> Result<GeneratePredictionsResponse, ApiErr> {
-    post_empty("/api/predictions/generate").await
+/// `POST /api/predictions/generate` — 冪等（cycle 凍結）。
+/// F4：body 必帶五領域強度（0–3），隨凍結快照落庫；缺/越界 → 400 INVALID_STRENGTHS。
+pub async fn generate_predictions(
+    b: &GeneratePredictionsRequest,
+) -> Result<GeneratePredictionsResponse, ApiErr> {
+    send_json(Request::post(&url("/api/predictions/generate")), b).await
 }
 
 /// `PUT /api/predictions/checks` — F6 第 1 段。`cycleId` 恆 None（省略 = 當週）。
