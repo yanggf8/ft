@@ -38,4 +38,4 @@ crates/api/build/
 .secrets.env
 
 # Codex CLI local state
-.codex/
+.codex
