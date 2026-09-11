@@ -30,17 +30,20 @@
 
   function rand(a, b) { return a + Math.random() * (b - a); }
 
-  // Box-Muller with 3-sigma rejection (spec §4).
+  // Box-Muller with 3-sigma rejection (spec §4). `for(;;)`, not do-while:
+  // `continue` in a do-while re-tests the condition with `g` still
+  // undefined on first-pass rejection (s >= 1, p ≈ 21.5%), returning
+  // undefined → NaN coordinates → createLinearGradient threw non-finite
+  // and killed the rAF loop (prod incident 2026-09-11).
   function gauss() {
-    var u, v, s, g;
-    do {
-      u = Math.random() * 2 - 1;
-      v = Math.random() * 2 - 1;
-      s = u * u + v * v;
+    for (;;) {
+      var u = Math.random() * 2 - 1;
+      var v = Math.random() * 2 - 1;
+      var s = u * u + v * v;
       if (s === 0 || s >= 1) continue;
-      g = u * Math.sqrt((-2 * Math.log(s)) / s);
-    } while (g > 3 || g < -3);
-    return g;
+      var g = u * Math.sqrt((-2 * Math.log(s)) / s);
+      if (g <= 3 && g >= -3) return g;
+    }
   }
 
   function resize() {
