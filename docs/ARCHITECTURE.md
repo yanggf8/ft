@@ -93,6 +93,16 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
   `|gap| ≥ 20` 且實測非最低檔才敘事、opt-in 三段動線。
 - **紅線**:`predictions.rs`/`services::ai` 不得 import `symbolic` — 由 golden 回歸測試釘死
   (`crates/schema/src/predict.rs` 的 F5 選則輸出逐欄位 fixture)。
+- **Runtime 驗收已過(2026-09-11,測試帳號實測後 F7+SQL 清除、F8 零污染)**:
+  401 session 強制、409 三態(`NO_MEASUREMENT`/`F3_DISABLED`/`MEASUREMENT_PENDING` —
+  分別對應無測量 / skip / careless_suspected)、過期快取重算(塗改
+  `meta.engineVersionWestern` → GET 回寫 4.0.0)、gender 缺失跳紫微
+  (`priorSource:"western"`)、F3 敘事閘門(gap≥20 敘事、最低檔豁免壓過大 gap)、
+  8 路並發重複計算容忍(全 200、last-write-wins)、**§0.4 紅線:四態命盤
+  (新鮮/過期/失敗/缺席)下 F5 generate 輸出正規化後逐位一致**。
+  Engine worker 真斷線的降級僅 native T6 覆蓋,未在 prod 演練。
+- **已知舊帳(非阻塞)**:`/api/charts/:type` cache-hit 與 fresh 兩路回應外殼不一致
+  (cached 版 `birth_data_hash` 恆 null、缺 top-level `engineVersion`)— 前端兩種皆容。
 - **chart_resolver**(`crates/api/src/services/chart_resolver.rs`):唯讀解析(Value 層新鮮度:
   birth hash + engine version + schema version;結構驗證;engine 失敗降級;gender 缺失跳紫微;
   紫微早返回、西洋 fallback)。

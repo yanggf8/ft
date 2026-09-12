@@ -93,6 +93,13 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
 - Route-level request bodies are capped at 64 KiB (`body_too_large` in `routes/common.rs`)
   — new body-parsing routes must call it before `req.json()`.
 - Route code must not echo DB/engine error detail to clients (generic `"db error"` only).
+- **CSP 紅線（2026-09-11 事故）**：`_headers` 的 `script-src 'self' 'wasm-unsafe-eval'`
+  **擋 inline script** — wasm 啟動器必須留在外部檔 `boot.js`（`index.html` 以
+  `<script type="module" src="/boot.js">` 引用，`build-web.sh` 負責複製）。
+  把啟動器改回 inline 會重演「app 不 mount」的全站停擺。改 `index.html`/`_headers`
+  後必須在瀏覽器載入 `dist/`（套用同款 header）驗證再部署。
+- `galaxy.js` 的拒絕迴圈用 `for(;;)`，**不要**用 `do-while` + `continue`（`g` 未定義
+  時會退出迴圈回傳 undefined → NaN → 動畫迴圈死亡；見 gauss() 註解與 commit 324bb73）。
 
 ## Testing
 
