@@ -315,6 +315,25 @@ pub async fn list_cycle(
         );
     }
 
+    // F8 事前盲(spec 2026-09-13-f8-control §0/Codex 終審 #2):回饋未收齊前,
+    // isControl 一律序列化為 false — 防止從 API 直接指認對照列。收齊 =
+    // 每列有 feedback,或其情境為 absent(設計上不會有 feedback)。
+    let fb_ids: std::collections::HashSet<&str> =
+        feedback.iter().map(|f| f.predictionId.as_str()).collect();
+    let absent_triggers: std::collections::HashSet<TriggerWire> = checks
+        .iter()
+        .filter(|c| c.situation == SituationWire::Absent)
+        .map(|c| c.trigger)
+        .collect();
+    let all_accounted = predictions
+        .iter()
+        .all(|p| fb_ids.contains(p.id.as_str()) || absent_triggers.contains(&p.trigger));
+    if !all_accounted {
+        for p in &mut predictions {
+            p.isControl = false;
+        }
+    }
+
     Ok(CycleView {
         predictions,
         checks,
@@ -347,10 +366,7 @@ fn draw_control_default() -> bool {
 /// F8 洗牌來源:其他使用者的最新 complete 側寫(Kimi #1:每人取最新一列後
 /// 隨機抽,避免重測使用者的舊側寫被過度加權)。損壞列有界重抽(≤3);
 /// 池空 → None。回 (ranges, display),已驗證可用(spec §1.2 先驗後用)。
-async fn draw_shuffled_profile(
-    db: &Turso,
-    me: &str,
-) -> Result<Option<([u8; 5], [f64; 5])>, PredictionsError> {
+async fn draw_shuffled_profile(db: &Turso, me: &str) -> Option<([u8; 5], [f64; 5])> {
     #[derive(serde::Deserialize)]
     struct ShuffledRow {
         ipip_answers: Option<String>,
@@ -368,8 +384,13 @@ async fn draw_shuffled_profile(
             &[&db::text(me)],
         )
         .await
-        .map_err(db_err)?;
-        let Some(row) = row else { return Ok(None) }; // 池空:重抽無意義
+        .map_err(|e| {
+            // 查詢失敗降級為「無來源」→ 槽回真實組(spec §1;Codex 終審 #4)
+            worker::console_log!("f8: shuffled-profile query failed: {e}");
+        })
+        .ok()
+        .flatten();
+        let Some(row) = row else { return None }; // 池空:重抽無意義
         let answers = row
             .ipip_answers
             .as_deref()
@@ -380,19 +401,19 @@ async fn draw_shuffled_profile(
             .and_then(|s| serde_json::from_str::<OceanScores>(s).ok());
         if let (Some(answers), Some(ocean)) = (answers, ocean) {
             if let Some(ranges) = dim_ranges(&answers) {
-                return Ok(Some((ranges, display_rounded(&ocean))));
+                return Some((ranges, display_rounded(&ocean)));
             }
         }
         // 損壞列:重抽(隨機換一列)
     }
-    Ok(None)
+    None
 }
 
 /// D2-A 壓列後把 is_control 旗標按 (domain, anchor.id) 接回存活列。
 /// 鍵唯一(每 domain 一列);被壓列的旗標自然消失(存活者語意,已登記於
 /// docs/preregistration/f8-d6.md)。未知列一律視為真實組。
 fn reattach_control_flags(
-    keys: &[(Domain, &'static str, bool)],
+    keys: &[(&'static str, Domain, bool, Option<&'static str>)],
     filtered: &[Selected<'_>],
 ) -> Vec<bool> {
     filtered
@@ -400,11 +421,45 @@ fn reattach_control_flags(
         .map(|s| {
             keys.iter()
                 .rev()
-                .find(|(d, id, _)| *d == s.anchor.domain && *id == s.anchor.id)
-                .map(|(_, _, c)| *c)
+                .find(|(id, _, _, _)| *id == s.anchor.id)
+                .map(|(_, _, c, _)| *c)
                 .unwrap_or(false)
         })
         .collect()
+}
+
+/// 一個生成槽位的完整計畫:id 於 freeze 前配發;fallback = 對照降級真實組的原因。
+struct SlotPlan {
+    domain: Domain,
+    id: String,
+    selected: Selected<'static>,
+    is_control: bool,
+    fallback: Option<&'static str>,
+}
+
+/// 純函數:單槽決策(F8 對照 or 真實)— spec rev.3 §1。輸入全部可注入,可測試。
+/// 回 (selected, is_control, fallback_reason);None = 槽位誠實空(真實與對照皆零命中)。
+fn plan_slot(
+    domain: Domain,
+    draw_control: bool,
+    shuffled: Option<([u8; 5], [f64; 5])>,
+    real_display: [f64; 5],
+    real_ranges: [u8; 5],
+) -> Option<(Selected<'static>, bool, Option<&'static str>)> {
+    if draw_control {
+        if let Some((c_ranges, c_display)) = shuffled {
+            if let Some(s) = select_for_domain(domain, c_display, c_ranges) {
+                return Some((s, true, None)); // 對照
+            }
+            // 洗牌向量零命中 → 真實 fallback(rev.3;prereg 逃生口;Codex 終審 #5 對帳)
+            return select_for_domain(domain, real_display, real_ranges)
+                .map(|s| (s, false, Some("fallback_zero_hit")));
+        }
+        // 池空 → 真實 fallback
+        return select_for_domain(domain, real_display, real_ranges)
+            .map(|s| (s, false, Some("fallback_pool_empty")));
+    }
+    select_for_domain(domain, real_display, real_ranges).map(|s| (s, false, None))
 }
 
 /// 週期生成（cycle 級凍結冪等）。Grok P0-4：一週一 profile 一快照；
@@ -467,32 +522,46 @@ pub(crate) async fn generate_with_draw(
         .ok_or_else(|| PredictionsError::Db("ipip_answers length invalid".into()))?;
     let display = display_rounded(&ocean);
 
-    // 3. 命中 → 擇一;F8 對照(spec 2026-09-13-f8-control §1):逐槽 25% 中籤時,
-    //    以其他使用者最新 complete 側寫走完全相同管線;一切失敗(池空/資料損壞/
-    //    零命中/抽籤不可用)誠實降級該槽真實組。負面不過半對混合集合套用(兩組對稱)。
-    let mut rows: Vec<(Selected<'static>, bool)> = Vec::new();
-    for domain in [Domain::Work, Domain::Money] {
-        if draw_control() {
-            match draw_shuffled_profile(db, user_id).await? {
-                Some((c_ranges, c_display)) => {
-                    if let Some(s) = select_for_domain(domain, c_display, c_ranges) {
-                        rows.push((s, true));
-                        continue;
-                    }
-                }
-                None => {}
+    // 3. 命中 → 擇一;F8 對照(spec 2026-09-13-f8-control rev.3 §1):逐槽 25%
+    //    中籤時,以其他使用者最新 complete 側寫走完全相同管線。一切對照失敗
+    //    (池空/資料損壞/零命中/抽籤或查詢不可用)誠實降級該槽真實組 — freeze
+    //    前後都不報錯(Codex 終審 #3/#4)。
+    let draws = [draw_control(), draw_control()];
+    let shuffled = if draws.iter().any(|d| *d) {
+        match draw_shuffled_profile(db, user_id).await {
+            Some(v) => Some(v),
+            None => {
+                worker::console_log!("f8: shuffled-profile query failed; slots degrade to real");
+                None
             }
         }
-        if let Some(s) = select_for_domain(domain, display, ranges) {
-            rows.push((s, false));
+    } else {
+        None
+    };
+    // 槽位計畫:id 於 freeze 前配發(Codex 終審 #3 — freeze 後零 crypto 依賴)。
+    let mut plan: Vec<SlotPlan> = Vec::new();
+    for (domain, drawn) in [Domain::Work, Domain::Money].iter().zip(draws.iter()) {
+        if let Some((selected, is_control, fallback)) =
+            plan_slot(*domain, *drawn, shuffled, display, ranges)
+        {
+            plan.push(SlotPlan {
+                domain: *domain,
+                id: uuid::random_uuid(),
+                selected,
+                is_control,
+                fallback,
+            });
         }
     }
-    let keys: Vec<(Domain, &'static str, bool)> = rows
+    let keys: Vec<(&'static str, Domain, bool, Option<&'static str>)> = plan
         .iter()
-        .map(|(s, c)| (s.anchor.domain, s.anchor.id, *c))
+        .map(|p| (p.selected.anchor.id, p.domain, p.is_control, p.fallback))
         .collect();
-    let sel = filter_negative_half(rows.into_iter().map(|(s, _)| s).collect::<Vec<_>>());
+    let selecteds: Vec<Selected<'static>> = plan.iter().map(|p| p.selected.clone()).collect();
+    let sel = filter_negative_half(selecteds);
     let control_flags = reattach_control_flags(&keys, &sel);
+    let prediction_ids: Vec<String> = sel.iter().map(|_| uuid::random_uuid()).collect();
+    let ledger_ids: Vec<String> = keys.iter().map(|_| uuid::random_uuid()).collect();
 
     // 4. 先寫 cycle 凍結快照（Grok 二審 P0 #1：freeze 先於 predictions）。
     //    Turso 每句 execute 是獨立 HTTP，無交易；freeze 先拿者才有資格插 predictions，
@@ -523,9 +592,13 @@ pub(crate) async fn generate_with_draw(
         });
     }
 
-    // 5. 只有自己拿到 freeze 才插 predictions（每 domain 原子 WHERE NOT EXISTS，UNIQUE 當防呆）
-    for (s, is_control) in sel.iter().zip(control_flags.iter()) {
-        let id = uuid::random_uuid();
+    // 5. 只有自己拿到 freeze 才寫入(每 domain 原子 WHERE NOT EXISTS,UNIQUE 當防呆):
+    //    存活槽位 → predictions 列 + 帳本(assigned);
+    //    被 D2-A 壓掉槽位 → 僅帳本(suppressed;ITT 可對帳,Codex 終審 #1)。
+    //    所有 id 已於 freeze 前配發 — 迴圈內零 crypto 依賴(Codex 終審 #3)。
+    for (i, s) in sel.iter().enumerate() {
+        let id = &prediction_ids[i];
+        let is_control = control_flags[i];
         let anchor_ids = serde_json::to_string(&s.anchor_ids).unwrap_or_else(|_| "[]".to_string());
         db::exec_changes(
             db,
@@ -536,7 +609,7 @@ pub(crate) async fn generate_with_draw(
              WHERE NOT EXISTS (SELECT 1 FROM predictions \
                                WHERE user_id = ?2 AND cycle_id = ?4 AND domain = ?5)",
             &[
-                &db::text(&id),
+                &db::text(id),
                 &db::text(user_id),
                 &db::text(&profile.id),
                 &db::text(cycle_id),
@@ -548,9 +621,59 @@ pub(crate) async fn generate_with_draw(
                 &db::text(&anchor_ids),
                 &db::text(coverage_to_str(s.coverage)),
                 &db::text(RULES_VERSION),
-                &db::int(*is_control as i32),
+                &db::int(is_control as i32),
                 &db::text(&created),
             ],
+        )
+        .await
+        .map_err(db_err)?;
+        // 帳本:drawn arm + 降級原因 + 落庫的 prediction id。
+        let li = keys
+            .iter()
+            .position(|(aid, _, _, _)| *aid == s.anchor.id)
+            .expect("survivor must come from plan");
+        let aid = &ledger_ids[li];
+        let drawn_arm = if is_control { "control" } else { "real" };
+        let a_id = db::text(aid);
+        let a_u = db::text(user_id);
+        let a_c = db::text(cycle_id);
+        let a_d = db::text(domain_to_str(s.anchor.domain));
+        let a_arm = db::text(drawn_arm);
+        let a_pid = db::text(id);
+        let a_t = db::text(&created);
+        db::exec(
+            db,
+            "INSERT INTO f8_assignments \
+             (id, user_id, cycle_id, domain, drawn_arm, fallback_reason, suppressed, prediction_id, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, 0, ?6, ?7)",
+            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_pid, &a_t],
+        )
+        .await
+        .map_err(db_err)?;
+    }
+    // 被計畫但被 D2-A 壓掉的槽位(含對照指派):帳本記 suppressed,ITT 可對帳
+    // (Codex 終審 #1;spec rev.3 §1)。
+    let survived: std::collections::HashSet<&'static str> =
+        sel.iter().map(|s| s.anchor.id).collect();
+    for (k_i, (anchor_id, domain, is_control, fallback)) in keys.iter().enumerate() {
+        if survived.contains(anchor_id) {
+            continue;
+        }
+        let aid = &ledger_ids[k_i];
+        let drawn_arm = if *is_control { "control" } else { "real" };
+        let a_id = db::text(aid);
+        let a_u = db::text(user_id);
+        let a_c = db::text(cycle_id);
+        let a_d = db::text(domain_to_str(*domain));
+        let a_arm = db::text(drawn_arm);
+        let a_pid = db::text("");
+        let a_t = db::text(&created);
+        db::exec(
+            db,
+            "INSERT INTO f8_assignments \
+             (id, user_id, cycle_id, domain, drawn_arm, fallback_reason, suppressed, prediction_id, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, 1, NULL, ?6)",
+            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_t],
         )
         .await
         .map_err(db_err)?;
@@ -725,12 +848,18 @@ mod f8_tests {
 
     #[test]
     fn control_flags_follow_surviving_rows() {
-        // keys 必須用真實 ANCHORS id(reattach 以 (domain, anchor.id) 對帳)
+        // keys 必須用真實 ANCHORS id(reattach 以 anchor.id 對帳;4-tuple =
+        // anchor_id, domain, is_control, fallback_reason)
         let work = selected_of(Domain::Work);
         let money = selected_of(Domain::Money);
         let keys = vec![
-            (Domain::Work, work.anchor.id, false),
-            (Domain::Money, money.anchor.id, true),
+            (work.anchor.id, Domain::Work, false, None),
+            (
+                money.anchor.id,
+                Domain::Money,
+                true,
+                Some("fallback_zero_hit"),
+            ),
         ];
         // D2-A 壓掉 work → money 的對照旗標必須跟著存活列走
         let rows = vec![money.clone()];
@@ -741,7 +870,7 @@ mod f8_tests {
 
     #[test]
     fn unknown_rows_default_to_real() {
-        let keys = vec![(Domain::Work, "work-x", false)];
+        let keys = vec![("work-x", Domain::Work, false, None)];
         let rows = vec![selected_of(Domain::Money)];
         assert_eq!(reattach_control_flags(&keys, &rows), vec![false]);
     }

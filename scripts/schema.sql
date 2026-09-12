@@ -201,6 +201,23 @@ CREATE INDEX IF NOT EXISTS idx_predictions_profile ON predictions(profile_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_user_cycle_domain
   ON predictions(user_id, cycle_id, domain);
 
+-- F8 對照指派帳本（2026-09-13；spec 2026-09-13-f8-control §0.1）
+-- 每個生成槽位一列 — drawn arm、降級原因、存活/壓制、落庫的 prediction id。
+-- ITT 分析、降級率稽核、D2-A 存活語意的資料基礎（Codex 終審 #1）。
+CREATE TABLE IF NOT EXISTS f8_assignments (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  cycle_id          TEXT NOT NULL,
+  domain            TEXT NOT NULL,
+  drawn_arm         TEXT NOT NULL,          -- 'control' | 'real'
+  fallback_reason   TEXT,                   -- NULL | 'pool_empty' | 'corrupt' | 'zero_hit' | 'crypto'
+  suppressed        INTEGER NOT NULL DEFAULT 0,  -- 1 = 被 D2-A 壓掉，無預測列
+  prediction_id     TEXT,                   -- NULL = 未落庫（suppressed）
+  created_at        TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_f8_assignments_user_cycle
+  ON f8_assignments(user_id, cycle_id);
+
 CREATE TABLE IF NOT EXISTS situation_checks (
   user_id     TEXT NOT NULL,
   cycle_id    TEXT NOT NULL,
