@@ -1,6 +1,8 @@
-# F8 對照組 — 技術設計切片(rev.2)
+# F8 對照組 — 技術設計切片(rev.3)
 
-- 日期:2026-09-13(rev.2 — Kimi 審查 5 major + 2 minor 全採,見文末對帳)
+- 日期:2026-09-13(rev.2 — Kimi 審查 5 major + 2 minor 全採,見文末對帳;
+  rev.3 — Codex 終審 4 major 全採:指派帳本落庫、isControl 遮罩、freeze 前配發 id、
+  查詢失敗降級;零命中改真實 fallback,見 §1.4 與文末對帳)
 - 上游規格:`docs/superpowers/specs/2026-08-26-engine-modernization-big5-design.md`
   §P0 表(:171)、對照組設計(:345-376)、D6 定案(:396-430,✅ 已定案)
 
@@ -51,8 +53,9 @@
   3. 以通過驗證的列走**完全相同**的管線:`dim_ranges(ipip_answers)`、
      `display_rounded(ocean_measured)`、`select_for_domain`、
      `filter_negative_half`(對最終整組列集合套用,真實/對照對稱)。
-  4. 洗牌向量對該 domain **零命中**(`select_for_domain` 回 None)→ 該槽誠實空
-     (不硬湊);此情形使對照占比統計上略低於 25%,接受(登記於 §3)。
+  4. 洗牌向量對該 domain 零命中 → **降級該槽真實組**(rev.3 裁決,取代 rev.2
+     的「誠實空」— 空槽讓使用者看到的列數隨機變動;對照占比略低於 25%,
+     接受並登記於 prereg 逃生口)。
   5. INSERT 帶 `is_control = 1`;其餘欄位(來源、週期、規則版本)與真實列相同。
 - 未中籤槽位:照現行真實路徑。
 - `filter_negative_half` 對「真實+對照混合的最終列集合」套用:D2-A 語意
