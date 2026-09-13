@@ -715,6 +715,10 @@ pub(crate) async fn generate_with_draw(
             .iter()
             .position(|(aid, _, _, _)| *aid == s.anchor.id)
             .expect("survivor must come from plan");
+        // fallback_reason 落實際值（fallback_pool_empty/fallback_zero_hit）—
+        // drawn_arm 記降級後的最終 arm，不記原因的話「中籤後降級」與「未中籤」
+        // 無法區分，25% 逃生口登記（spec rev.3 §1.4）無從對帳。
+        let a_f = db::opt_text(keys[li].3);
         let a_id = db::text(&ledger_ids[li]);
         let a_u = db::text(user_id);
         let a_c = db::text(cycle_id);
@@ -726,8 +730,8 @@ pub(crate) async fn generate_with_draw(
             db,
             "INSERT INTO f8_assignments \
              (id, user_id, cycle_id, domain, drawn_arm, fallback_reason, suppressed, prediction_id, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, NULL, 0, ?6, ?7)",
-            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_pid, &a_t],
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8)",
+            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_f, &a_pid, &a_t],
         )
         .await
         .map_err(db_err)?;
@@ -736,12 +740,13 @@ pub(crate) async fn generate_with_draw(
     // (Codex 終審 #1;spec rev.3 §1)。
     let survived: std::collections::HashSet<&'static str> =
         sel.iter().map(|s| s.anchor.id).collect();
-    for (k_i, (anchor_id, domain, is_control, _fallback)) in keys.iter().enumerate() {
+    for (k_i, (anchor_id, domain, is_control, fallback)) in keys.iter().enumerate() {
         if survived.contains(anchor_id) {
             continue;
         }
         let aid = &ledger_ids[k_i];
         let drawn_arm = if *is_control { "control" } else { "real" };
+        let a_f = db::opt_text(*fallback);
         let a_id = db::text(aid);
         let a_u = db::text(user_id);
         let a_c = db::text(cycle_id);
@@ -752,8 +757,8 @@ pub(crate) async fn generate_with_draw(
             db,
             "INSERT INTO f8_assignments \
              (id, user_id, cycle_id, domain, drawn_arm, fallback_reason, suppressed, prediction_id, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, NULL, 1, NULL, ?6)",
-            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_t],
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, NULL, ?7)",
+            &[&a_id, &a_u, &a_c, &a_d, &a_arm, &a_f, &a_t],
         )
         .await
         .map_err(db_err)?;
