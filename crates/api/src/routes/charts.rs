@@ -408,7 +408,7 @@ pub fn register(router: R<'static>) -> R<'static> {
             let bh = db::opt_text(birth.birth_data_hash.as_deref());
             let cached: Option<InterpRow> = match db::first(
                 &db,
-                "SELECT id, chart_data, ai_interpretation, created_at, updated_at FROM interpretations WHERE user_id = ?1 AND divination_type = ?2 AND birth_data_hash = ?3",
+                "SELECT id, chart_data, ai_interpretation, birth_data_hash, created_at, updated_at FROM interpretations WHERE user_id = ?1 AND divination_type = ?2 AND birth_data_hash = ?3",
                 &[&u, &dt, &bh],
             ).await {
                 Ok(r) => r,
@@ -430,10 +430,14 @@ pub fn register(router: R<'static>) -> R<'static> {
                 let parsed = parse_chart(c.chart_data.as_deref());
                 let stored_version = extracted_version(&parsed);
                 if stored_version == expected_version {
+                    // 外殼與 fresh 路徑逐欄一致（版本欄在本分支僅於
+                    // stored_version == expected_version 時可達，寫 expected 誠實）。
                     let mut res = ok_json(&serde_json::json!({
                         "id": c.id, "user_id": user, "divination_type": div_type,
                         "chart_data": parsed, "ai_interpretation": c.ai_interpretation,
                         "birth_data_hash": c.birth_data_hash, "fromCache": true,
+                        "engineVersion": expected_version,
+                        "chartSchemaVersion": CHART_SCHEMA_VERSION,
                     }), 200);
                     let _ = res.headers_mut().set("ETag", &etag);
                     apply_cache_headers(&mut res, 3600, false);

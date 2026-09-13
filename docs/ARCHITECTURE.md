@@ -121,8 +121,10 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
   8 路並發重複計算容忍(全 200、last-write-wins)、**§0.4 紅線:四態命盤
   (新鮮/過期/失敗/缺席)下 F5 generate 輸出正規化後逐位一致**。
   Engine worker 真斷線的降級僅 native T6 覆蓋,未在 prod 演練。
-- **已知舊帳(非阻塞)**:`/api/charts/:type` cache-hit 與 fresh 兩路回應外殼不一致
-  (cached 版 `birth_data_hash` 恆 null、缺 top-level `engineVersion`)— 前端兩種皆容。
+- **已知舊帳(已結,2026-09-13)**:`/api/charts/:type` cache-hit 與 fresh 兩路回應外殼
+  曾不一致(cached 版 `birth_data_hash` 恆 null — SELECT 漏欄、缺 top-level
+  `engineVersion`/`chartSchemaVersion`)— cache-hit 回應現與 fresh 逐欄一致
+  (僅 `fromCache` 旗標有別),前端容錯保留。
 - **chart_resolver**(`crates/api/src/services/chart_resolver.rs`):唯讀解析(Value 層新鮮度:
   birth hash + engine version + schema version;結構驗證;engine 失敗降級;gender 缺失跳紫微;
   紫微早返回、西洋 fallback)。
