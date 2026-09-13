@@ -18,7 +18,10 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-strip = true
+# strip = true 會剝掉 target-features 段 → wasm-bindgen「externref table
+# required for catch wrappers」(workers-rs#1014)。只剝 debuginfo 即可,
+# names 段由 wasm-opt 收掉,gzip 體積幾乎不變。
+strip = "debuginfo"
 
 # Local patch of solar-ephemeris: promotes `Body::elements()` to pub so ft-western
 # can feed each planet's &Planet into planet_apparent_ecliptic (geocentric apparent
