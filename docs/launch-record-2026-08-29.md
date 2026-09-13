@@ -49,6 +49,6 @@ register(`yanggf@msn.com`)→ 202 → 信件 → 點連結 → token 單次消�
 ## 待辦
 
 - [x] 部署期修復 commit(見 working tree:auth.rs / email.rs / wrangler.toml / .gitignore)— 已提交 `d034bb4`
-- [ ] 正式網域寄件(Resend 驗證網域 → 換 `MAIL_FROM`)
+- [x] 正式網域寄件(Resend 驗證網域 → 換 `MAIL_FROM`)— `ahexagram.com` 已通過 Resend 網域驗證(SPF/DKIM 走 Cloudflare DNS),`MAIL_FROM=noreply@ahexagram.com` 已上線並實測全網域可收信(`52d071c`,2026-09-13)
 - [x] `scripts/verify-deployment.sh` 的 ZiWei 測試打已刪除的 debug 路由,擇期修正 — 已改打引擎 worker(`7c9eaa3`,2026-08-31)
 - [x] `ALLOWED_ORIGINS` 於首次 preview 部署時補設 — var 已預留(空值=僅內建 allowlist),每次 preview 部署後補該 origin(2026-08-31)
