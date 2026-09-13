@@ -50,16 +50,19 @@
   --error-on-dark: #fb7185;       /* error on #1c202a / var(--deep-space) — was #ef4444 */
   --gen-title: #f5f3ff;           /* generation title on subtle purple — was #6d28d9 (1.62:1) */
   --metal-line: rgba(200, 208, 220, 0.22);
-  /* moving glint layer for the mirror chrome (user direction 2026-09-13):
-     one diagonal light band crossing the glyphs, silver-white, no hue */
+  /* moving glint layer for the mirror chrome (user direction 2026-09-13/14):
+     one diagonal light band crossing the glyphs, silver-white, no hue.
+     45deg（使用者指定，最好辨認）；純白核心在已白的鏡面上不可見，故帶一段
+     淡暗前導邊（墨色低透明）造出反光邊界的對比 — 亮區暗區都看得到移動。 */
   --chrome-glint: linear-gradient(
-    120deg,
+    45deg,
     transparent 0%,
-    transparent 40%,
-    rgba(255, 255, 255, 0.1) 45%,
-    rgba(248, 250, 252, 0.65) 50%,
-    rgba(255, 255, 255, 0.1) 55%,
-    transparent 60%,
+    transparent 30%,
+    rgba(16, 20, 31, 0.32) 36%,
+    rgba(248, 250, 252, 0.95) 42%,
+    rgba(248, 250, 252, 0.95) 50%,
+    rgba(255, 255, 255, 0.15) 58%,
+    transparent 64%,
     transparent 100%
   );
   --metal-edge: linear-gradient(
@@ -227,26 +230,26 @@ h3, h4, h5, h6 {
   h1, h2, .nav-brand {
     background-image: var(--chrome-glint), var(--chrome-mirror-lg);
     background-size: 240% 100%, 100% 100%;
-    background-position: -30% 0, 0 0;
+    background-position: 130% 0, 0 0;
     background-repeat: no-repeat;
-    animation: chrome-glint 7.5s ease-in-out infinite;
+    animation: chrome-glint 10s ease-in-out infinite;
   }
   h3, h4, h5, h6 {
     background-image: var(--chrome-glint), var(--chrome-mirror-sm);
     background-size: 240% 100%, 100% 100%;
-    background-position: -30% 0, 0 0;
+    background-position: 130% 0, 0 0;
     background-repeat: no-repeat;
-    animation: chrome-glint 13s ease-in-out 5.5s infinite;
+    animation: chrome-glint 16s ease-in-out 5.5s infinite;
   }
 }
-/* band center at position p: x = 1.2C − 1.4C·p/100 → p=−30% fully off the
-   right edge, p=130% fully off the left; the pass takes ~2s of the 7.5s
-   cycle (ease-in-out gives it a gentle accelerate-coast-decelerate glint),
-   the rest is hold. */
+/* band center at position p: x = 1.2C − 1.4C·p/100 → p=130% fully off the
+   left edge, p=−30% fully off the right; the pass runs left→right（閱讀方向）
+   and takes 45% of the cycle — 大標 4.5s、小標 7.2s 的可追蹤速度
+   (使用者回饋:原 2s 太快追不到)，其餘時間完全靜止。 */
 @keyframes chrome-glint {
-  0%   { background-position: -30% 0, 0 0; }
-  26%  { background-position: 130% 0, 0 0; }
-  100% { background-position: 130% 0, 0 0; }
+  0%   { background-position: 130% 0, 0 0; }
+  45%  { background-position: -30% 0, 0 0; }
+  100% { background-position: -30% 0, 0 0; }
 }
 
 /* ═══ reduced motion: freeze to a static sky (spec §4) ═══ */
