@@ -711,10 +711,24 @@ fn PredictionsCard() -> impl IntoView {
                             </div>
                         }.into_any()
                     } else if revealed {
+                        // F8 事後解盲(spec 2026-09-13-f8-control §2):回饋兩段收齊後,
+                        // 週級聚合摘要(逐條指認已裁決降級,見 spec rev.2 對帳)。
+                        let control_count = preds.iter().filter(|p| p.isControl).count();
+                        let all_fb = !preds.is_empty()
+                            && preds.iter().all(|p| fbs.iter().any(|f| f.predictionId == p.id));
                         view! {
                             <p style="font-size:0.85rem;color:var(--silver-dim);margin-bottom:0.75rem">
                                 {format!("已收齊 {} 則預測 — 依你的反應回饋", preds.len())}
                             </p>
+                            {if all_fb && control_count > 0 {
+                                Some(view! {
+                                    <p class="muted" style="font-size:0.8rem;margin-bottom:0.75rem">
+                                        {format!("本週有 {control_count} 條為對照樣本（研究用）")}
+                                    </p>
+                                })
+                            } else {
+                                None
+                            }}
                             <div style="display:grid;gap:0.75rem">
                                 <For
                                     each=move || preds.clone()

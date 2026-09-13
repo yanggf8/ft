@@ -42,10 +42,10 @@ TURSO_URL = "libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io"
 #                https://api.ahexagram.com/api/auth/google/callback
 GOOGLE_CLIENT_ID = "892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com"
 WEB_ORIGIN = "https://fortunet.pages.dev"
-# Magic-link sender (audit P0-01). onboarding@resend.dev is Resend's test
-# sender: it only delivers to the Resend account owner's own email. Swap to a
-# verified domain address before opening registration to real users.
-MAIL_FROM = "onboarding@resend.dev"
+# Magic-link sender (audit P0-01). ahexagram.com verified with Resend
+# 2026-09-13 (DKIM/SPF-MX/SPF-TXT/CNAME all green); the old test sender
+# onboarding@resend.dev only delivered to the account owner's own inbox.
+MAIL_FROM = "noreply@ahexagram.com"
 # Invite-system admin (spec 2026-08-30). The session email matching this value
 # (case-insensitive) may manage invites; unset = nobody (fail-closed).
 ADMIN_EMAIL = "yanggf@msn.com,yang.goufang@gmail.com"

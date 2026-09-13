@@ -275,6 +275,9 @@ pub fn PersonalityPage() -> impl IntoView {
                             <div>
                                 <h2>"IPIP-15"</h2>
                                 <p class="muted">"十五題，約 90 秒。請依你平常的情況作答。"</p>
+                                <p class="muted" style="font-size:0.75rem;margin-top:0.35rem">
+                                    "你的作答與回饋可能以匿名方式用於研究對照；可隨時刪除全部資料。"
+                                </p>
                             </div>
                             <button
                                 class="btn-link"
@@ -285,7 +288,7 @@ pub fn PersonalityPage() -> impl IntoView {
                             </button>
                         </div>
                         <p class="quiz-consent muted">
-                            "作答視為同意僅用於本站人格分析；原始作答僅儲存於本站，不對外提供。"
+                            "作答即同意：作答用於本站人格分析，並可能以匿名方式用於研究對照（去除個人連結）；原始作答僅儲存於本站，可隨時刪除。"
                         </p>
                         <Show when=move || suspected>
                             <p class="error">"這份作答與常見模式差異較大，結果可能不具參考性，請再試一次"</p>
@@ -422,7 +425,13 @@ pub fn PersonalityPage() -> impl IntoView {
                                             return;
                                         }
                                         let confirmed = web_sys::window()
-                                            .and_then(|window| window.confirm_with_message("確定刪除全部人格資料？").ok())
+                                            .and_then(|window| {
+                                                window
+                                                    .confirm_with_message(
+                                                        "研究揭露：人格資料將用於匿名研究對照。確定刪除全部人格資料？",
+                                                    )
+                                                    .ok()
+                                            })
                                             .unwrap_or(false);
                                         if !confirmed {
                                             return;
