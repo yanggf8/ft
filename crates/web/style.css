@@ -12,6 +12,28 @@
   --glass-bg-strong: rgba(16, 20, 31, 0.72);
   --glass-border: rgba(255, 255, 255, 0.1);
 
+  /* mirror chrome gradients — single source of truth: the base heading rules
+     and the animated glint overlay (@supports block below) MUST be the same
+     two mirrors, so both reference these tokens */
+  --chrome-mirror-lg: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #eef2f8 16%,
+    #c8d0dc 34%,
+    #8e97a6 45%,
+    #6f7787 49%,
+    #dfe6ee 53%,
+    #f8fafc 78%,
+    #ffffff 100%
+  );
+  --chrome-mirror-sm: linear-gradient(
+    180deg,
+    #fdfeff 0%,
+    #ccd4df 40%,
+    #939da9 70%,
+    #b9c2cf 100%
+  );
+
   /* metallic silver sheen — the entire interaction language is chrome now:
      states are expressed by luminance (edge → brighter edge → inverted
      chrome plate), never by hue (user direction: no blue-violet) */
@@ -28,6 +50,18 @@
   --error-on-dark: #fb7185;       /* error on #1c202a / var(--deep-space) — was #ef4444 */
   --gen-title: #f5f3ff;           /* generation title on subtle purple — was #6d28d9 (1.62:1) */
   --metal-line: rgba(200, 208, 220, 0.22);
+  /* moving glint layer for the mirror chrome (user direction 2026-09-13):
+     one diagonal light band crossing the glyphs, silver-white, no hue */
+  --chrome-glint: linear-gradient(
+    120deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(248, 250, 252, 0.65) 50%,
+    rgba(255, 255, 255, 0.1) 55%,
+    transparent 60%,
+    transparent 100%
+  );
   --metal-edge: linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.55),
@@ -167,17 +201,7 @@ h1, h2, h3, h4, h5, h6,
 .nav-brand {
   font-family: 'Playfair Display', 'Noto Serif TC', serif;
   color: var(--heading);
-  background: linear-gradient(
-    180deg,
-    #ffffff 0%,
-    #eef2f8 16%,
-    #c8d0dc 34%,
-    #8e97a6 45%,
-    #6f7787 49%,
-    #dfe6ee 53%,
-    #f8fafc 78%,
-    #ffffff 100%
-  );
+  background: var(--chrome-mirror-lg);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -187,13 +211,42 @@ h1, h2, h3, h4, h5, h6,
    into the card glass at 1.25rem) — light silver only, AA-safe throughout.
    background-image (not the shorthand) so background-clip: text survives. */
 h3, h4, h5, h6 {
-  background-image: linear-gradient(
-    180deg,
-    #fdfeff 0%,
-    #ccd4df 40%,
-    #939da9 70%,
-    #b9c2cf 100%
-  );
+  background-image: var(--chrome-mirror-sm);
+}
+
+/* mirror chrome glint (user direction 2026-09-13, supersedes "no sweeping
+   animation"): a slow light pass ACROSS the static mirror — the mirror
+   gradient itself never moves; an oversized clipped sheen layer slides
+   over it. The long rest between passes IS the effect: the eye is caught
+   by change and habituates to constant motion. Periods differ per level
+   (7.5s vs 13s) and are phase-offset, so headings drift out of sync and
+   never pulse together. Sweeping band is fully off-text at both keyframe
+   ends, so the loop seam is invisible. Only inside @supports: without
+   background-clip: text the sheen would paint as a moving block. */
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  h1, h2, .nav-brand {
+    background-image: var(--chrome-glint), var(--chrome-mirror-lg);
+    background-size: 240% 100%, 100% 100%;
+    background-position: -30% 0, 0 0;
+    background-repeat: no-repeat;
+    animation: chrome-glint 7.5s ease-in-out infinite;
+  }
+  h3, h4, h5, h6 {
+    background-image: var(--chrome-glint), var(--chrome-mirror-sm);
+    background-size: 240% 100%, 100% 100%;
+    background-position: -30% 0, 0 0;
+    background-repeat: no-repeat;
+    animation: chrome-glint 13s ease-in-out 5.5s infinite;
+  }
+}
+/* band center at position p: x = 1.2C − 1.4C·p/100 → p=−30% fully off the
+   right edge, p=130% fully off the left; the pass takes ~2s of the 7.5s
+   cycle (ease-in-out gives it a gentle accelerate-coast-decelerate glint),
+   the rest is hold. */
+@keyframes chrome-glint {
+  0%   { background-position: -30% 0, 0 0; }
+  26%  { background-position: 130% 0, 0 0; }
+  100% { background-position: 130% 0, 0 0; }
 }
 
 /* ═══ reduced motion: freeze to a static sky (spec §4) ═══ */
@@ -202,6 +255,9 @@ h3, h4, h5, h6 {
   .sky-stars-b {
     animation: none;
     opacity: 0.7;
+  }
+  h1, h2, h3, h4, h5, h6, .nav-brand {
+    animation: none;  /* glint off — static mirror */
   }
 }
 
@@ -661,6 +717,11 @@ main { flex: 1; }
     background: rgba(16, 20, 31, 0.82);  /* solid ground: no blur to rely on */
   }
   :root { --glass-bg-strong: rgba(12, 14, 22, 0.9); }
+  /* glint off on touch devices too: every pass repaints the heading over
+     the animating galaxy canvas — same reason blur is dropped above */
+  h1, h2, h3, h4, h5, h6, .nav-brand {
+    animation: none;
+  }
 }
 
 /* ── light-surface safety (contrast fix) ──
@@ -677,6 +738,7 @@ main { flex: 1; }
   -webkit-text-fill-color: var(--ink-on-chrome);
   filter: none;
   color: var(--ink-on-chrome);
+  animation: none;  /* glint layer is clipped-text only; keep light surfaces fully static */
 }
 .on-light .muted { color: var(--text-muted-on-light); }
 .on-light a { color: #1e3a8a; text-decoration-color: rgba(30, 58, 138, 0.35); }
