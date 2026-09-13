@@ -93,7 +93,10 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 - **F7 資料刪除**：`DELETE /api/personality/me` 六句一次 `db::batch`（Hrana v2 隱式交易，失敗整批 rollback；
   含 `prediction_strengths`）。
 - **E2E**：`scripts/predictions-e2e.sh -t <session>` 半自動整鏈（generate 帶 F4 strengths→checks→feedback，
-  含遮罩閘門①②驗證）；已實測通過（2026-09-04，測試帳號用完即清，零污染）。
+  含遮罩閘門①②驗證）；`scripts/f8-acceptance.sh` F8 驗收**全自動**（turso 自造 login token
+  登入 → 測驗自舉 → generate → 事前盲 → checks/feedback → 事後解盲 API≡DB 交叉比對 →
+  `--cleanup` F7+SQL 硬清測試列）。F8 首輪驗收已過（2026-09-13：work 槽中籤 control、
+  D2-A 壓除記 suppressed、money real assigned、解盲一致，測試帳號已清）。
 - **部署順序 web 先**：新 API 拒絕舊 web 無 strengths 的 generate（400）；反之舊 API 容忍新 web 的 body。
 - 設計文件：`docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md`、
   `docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md`、
