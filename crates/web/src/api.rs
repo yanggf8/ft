@@ -11,8 +11,9 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Same default as the React client's `VITE_API_URL` fallback.
-pub const API_URL: &str = "https://fortunet-api.yanggf.workers.dev";
+/// Canonical production API (custom domain, 2026-09); the workers.dev URL
+/// keeps serving as backup and for `verify-deployment.sh`.
+pub const API_URL: &str = "https://api.ahexagram.com";
 
 const SESSION_KEY: &str = "sessionId";
 

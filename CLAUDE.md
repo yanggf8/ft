@@ -11,9 +11,15 @@ FortuneT V2 is an AI-powered Chinese/Western astrology platform. The backend, ch
 and frontend are all **Rust**, deployed as Cloudflare Workers (workers-rs) and a Leptos CSR
 frontend on Cloudflare Pages.
 
-- **Production Frontend**: https://fortunet.pages.dev
-- **Production API**: https://fortunet-api.yanggf.workers.dev
+- **Production Frontend**: https://ahexagram.com（canonical，2026-09-16 起；`www.` 轉址同站、
+  `fortunet.pages.dev` 為備援 mirror）
+- **Production API**: https://api.ahexagram.com（canonical；`fortunet-api.yanggf.workers.dev`
+  為備援，`verify-deployment.sh` 預設仍打它）
 - **Engine Worker** (service binding): https://fortunet-engine.yanggf.workers.dev
+- 網域相關：CORS 生產白名單寫死在 `lib.rs is_allowed_origin`（ahexagram.com/www/pages.dev）；
+  magic-link/OAuth/邀請連結指向 `WEB_ORIGIN` var；Pages custom domain 與 Worker custom domain
+  都在 Cloudflare dashboard 管理（wrangler OAuth 無 DNS 寫入權）；`ahexagram.com` 同時是
+  Resend 寄件網域（`MAIL_FROM=noreply@ahexagram.com`）與 Google OAuth redirect URI 的 host。
 
 ## Commands
 

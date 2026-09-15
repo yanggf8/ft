@@ -113,7 +113,8 @@ fn decorate(res: &mut Response, req: &Request, extra_origins: &str) -> Result<()
 }
 
 /// Resolves the allowed origin against an explicit allowlist (finding P2-03):
-///   - exactly `https://fortunet.pages.dev` (production), or
+///   - exactly `https://ahexagram.com` / `https://www.ahexagram.com`
+///     (canonical production) or `https://fortunet.pages.dev` (backup), or
 ///   - localhost dev: scheme http or https, host localhost / 127.0.0.1 / [::1],
 ///     any port, or
 ///   - an exact origin listed in the ALLOWED_ORIGINS env var (comma-separated,
@@ -158,7 +159,13 @@ fn is_allowed_origin(url: &web_sys::Url, extra_origins: &str) -> bool {
     }
 
     // Production — exact origin only (https, default port, exact host).
-    if scheme == "https" && host == "fortunet.pages.dev" && port.is_empty() {
+    // ahexagram.com / www.ahexagram.com are the canonical production origins
+    // (2026-09 custom-domain migration); fortunet.pages.dev stays allowed as
+    // the backup mirror.
+    if scheme == "https"
+        && (host == "ahexagram.com" || host == "www.ahexagram.com" || host == "fortunet.pages.dev")
+        && port.is_empty()
+    {
         return true;
     }
 

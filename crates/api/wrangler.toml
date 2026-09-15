@@ -39,9 +39,12 @@ TURSO_URL = "libsql://fortunet-yanggf8.aws-ap-northeast-1.turso.io"
 # Google OAuth — CLIENT_ID is public (var), CLIENT_SECRET is secret.
 # Client: 892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com
 # Redirect URIs: https://fortunet-api.yanggf.workers.dev/api/auth/google/callback
-#                https://api.ahexagram.com/api/auth/google/callback
+#                https://api.ahexagram.com/api/auth/google/callback (canonical, 2026-09)
 GOOGLE_CLIENT_ID = "892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com"
-WEB_ORIGIN = "https://fortunet.pages.dev"
+# Web origin for magic-link/OAuth/invite links. ahexagram.com is canonical
+# (2026-09 custom-domain migration); fortunet.pages.dev remains CORS-allowed
+# as a backup mirror (hardcoded in lib.rs is_allowed_origin).
+WEB_ORIGIN = "https://ahexagram.com"
 # Magic-link sender (audit P0-01). ahexagram.com verified with Resend
 # 2026-09-13 (DKIM/SPF-MX/SPF-TXT/CNAME all green); the old test sender
 # onboarding@resend.dev only delivered to the account owner's own inbox.
