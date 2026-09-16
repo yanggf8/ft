@@ -61,6 +61,42 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 - `crates/web/_headers` — Pages 安全標頭(HSTS/CSP/X-Frame-Options/nosniff/Referrer/
   Permissions-Policy);`build-web.sh` 會複製進 dist。
 
+## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
+
+All styling is plain CSS in `crates/web/style.css`; no Rust owns a token.
+Spec: `docs/superpowers/specs/2026-08-30-cosmic-silver-theme-design.md` §1
+carries the token table and every contrast derivation — **read it before
+changing any colour.**
+
+- **Ground** = body `linear-gradient(135deg, var(--void), var(--deep-space))`.
+  Since 2026-09-16 that pair is `#0A1733 → #14224A` (星空藍, user direction);
+  it replaced the hesocial midnight-black `#0C0C0C → #10141F`, which read as
+  夜空黑. The hue shift ~doubled ground luminance, which is what forced the
+  two value moves below.
+- **AA floor is the glass COMPOSITE, never the bare ground.** Text sits on
+  plates: `.card`/`.feature` (`white .05`), `.ocean-dim` (`.04` over a card),
+  `input` (`.05` over a card), `.palace`/`.quiz-choice` (`navy .55` over a
+  card), `.star` pills, `.palace.life` (`white .07`), `.nav`/`.quiz-submit`
+  (`navy .72`). Sampling the bare gradient overstates every ratio.
+- **Two values moved for the hue shift**: `--silver-faint` `#8A919C` →
+  `#9AA3B2` (was 4.2:1 on card glass / 3.8:1 on ocean-dim, both under the
+  floor) and the lg mirror's horizon band `#6F7787` → `#7B8494`.
+- **`.palace.life` is the trap.** It swaps the navy plate for a near-white
+  highlight, so semi-transparent `.star` pills resolve against a *brighter*
+  plate there: silver-dim fell to 4.05:1 and rose to 3.48:1. Fixed by
+  re-laying the navy `.55` plate under the role tint inside the life palace
+  only; the rules also pair each background with its `color` so a future
+  `.on-light` nesting cannot split them.
+- **`card:hover` / `.feature:hover` is not a floor case.**
+  `filter: brightness(1.12)` scales the element's whole rendered output —
+  plate and glyph together — so the ratio rises. Do not model a brightened
+  plate against an unbrightened fill.
+- **Tightest passing text on the site**: `rose` star pills in the life palace
+  at 4.6:1. `--silver-faint`'s floor is `input::placeholder` at 4.55:1.
+- Reviewed by an adversarial pass (Kimi K3, 2026-09-17) that re-derived every
+  number; its corrections are recorded in the spec's "K3 adversarial review"
+  block, including three claims in the earlier 09-16 note that were wrong.
+
 ## F5 Predictions (2026-09)
 
 - **端點**（`routes/predictions.rs` → `services/predictions.rs`）：

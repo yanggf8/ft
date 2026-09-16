@@ -44,23 +44,25 @@ removed entirely post-launch — see Goals).
 
 ```css
 :root {
-  /* deep space base */
-  --void:        #0C0C0C;   /* deepest layer (hesocial midnight-black) */
-  --deep-space:  #10141F;   /* blue-black, far end of the body gradient */
+  /* deep space base — 2026-09-16 星空藍 hue shift (user direction): the
+     hesocial midnight-black pair below read as 夜空黑 and was replaced;
+     gradient shape and stops unchanged, only the hue moved */
+  --void:        #0a1733;   /* deep star-blue — body gradient near stop */
+  --deep-space:  #14224a;   /* lighter horizon blue — far end of the body gradient */
 
   /* silver family (dominant) */
   --heading:     #E5E4E2;   /* titles (hesocial platinum) */
   --text:        #DDE2EC;   /* body text, near-white starlight */
   --silver-dim:  #A9B0BC;   /* secondary text */
-  --silver-faint:#8A919C;   /* muted text (brightened: see contrast note) */
+  --silver-faint:#9AA3B2;   /* muted text — lifted #8A919C→#9AA3B2 for AA on the star-blue glass composite (see contrast note) */
   --starlight:   #F5F7FA;   /* highlights: focus ring, hover glow */
 
   /* chrome interaction ladder (blue-violet removed post-launch;
      states are luminance-only: edge -> hover -> inverted plate -> focus) */
-  --metal-hi:      #F8FAFC; /* hover/focus highlight           15.2:1 */
-  --metal-mid:     #C8D0DC; /* interactive text base           10.1:1 */
-  --metal-lo:      #9AA3B2; /* control edges                    6.4:1 */
-  --metal-deep:    #6F7787; /* horizon band / dark edge floor   3.62:1 */
+  --metal-hi:      #F8FAFC; /* hover/focus highlight          12.9:1 */
+  --metal-mid:     #C8D0DC; /* interactive text base           8.7:1 */
+  --metal-lo:      #9AA3B2; /* control edges                   5.3:1 */
+  --metal-deep:    #6F7787; /* dark edge floor (decor) — the lg mirror band moved to #7B8494 on 2026-09-16 (2.99:1 on the star-blue card glass) */
   --ink-on-chrome: #10141F; /* text on a chrome plate           >=6.2:1 */
 
   /* semantic — one shared warning token by design: palace-grid
@@ -72,10 +74,14 @@ removed entirely post-launch — see Goals).
 
   /* glass surfaces */
   --glass-bg:        rgba(255,255,255,0.05);
-  --glass-bg-strong: rgba(16,20,31,0.72);  /* nav, sticky bars */
+  --glass-bg-strong: rgba(10,23,51,0.72);  /* nav, sticky bars — re-tinted to --void on 2026-09-16 */
   --glass-border:    rgba(255,255,255,0.10);
 }
 ```
+
+> **Superseded (kept for history).** The paragraph below was written
+> against the *midnight-black* ground; every number in it is stale. The
+> live floors are in the two re-check blocks that follow — read those.
 
 Accessibility floor — worst case is NOT bare `--deep-space`: text sits on
 glass (`rgba(255,255,255,.05)` over the gradient, composite ≈ `#1C202A`).
@@ -87,6 +93,66 @@ re-verified: metal-deep 3.62:1, link #CFD6E0 11.1:1, muted 5.1:1.)
 (The first draft's `#7C828E` measured 4.22:1 on glass — that is why
 `--silver-faint` is now `#8A919C`.) Any token change during implementation
 must re-run this check against the glass composite, not bare deep-space.
+
+**2026-09-16 star-blue re-check** — the 星空藍 hue shift roughly doubled the
+ground's luminance (far stop `#10141F` → `#14224a`), which ate the faint-text
+margin the paragraph above was calibrated against. Worst-case composite is
+still glass-on-far-stop, but now with two real candidates: `.card` glass
+(white .05, ≈`#202d53`) and `.ocean-dim` inside a card (white .05 + .04,
+≈`#29355a`). Re-sampled ratios on those composites for the values that did
+NOT move: `--text` 10.4/9.2, `--heading` 10.6/9.4, `--silver-dim` 6.2/5.5.
+`--silver-faint` was the failure: on the OLD `#8A919C` it measured
+**4.2:1** on the card glass and **3.8:1** on the ocean-dim plate (both
+break the 4.5 floor). Two values moved: `--silver-faint` `#8A919C` →
+`#9AA3B2` (**4.2/3.8 → 5.3/4.7:1**, same value as `--metal-lo`), and the lg
+mirror's horizon band stop `#6F7787` → `#7B8494` (2.99 → 3.57:1 on card
+glass). sm mirror's darkest stop `#939da9` already passes (4.9:1).
+Bare-ground numbers are higher everywhere and remain non-binding. `--rose`
+measured **4.44:1** on the ocean-dim plate — under the floor; no rose text
+renders there (see the review block below for where rose actually lands).
+
+**2026-09-17 K3 adversarial review — floors corrected.** The reviewer
+re-derived every ratio independently and confirmed both new values, but
+killed three claims in the paragraph above. Recorded here because a wrong
+floor is what misleads the next hue change:
+
+1. **`card:hover` is not a floor case.** `filter: brightness(1.12)` applies
+   to the element's whole rendered output, so the plate *and* the glyph
+   scale together and the ratio RISES. The earlier "3.4:1 even under
+   `card:hover`" modelled a brightened plate against an unbrightened fill,
+   which no rule on this site does. (The exact hover ratio depends on the
+   filter's colour space — sRGB scaling gives 4.04:1, linearRGB 3.76:1 — so
+   do not quote a hover figure; the direction is what matters, and either
+   way it is above the 3.57:1 rest value.)
+2. **The faint floor is `input::placeholder`, not `.ocean-dim`.** `input`
+   is `var(--glass-bg)` on top of the `.card` plate, i.e. two white .05
+   layers over the far stop (≈`#2b385c`) → `--silver-faint` **4.55:1**,
+   tighter than `.ocean-dim`'s 4.70:1. Both pass; sample the tighter one
+   next time.
+3. **`--rose` does not have a clean floor.** `.star.transformation` pills
+   really do render inside `.palace.life` (the life palace is styled like
+   any other palace — `palace_grid.rs` renders every palace's stars
+   unconditionally), where rose sits on rose over a near-white plate:
+   **3.48:1**. `--silver-dim` stars in that same palace fell to **4.05:1**.
+   Both are worse on star-blue than on midnight-black (4.15 / 4.91), so the
+   hue shift widened a pre-existing gap rather than creating it. Fixed in
+   `style.css` by re-laying the navy `.55` plate under the role tint inside
+   the life palace only — life-palace pills now measure silver-dim 6.7:1,
+   starlight 9.3:1, rose 4.6:1. (Ordinary palaces: silver-dim 6.0:1,
+   rose 5.0:1 — so a fixed life palace is *darker* than a normal one, not
+   "matching" it, and `rose` in the life palace at 4.6:1 is the tightest
+   passing text on the site, worth 0.1 over the floor.) The "no rose text
+   on ocean-dim" note above is true but was answering the wrong surface.
+
+**Also closed 2026-09-17 (pre-existing, not introduced by the hue shift)** —
+two inline styles in `crates/web/src` carried their own hues and failed AA
+independently of the ground: the account-avatar chip (`#fff` on a
+violet→pink disc, 2.7:1 — now ink, 6.7:1) and the *selected* generation-tag
+chip (`#8b5cf6` violet gradient with ink at 12px, 4.34:1 — now the shared
+chrome plate, worst stop 6.2:1). Those were the last blue-violet hues on a
+site whose rule is "silver only, one hue (rose)". A third (`profile.rs`'s
+generation card) passes contrast on both grounds and offends only the hue
+rule; left as-is pending a call on whether that card should be reskinned.
 
 ## 2. Typography
 

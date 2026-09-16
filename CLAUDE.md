@@ -118,6 +118,13 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   部署順序 **web 先**：新 API 會拒絕舊 web 無 strengths 的 generate（400）；
   細節見 docs/ARCHITECTURE.md §F5。
 
+- **色彩/對比紅線（2026-09-17）**：AA 基準是**玻璃合成底**，不是裸漸層。換任何
+  `style.css` 色彩 token 都要重採；採錯基準會高估比值（星空藍換色時就發生過）。
+  最容易漏的表面是 `.palace.life`（近白高光底，半透明 `.star` 藥丸會疊上去）
+  與 `input::placeholder`（兩層白疊卡面，全站 faint 最緊）。`card:hover` 的
+  `brightness()` 是整塊元素縮放，比值會**上升**，不是地板。細節見
+  docs/ARCHITECTURE.md §Cosmic-silver theme 與 spec §1。
+
 ## Testing
 
 `cargo test -p ft-schema -p ft-ziwei -p ft-western -p ft-big5 -p ft-api` — **native target

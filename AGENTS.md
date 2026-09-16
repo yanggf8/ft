@@ -186,6 +186,7 @@ Phase 7:  Storytelling        Week 26-33  ← P0/P1 generation chain live (2026-
 ```
 
 Recent: 2026-09 rename `我的命盤→我的命格`, Wuxing+BaZi, personality merged, 4×4 palace, generation tags as selectable birth attribute, story prompt thickened.
+2026-09-16/17 星空藍 ground (`--void #0A1733` / `--deep-space #14224A`) replacing the midnight-black pair; AA floors re-derived on the glass composite, `--silver-faint` `#8A919C→#9AA3B2`, mirror band `#6F7787→#7B8494`, `.palace.life` pill contrast fixed, last two blue-violet inline hues removed (avatar + generation tag chips). K3 adversarial review closed 2026-09-17.
 
 ---
 
@@ -260,6 +261,6 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 
 ---
 
-**Last Updated**: 2026-09-04
+**Last Updated**: 2026-09-17
 **API URL**: https://fortunet-api.yanggf.workers.dev
 **Workspace**: Cargo (`ft-api` / `ft-worker` / `ft-web` / `ft-schema` / `ft-ziwei` / `ft-western` / `ft-big5`)

@@ -4,14 +4,23 @@
      (#0C0C0C → #10141F) read as 夜空黑; the site now sits in deep blue.
      Same two-stop 135deg body gradient, only the hue moves — the near
      stop stays darkest (night zenith), the far stop lifts to starlit blue.
-     Sampled AA against this ground: --text 13.6:1, --heading 13.9:1,
-     --silver-faint 5.6:1, --rose 6.6:1 (all pass; chart in the change log). */
+     AA floor = the GLASS COMPOSITE, not bare ground (spec §1 rule); the
+     star-blue far stop is ~2× the old luminance, so two values moved to
+     keep the floors (2026-09-16): --silver-faint #8a919c → #9aa3b2 and
+     the lg mirror band #6f7787 → #7b8494. Worst real surfaces on the far
+     stop: card glass ≈#202d53 → text 10.4, heading 10.6, silver-dim 6.2,
+     faint 5.3, rose 5.0, mirror band 3.6. card:hover's brightness(1.12)
+     scales the element's whole rendered output — plate and glyph together —
+     so the ratio RISES (band 3.57 → 4.04); it is not a floor case.
+     Real faint floor is input::placeholder (glass .05 over the card plate,
+     ≈#2b385c) at 4.55:1, not ocean-dim's 4.70:1 — both pass, but the
+     tighter one is what to sample next time. */
   --void: #0a1733;        /* deep 星空藍 — body gradient near stop */
   --deep-space: #14224a;  /* lighter horizon blue — far stop  */
   --heading: #e5e4e2;
   --text: #dde2ec;
   --silver-dim: #a9b0bc;
-  --silver-faint: #8a919c;
+  --silver-faint: #9aa3b2;  /* muted — same value as --metal-lo; lifted off #8a919c (3.8:1 worst) for AA on the 星空藍 glass */
   --starlight: #f5f7fa;
   --rose: #fb7185;   /* the ONLY hue on the site: transformation stars + errors */
   --glass-bg: rgba(255, 255, 255, 0.05);
@@ -27,7 +36,7 @@
     #eef2f8 16%,
     #c8d0dc 34%,
     #8e97a6 45%,
-    #6f7787 49%,
+    #7b8494 49%,  /* lifted off #6f7787 (2.99:1 on 星空藍 card glass) to hold the 3.0 large-text floor */
     #dfe6ee 53%,
     #f8fafc 78%,
     #ffffff 100%
@@ -43,10 +52,10 @@
   /* metallic silver sheen — the entire interaction language is chrome now:
      states are expressed by luminance (edge → brighter edge → inverted
      chrome plate), never by hue (user direction: no blue-violet) */
-  --metal-hi: #f8fafc;        /* hover/focus highlight          15.2:1 */
-  --metal-mid: #c8d0dc;       /* interactive text base          10.1:1 */
-  --metal-lo: #9aa3b2;        /* control edges                   6.4:1 */
-  --metal-deep: #6f7787;      /* horizon band / dark edge floor  3.62:1 — large text / decor only */
+  --metal-hi: #f8fafc;        /* hover/focus highlight          12.9:1 on card glass */
+  --metal-mid: #c8d0dc;       /* interactive text base           8.7:1 on card glass */
+  --metal-lo: #9aa3b2;        /* control edges                    5.3:1 on card glass */
+  --metal-deep: #6f7787;      /* dark edge floor (decor); NOT the mirror band — band lifted to #7b8494; 3.4:1 bare far stop — large text / decor only */
   --metal-deep-small: #8a93a5; /* small text on dark — AA-safe replacement for #6f7787 */
   --ink-on-chrome: #10141f;   /* text on a chrome plate          >=6.2:1 */
   /* WCAG AA contrast tokens (spec § contrast) */
@@ -548,6 +557,34 @@ main { flex: 1; }
 .star { font-size: 0.8rem; padding: 0.15rem 0.35rem; border-radius: 4px; background: rgba(255, 255, 255, 0.07); color: var(--silver-dim); }
 .star.main { background: rgba(229, 228, 226, 0.14); color: var(--starlight); }
 .star.transformation { background: rgba(251, 113, 133, 0.12); color: var(--rose); }
+/* The life palace swaps the navy plate for a near-white highlight
+   (rgba(255,255,255,.07) top stop). Star pills are semi-transparent, so
+   they used to resolve against that brighter plate and lost the AA floor
+   the navy palaces hold: silver-dim 4.05:1, rose 3.48:1 (star-blue ground,
+   2026-09-17). Re-lay the navy plate UNDER the role tint inside the life
+   palace only. Result: life-palace pills silver-dim 6.7:1, starlight
+   9.3:1, rose 4.6:1 — i.e. DARKER than an ordinary palace (6.0 / 5.0),
+   not "the same as"; rose there is the tightest passing text on the site.
+   These selectors are 3 and 4 classes so they outrank both `.star*` (1-2)
+   and `.on-light .star` (2). If a life palace is ever nested inside an
+   `.on-light` surface, the background below would still win while the
+   colour came from the light branch — keep the pair together. */
+.palace.life .star {
+  background: rgba(10, 23, 51, 0.55);
+  color: var(--silver-dim);
+}
+.palace.life .star.main {
+  background:
+    linear-gradient(rgba(229, 228, 226, 0.14), rgba(229, 228, 226, 0.14)),
+    rgba(10, 23, 51, 0.55);
+  color: var(--starlight);
+}
+.palace.life .star.transformation {
+  background:
+    linear-gradient(rgba(251, 113, 133, 0.12), rgba(251, 113, 133, 0.12)),
+    rgba(10, 23, 51, 0.55);
+  color: var(--rose);
+}
 
 /* ── /personality result: OCEAN score tracks (Grok design review) ── */
 .ocean-dim {

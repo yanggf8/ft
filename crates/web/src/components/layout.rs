@@ -57,7 +57,10 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                 .unwrap_or('?')
                                                 .to_string();
                                             view! {
-                                                <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">
+                                                // ink on the violet/pink chip, not white: #fff measures 2.7:1
+                                                // against this gradient (14px bold is below the large-text
+                                                // threshold), while #10141f holds 6.7:1 (2026-09-17)
+                                                <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#10141f;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">
                                                     {initial}
                                                 </span>
                                             }.into_any()

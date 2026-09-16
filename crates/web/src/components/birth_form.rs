@@ -175,7 +175,11 @@ pub fn BirthDataForm(
                                 style=move || {
                                     let selected = generation_tags.get().contains(&tag_str);
                                     if selected {
-                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid #8b5cf6;background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#10141f;cursor:pointer"
+                                        // selected = the chrome plate the rest of the app uses for
+                                        // "selected" (see .btn-primary / .quiz-choice:checked). The old
+                                        // violet gradient was the last blue-violet hue on the site, and
+                                        // its darkest stop measured 4.34:1 with ink at 12px (2026-09-17)
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--metal-mid);background:linear-gradient(180deg,#f8fafc,#dbe2eb 34%,#aab3c1 50%,#8e97a6 56%,#c4ccd8 82%,#eef2f7 100%);color:var(--ink-on-chrome);cursor:pointer"
                                     } else {
                                         "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--silver-dim);cursor:pointer"
                                     }
