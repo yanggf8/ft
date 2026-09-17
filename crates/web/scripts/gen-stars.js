@@ -19,14 +19,15 @@ function layer(count, dim) {
   for (var i = 0; i < count; i++) {
     var x = (rnd() * 100).toFixed(2);
     var y = (rnd() * 100).toFixed(2);
-    var a = (dim ? 0.35 + rnd() * 0.4 : 0.5 + rnd() * 0.5).toFixed(2);
+    // 2026-09-17 使用者指示：星星少一點但要亮一點 — 顆數砍半再砍、α 全帶拉高
+    var a = (dim ? 0.65 + rnd() * 0.3 : 0.85 + rnd() * 0.15).toFixed(2);
     parts.push(x + 'vw ' + y + 'vh 0 0 rgba(229,228,226,' + a + ')');
   }
   if (parts.length !== count) throw new Error('bad count'); // sanity
   return parts.join(',\n  ');
 }
 
-var a = layer(30, false); // .sky-stars-a — 1px, brighter
-var b = layer(30, true);  // .sky-stars-b — 2px, dimmer
+var a = layer(14, false); // .sky-stars-a — 1px, bright
+var b = layer(10, true);  // .sky-stars-b — 2px, dim
 if (!/^[\d.]+vw/.test(a) || !/^[\d.]+vw/.test(b)) throw new Error('bad format');
 console.log('-- STARS-A --\n' + a + '\n-- STARS-B --\n' + b);

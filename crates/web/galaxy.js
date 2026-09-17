@@ -17,7 +17,7 @@
   var COS = Math.cos(BAND_RAD), SIN = Math.sin(BAND_RAD);
   var ABS_COS = Math.abs(COS), ABS_SIN = Math.abs(SIN);
   var SIGMA_FRAC = 0.09;      // band width, fraction of viewport diagonal
-  var AREA_PER_STAR = 14400;  // px^2 per band particle
+  var AREA_PER_STAR = 36000;  // px^2 per band particle — 2026-09-17 使用者指示：星星少一點但要亮一點（14400 → 36000，密度 ÷2.5）
   var COUNT_MIN = 24, COUNT_MAX = 180;
   var SCATTER = 30;           // uniform stars outside the band
   var DPR_CAP = 2;
@@ -77,8 +77,8 @@
       ax: rand(-axMax, axMax),   // along-band coordinate (float, always)
       ay: gauss() * sigma,       // perpendicular Gaussian offset
       vx: (Math.random() < 0.5 ? -1 : 1) * rand(2, 6), // px/s along band
-      r: rand(0.8, 2.4),
-      a0: rand(0.5, 1.0),
+      r: rand(1.0, 2.8),         // bigger + brighter (2026-09-17)
+      a0: rand(0.7, 1.0),
       phase: rand(0, Math.PI * 2),
       tw: rand(2, 6)             // twinkle period, seconds
     };
@@ -173,7 +173,9 @@
       p = parts[i];
       x = W / 2 + p.ax * COS - p.ay * SIN;
       y = H / 2 + p.ax * SIN + p.ay * COS;
-      ctx.globalAlpha = p.a0 * (0.55 + 0.45 * Math.sin(p.phase + (t * Math.PI * 2) / p.tw));
+      // twinkle floor 0.8 (2026-09-17): never dim below 80% base alpha —
+      // fewer stars must each stay clearly visible
+      ctx.globalAlpha = p.a0 * (0.8 + 0.2 * Math.sin(p.phase + (t * Math.PI * 2) / p.tw));
       ctx.fillRect(x - p.r / 2, y - p.r / 2, p.r, p.r);
     }
     drawMeteor(now);
