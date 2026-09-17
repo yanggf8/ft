@@ -23,6 +23,9 @@ pub fn LoginPage() -> impl IntoView {
     // check-your-inbox state. There is no session yet and nothing to navigate
     // to; the emailed link completes the flow.
     let sent_to = RwSignal::new(Option::<String>::None);
+    // Google 按鈕 debounce（2026-09-17 使用者指示）：點擊後同步鎖住，
+    // 連點 no-op；location.href 跳轉前的空檔顯示「正在前往 Google…」。
+    let g_loading = RwSignal::new(false);
 
     // OAuth callback: ?oauth_code= — a one-time 60-second code from the Google
     // flow. It is exchanged (POST) for the session, so the session id itself
@@ -203,8 +206,14 @@ pub fn LoginPage() -> impl IntoView {
                         </div>
                         <button
                             class="btn-primary"
+                            disabled=move || g_loading.get()
                             style="width:100%;background:#fff;color:#111827;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;gap:0.5rem"
                             on:click=move |_| {
+                                // debounce: 同步檢查＋鎖定，重複點擊直接 no-op
+                                if g_loading.get_untracked() {
+                                    return;
+                                }
+                                g_loading.set(true);
                                 let mut url = format!("{}/api/auth/google", crate::api::API_URL);
                                 // 首次 Google 註冊需要邀請碼——把（可能填在註冊
                                 // 分頁的）邀請碼一併帶上；既有帳號登入不受影響。
@@ -219,7 +228,13 @@ pub fn LoginPage() -> impl IntoView {
                             }
                         >
                             <span>"G"</span>
-                            "使用 Google 登入"
+                            {move || {
+                                if g_loading.get() {
+                                    "正在前往 Google…".to_string()
+                                } else {
+                                    "使用 Google 登入".to_string()
+                                }
+                            }}
                         </button>
                         <p style="margin-top:0.5rem;font-size:0.75rem;color:#9aa3b2;text-align:center">
                             "有邀請碼的話，可先在「註冊」分頁填入（選填）。"

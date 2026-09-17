@@ -409,6 +409,8 @@ main { flex: 1; }
 }
 .btn-primary:active,
 .cta:active { filter: brightness(0.95); transform: translateY(1px); }
+/* disabled = 處理中/已鎖定（Google 登入 debounce、magic-link 送信中） */
+.btn-primary:disabled { opacity: 0.65; cursor: not-allowed; filter: none; }
 .btn-block { width: 100%; padding: 1rem 1.5rem; border-radius: 8px; border: none; font-size: 1rem; }
 .btn-link, .back-link { background: none; border: none; color: #cfd6e0; cursor: pointer; }
 .back-link { margin-bottom: 1rem; }
