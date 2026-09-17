@@ -30,19 +30,19 @@ pub fn HomePage() -> impl IntoView {
             </div>
             <div class="feature-grid">
                 <div class="feature">
-                    <h3>"🔮 紫微斗數"</h3>
+                    <h3><span class="feature-icon">"🔮"</span>" 紫微斗數"</h3>
                     <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
                 </div>
                 <div class="feature">
-                    <h3>"⭐ 西洋占星"</h3>
+                    <h3><span class="feature-icon">"⭐"</span>" 西洋占星"</h3>
                     <p>"星座與行星位置分析，探索性格與天賦"</p>
                 </div>
                 <div class="feature">
-                    <h3>"🤖 AI 解讀"</h3>
+                    <h3><span class="feature-icon">"🤖"</span>" AI 解讀"</h3>
                     <p>"智能 AI 提供專業且易懂的命理解讀"</p>
                 </div>
                 <div class="feature">
-                    <h3>"🧠 人格測驗"</h3>
+                    <h3><span class="feature-icon">"🧠"</span>" 人格測驗"</h3>
                     <p>"IPIP-15 十五題，約 90 秒，了解你的行為傾向"</p>
                 </div>
             </div>

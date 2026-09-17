@@ -199,37 +199,37 @@ h3, h4, h5, h6 {
 }
 
 /* mirror chrome glint (user direction 2026-09-13, supersedes "no sweeping
-   animation"): a slow light pass ACROSS the static mirror — the mirror
+   animation"): a light pass ACROSS the static mirror — the mirror
    gradient itself never moves; an oversized clipped sheen layer slides
    over it. The long rest between passes IS the effect: the eye is caught
-   by change and habituates to constant motion. Periods differ per level
-   (7.5s vs 13s) and are phase-offset, so headings drift out of sync and
-   never pulse together. Sweeping band is fully off-text at both keyframe
-   ends, so the loop seam is invisible. Only inside @supports: without
-   background-clip: text the sheen would paint as a moving block. */
+   by change and habituates to constant motion. Both levels share the
+   120s period (2026-09-17) and are phase-offset (small headings +60s),
+   so they never pulse together. Sweeping band is fully off-text at both
+   keyframe ends, so the loop seam is invisible. Only inside @supports:
+   without background-clip: text the sheen would paint as a moving block. */
 @supports (-webkit-background-clip: text) or (background-clip: text) {
   h1, h2, .nav-brand {
     background-image: var(--chrome-glint), var(--chrome-mirror-lg);
     background-size: 240% 100%, 100% 100%;
     background-position: 130% 0, 0 0;
     background-repeat: no-repeat;
-    animation: chrome-glint 10s ease-in-out infinite;
+    animation: chrome-glint 120s ease-in-out infinite;
   }
   h3, h4, h5, h6 {
     background-image: var(--chrome-glint), var(--chrome-mirror-sm);
     background-size: 240% 100%, 100% 100%;
     background-position: 130% 0, 0 0;
     background-repeat: no-repeat;
-    animation: chrome-glint 16s ease-in-out 5.5s infinite;
+    animation: chrome-glint 120s ease-in-out 60s infinite;
   }
 }
 /* band center at position p: x = 1.2C − 1.4C·p/100 → p=130% fully off the
-   left edge, p=−30% fully off the right; the pass runs left→right（閱讀方向）
-   and takes 45% of the cycle — 大標 4.5s、小標 7.2s 的可追蹤速度
-   (使用者回饋:原 2s 太快追不到)，其餘時間完全靜止。 */
+   left edge, p=−30% fully off the right; the pass runs left→right（閱讀方向）.
+   2026-09-17 使用者指示（issue#1，取代 09-14 的慢掃回饋）：掃過速度加快
+   （~2s，1.7% of cycle）、每 2 分鐘閃一次；小標延遲 60s 錯相，不齊發。 */
 @keyframes chrome-glint {
   0%   { background-position: 130% 0, 0 0; }
-  45%  { background-position: -30% 0, 0 0; }
+  1.7% { background-position: -30% 0, 0 0; }
   100% { background-position: -30% 0, 0 0; }
 }
 
@@ -450,14 +450,22 @@ main { flex: 1; }
 }
 .feature {
   border: 1px solid transparent;
+  /* 2026-09-17 issue#1：方框內漸層加深（deep-space 往 void 壓深），凸顯白字 —
+     銀河玻璃白 0.05 換成深藍縱向漸層；silver-dim 對比 6.2 → 8.4:1 */
   background:
-    linear-gradient(var(--glass-bg), var(--glass-bg)) padding-box,
+    linear-gradient(180deg, rgba(10, 23, 51, 0.32), rgba(5, 13, 31, 0.55)) padding-box,
     var(--metal-edge) border-box;
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
   padding: 2rem; border-radius: 18px 6px 18px 6px;  /* tailfin cut */
 }
 .feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--heading); }
 .feature p { color: var(--silver-dim); }
+/* 2026-09-17 issue#1：標題前的圖示脫離鏡面漸層，改白色實體，與鍍鉻標題字跳出色差 */
+.feature-icon {
+  background-image: none;
+  color: var(--starlight);
+  -webkit-text-fill-color: var(--starlight);
+}
 
 /* chrome ring on the ONE featured card — silver-white only (hue-rotate
    drift removed: it does nothing on a hueless gradient) */

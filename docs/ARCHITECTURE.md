@@ -74,7 +74,9 @@ changing any colour.**
   夜空黑. The hue shift ~doubled ground luminance, which is what forced the
   two value moves below.
 - **AA floor is the glass COMPOSITE, never the bare ground.** Text sits on
-  plates: `.card`/`.feature` (`white .05`), `.ocean-dim` (`.04` over a card),
+  plates: `.card` (`white .05`), `.feature` (deep-space gradient
+  `rgba(10,23,51,.32) → rgba(5,13,31,.55)`, 2026-09-17 issue#1 — 凸顯白字，
+  silver-dim 由 6.2 升到 ~7.6–8.8:1), `.ocean-dim` (`.04` over a card),
   `input` (`.05` over a card), `.palace`/`.quiz-choice` (`navy .55` over a
   card), `.star` pills, `.palace.life` (`white .07`), `.nav`/`.quiz-submit`
   (`navy .72`). Sampling the bare gradient overstates every ratio.
