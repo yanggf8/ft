@@ -1,8 +1,8 @@
 //! 命理名詞解釋 — 靜態詞條（generation.rs 先例：小模組＋頁面渲染）。
 //!
-//! 全文鎖定於 docs/superpowers/specs/2026-09-18-naming-v1-design.md §5（22 條），
-//! 初稿待 issue #2 stakeholder（ping225710）審訂；ft-web 無測試慣例，詞條正確性
-//! 由 spec 審訂流程把關。
+//! 全文鎖定於 docs/superpowers/specs/2026-09-18-naming-v1-design.md §5（22 條）。
+//! 2026-09-18 定案（glossary-1）；後續 ping225710 意見以修訂版處理。ft-web 無測試
+//! 慣例，詞條正確性由 spec 審訂流程把關。
 
 /// 詞條分類。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,8 +31,8 @@ pub struct Term {
     pub def: &'static str,
 }
 
-/// 詞條版本（初稿標記；審訂後 bump）。
-pub const GLOSSARY_VERSION: &str = "glossary-draft-1";
+/// 詞條版本（2026-09-18 由初稿定案；後續 stakeholder 意見以修訂版處理並 bump）。
+pub const GLOSSARY_VERSION: &str = "glossary-1";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[

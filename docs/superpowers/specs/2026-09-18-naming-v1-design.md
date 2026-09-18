@@ -170,9 +170,9 @@ fixture 全數核上：王4 小3 明8 李7 白5 歐15 陽17 鵬19。歐=11/陽=1
 - kRSUnicode 解析：apostrophe 表示簡體字形（跳過取繁體）、多值取第一、kTotalStrokes 簡繁兩值取繁體
 - Unihan 缺漏/歧義 → skip → runtime UnknownChars（不猜）
 
-## 5. 詞彙初稿（22 條，zh-TW，一行 neutral 定義；貼 issue #2 給 ping225710 審）
+## 5. 詞彙（22 條，zh-TW，一行 neutral 定義）
 
-版本：`GLOSSARY_VERSION = "glossary-draft-1"`（初稿，內容審訂中）
+版本：`GLOSSARY_VERSION = "glossary-1"`（2026-09-18 由初稿 `glossary-draft-1` 定案——詞條已貼 issue #2 待 ping225710 審，所有者決議先行定案，後續意見以修訂版處理）
 
 ### 紫微斗數（基礎 6）
 

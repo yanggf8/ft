@@ -32,7 +32,7 @@ pub fn GlossaryPage() -> impl IntoView {
             <A href="/" attr:class="back-link">"← 返回"</A>
             <h1 style="margin-bottom:0.5rem">"名詞解釋"</h1>
             <p class="muted" style="margin-bottom:1.5rem">
-                {format!("紫微、西洋占星與姓名學的常見名詞一次看懂（初稿 {}，內容審訂中）。", GLOSSARY_VERSION)}
+                {format!("紫微、西洋占星與姓名學的常見名詞一次看懂（{}）。", GLOSSARY_VERSION)}
             </p>
             {category_section(Category::Ziwei)}
             {category_section(Category::ZiweiPattern)}
