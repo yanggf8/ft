@@ -91,7 +91,7 @@ pub static TERMS: &[Term] = &[
     Term {
         term: "日月並明",
         category: Category::ZiweiPattern,
-        def: "太陽太陰皆處廟旺明亮的組合，主聲名與多元之才。",
+        def: "太陽太陰皆處廟旺明亮的組合，主聲名與雙棟之才。",
     },
     Term {
         term: "火貪格",

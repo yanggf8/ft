@@ -48,11 +48,12 @@ fn stroke_text(chars: &[CharStrokes]) -> String {
         .join(" ")
 }
 
-fn grid_row(g: &Grid) -> impl IntoView + '_ {
-    let entry = &luck::LUCK[(g.luck_index - 1) as usize];
+fn grid_row(g: &Grid, single_given: bool) -> impl IntoView + '_ {
+    let entry = luck::luck_entry(g.luck_index);
     let note = match g.kind {
         naming::GridKind::Heaven => "（祖傳之格，不單獨論吉凶）",
-        naming::GridKind::Outer if g.strokes == 2 => "（單名固定虛畫，意義有限）",
+        // 單名外格固定 2（虛畫 +1）；雙名第二字 1 畫（一/乙）外格也是 2，不可用筆畫判斷
+        naming::GridKind::Outer if single_given => "（單名固定虛畫，意義有限）",
         _ => "",
     };
     view! {
@@ -151,7 +152,7 @@ pub fn NamingPage() -> impl IntoView {
                                 </tr>
                             </thead>
                             <tbody>
-                                {r.grids.iter().map(grid_row).collect_view()}
+                                {r.grids.iter().map(|g| grid_row(g, single_given)).collect_view()}
                             </tbody>
                         </table>
 

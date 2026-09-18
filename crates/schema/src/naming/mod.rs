@@ -43,7 +43,7 @@ pub struct CharStrokes {
     pub strokes: u8,
 }
 
-/// 五格結果之一（吉凶短評由表端 `LUCK[luck_index]` 組裝，不進本結構）。
+/// 五格結果之一（吉凶短評由表端 `luck::luck_entry(luck_index)` 組裝，不進本結構）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Grid {

@@ -131,6 +131,13 @@ pub fn luck_index(n: u16) -> u8 {
     m as u8
 }
 
+/// 1-based 查表：回傳數理 `n` 的條目。`n` 須為 `luck_index()` 的回傳值（1..=81）；
+/// 表端一律走本函式，勿手寫 `LUCK[n - 1]`（n 的 1-based 約定容易漏 −1 或寫成 `LUCK[n]`）。
+pub fn luck_entry(n: u8) -> &'static LuckEntry {
+    assert!((1..=81).contains(&n), "luck_index out of range: {n}");
+    &LUCK[usize::from(n) - 1]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,5 +222,15 @@ mod tests {
         assert_eq!(luck_index(162), 2);
         // 241 → 161 → 81（減兩次；不是 1——「81 同 1」只是意象，不是查表規則）
         assert_eq!(luck_index(241), 81);
+    }
+
+    #[test]
+    fn luck_entry_is_one_based_lookup() {
+        assert_eq!(luck_entry(1).name, "天地開泰");
+        assert_eq!(luck_entry(81).name, "萬物回春");
+        assert_eq!(luck_entry(5).class, LuckClass::DaJi);
+        // 邊界外一律 panic（0 與 82 都不是 luck_index 的合法輸出）
+        assert!(std::panic::catch_unwind(|| luck_entry(0)).is_err());
+        assert!(std::panic::catch_unwind(|| luck_entry(82)).is_err());
     }
 }
