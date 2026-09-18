@@ -457,6 +457,10 @@ main { flex: 1; }
   color: var(--starlight);
   -webkit-text-fill-color: var(--starlight);
 }
+/* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/hover 光暈/改色，
+   讓連結卡與 div 卡視覺一致（全域 a:hover 會穿透子元素，故逐項重設） */
+a.feature { display: block; text-decoration: none; color: inherit; }
+a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 
 /* chrome ring on the ONE featured card — silver-white only (hue-rotate
    drift removed: it does nothing on a hueless gradient) */

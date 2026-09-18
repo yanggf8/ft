@@ -5,6 +5,7 @@ pub mod api;
 pub mod auth;
 pub mod components;
 pub mod generation;
+pub mod glossary;
 pub mod pages;
 
 use leptos::prelude::*;
@@ -16,7 +17,8 @@ use leptos_router::path;
 use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
 use crate::pages::{
-    AdminPage, DivinationPage, HomePage, LoginPage, PersonalityPage, ProfilePage, StoryPage,
+    AdminPage, DivinationPage, GlossaryPage, HomePage, LoginPage, NamingPage, PersonalityPage,
+    ProfilePage, StoryPage,
 };
 
 #[component]
@@ -35,6 +37,9 @@ pub fn App() -> impl IntoView {
                     // (built backend-side), which reads better in an invite.
                     <Route path=path!("/register") view=LoginPage/>
                     <Route path=path!("/auth/verify") view=VerifyPage/>
+                    // 姓名學與名詞解釋為公開頁（免登入；issue #2 決議）
+                    <Route path=path!("/naming") view=NamingPage/>
+                    <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>
                     <Route path=path!("/divination/:type") view=|| view! { <Protected><DivinationPage/></Protected> }/>

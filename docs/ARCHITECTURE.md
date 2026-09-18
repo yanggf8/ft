@@ -6,8 +6,10 @@
 ## Workspace (Cargo)
 
 - `crates/schema` — shared DTOs. **`api`** (request/response contract both Worker and Web
-  deserialize) and **`storage`** (DO storage key/format for bit-compat). This crate is the
-  single source of truth that removes TS↔Rust drift.
+  deserialize) and **`storage`** (DO storage key/format for bit-compat), plus pure feature
+  logic / static truth tables: `items` (IPIP-15), `symbolic`, `predict`, `anchors`, `cycle`,
+  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18). This crate is the single source
+  of truth that removes TS↔Rust drift.
 - `crates/domain/ziwei` — ZiWei engine (wraps `x-iztro`).
 - `crates/domain/western` — Western engine (hybrid: `solar-ephemeris` Moon + `vsop87` planets).
 - `crates/domain/big5` — F1 personality scoring (`scoring`/`careless`/`norm`).
@@ -54,9 +56,9 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 - **`api.rs`** — gloo-net client (session in localStorage, structured `ApiErr`,
   `exchange_oauth_code`, `fetch_overlay`).
 - **Pages**: `Home`, `Login`, `Profile`, `Personality` (quiz + F3 overlay), `Divination`
-  (ziwei/western), `Story`, `Admin`.
+  (ziwei/western), `Story`, `Admin`, `Naming`＋`Glossary`（2026-09-18 起公開頁，免登入）。
 - **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PredictionsCard`
-  （F5 本週預測 — F6 兩段式動線）。
+  （F5 本週預測 — F6 兩段式動線）；`glossary.rs` 靜態詞條（名詞解釋頁渲染）。
 - Uses `ft-schema::api` types directly — no wire-type drift.
 - `crates/web/_headers` — Pages 安全標頭(HSTS/CSP/X-Frame-Options/nosniff/Referrer/
   Permissions-Policy);`build-web.sh` 會複製進 dist。
@@ -166,6 +168,24 @@ changing any colour.**
 - **chart_resolver**(`crates/api/src/services/chart_resolver.rs`):唯讀解析(Value 層新鮮度:
   birth hash + engine version + schema version;結構驗證;engine 失敗降級;gender 缺失跳紫微;
   紫微早返回、西洋 fallback)。
+
+## 姓名學 v1 ＋ 名詞解釋 (2026-09-18, issue #2)
+
+純 client-side 功能：**零 API、零 DB、免登入**——api/worker/schema.sql 全不動，部署只動 web。
+
+- **引擎**：`crates/schema/src/naming/`（`mod` 管線／`sancai` 五行生剋＋三才簡表／`luck` 81
+  數理表／`strokes` 康熙筆畫表 5410 字）。`/naming` 頁同步呼叫 `analyze()` 在瀏覽器計算
+  （輸入不傳送不儲存）。設計與**產品資料鎖定版**（81 表全文、golden 筆畫、22 詞條、
+  肉部=6／數目字形等決策）：`docs/superpowers/specs/2026-09-18-naming-v1-design.md`。
+- **筆畫表產製**：`scripts/gen-kangxi.py`（一次性離線，不進 CI）——Big5 常用 5401 字＋
+  姓氏補充，14 個簡化部首規則（含 肉部之月=6、罒→网6、飠→食9；residual==0 例外讓 王=4），
+  generator 內建 golden 對帳、不符即中止。表版本 `STROKE_TABLE_VERSION`（資訊性，非
+  api engine_version 體系——無快取可比對）。
+- **版面**：首頁 feature-grid 6 卡 3+3（紫微維持 DOM 第一保 chrome ring）；姓名學與
+  名詞解釋為整卡連結 `a.feature`（style.css 兩行擋全域連結樣式）；`/glossary` 為獨立
+  靜態頁（詞條在 `crates/web/src/glossary.rs`，初稿待 stakeholder 審）。
+- 已知刻意簡化（spec §2/§3 列冊）：三才為生剋簡表非 125 組古表（金金金/木木土 等失真
+  點有 snapshot 測試鎖定）；81 數理分歧條目採四源投票共識。
 
 ## Engine Versions
 

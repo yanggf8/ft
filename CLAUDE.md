@@ -80,7 +80,8 @@ Detailed walkthrough — routes, DOs, services, engines, frontend, F5 design not
 notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map:
 
 - `crates/schema` — shared DTOs (`api` wire contract, `storage` DO format) + pure feature
-  logic (`symbolic`, `predict`, `anchors`, `cycle`); single source of truth, no TS drift.
+  logic (`symbolic`, `predict`, `anchors`, `cycle`, `naming` 姓名學 v1); single source of
+  truth, no TS drift.
 - `crates/domain/{ziwei,western,big5}` — engines (ziwei wraps x-iztro; western = real
   ephemeris; big5 = F1 scoring).
 - `crates/worker` — `fortunet-engine` Worker (service binding `FT_ENGINE`).
@@ -136,14 +137,17 @@ Pages site.
 ## Coding Standards
 
 - Rust, 2-space indent, snake_case (camelCase only for JSON wire keys via `serde(rename)`).
-- Existing warnings: some legacy clippy lints remain; CI gates on `fmt` + build, `clippy` is
-  report-only. Prefer not to add new warnings.
+- Existing warnings: some legacy clippy lints remain; CI gates on `fmt` + test + build +
+  **clippy (wasm32, no continue-on-error — 2026-09-18 修正：clippy 實為硬閘，非 report-only)**.
+  Prefer not to add new warnings.
 - Schema DTO field names are **semantic**: storage keys and wire keys must not be renamed.
 
 ## Git & CI
 
-- `.github/workflows/deploy.yml` — on push/PR to `main`: `cargo fmt --check`, `cargo clippy`,
-  `cargo build` the wasm crates. **Deployment is manual** (OAuth only, no API token in CI).
+- `.github/workflows/deploy.yml` — on push/PR to `main`: `cargo fmt --check`,
+  `cargo test --locked`（native：schema/ziwei/western/big5/api）, `cargo clippy`
+  (wasm32 `--all-targets`), `cargo build` the wasm crates. **Deployment is manual**
+  (OAuth only, no API token in CI).
 - One-person project; all work lands directly on `main` (no feature branching).
 - Must `unset CLOUDFLARE_API_TOKEN` before any `wrangler` command (OAuth preferred; API
   tokens have permission issues).

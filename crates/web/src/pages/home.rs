@@ -17,13 +17,17 @@ pub fn HomePage() -> impl IntoView {
                 <Show
                     when=move || auth.is_authed()
                     fallback=|| view! {
-                        <A href="/login" attr:class="cta">"開始使用"</A>
+                        <div class="hero-actions">
+                            <A href="/login" attr:class="cta">"開始使用"</A>
+                            <A href="/naming" attr:class="cta-alt">"姓名學（免登入）"</A>
+                        </div>
                     }
                 >
                     <div class="hero-actions">
                         <A href="/divination/ziwei" attr:class="cta">"紫微斗數"</A>
                         <A href="/divination/western" attr:class="cta-alt">"西洋占星"</A>
                         <A href="/personality" attr:class="cta-alt">"人格測驗"</A>
+                        <A href="/naming" attr:class="cta-alt">"姓名學"</A>
                         <A href="/profile" attr:class="cta-alt">"我的資料"</A>
                     </div>
                 </Show>
@@ -37,6 +41,10 @@ pub fn HomePage() -> impl IntoView {
                     <h3><span class="feature-icon">"⭐"</span>" 西洋占星"</h3>
                     <p>"星座與行星位置分析，探索性格與天賦"</p>
                 </div>
+                <A href="/naming" attr:class="feature">
+                    <h3><span class="feature-icon">"✒️"</span>" 姓名學"</h3>
+                    <p>"五格剖象＋三才五行，輸入姓名即時解析（免登入）"</p>
+                </A>
                 <div class="feature">
                     <h3><span class="feature-icon">"🤖"</span>" AI 解讀"</h3>
                     <p>"智能 AI 提供專業且易懂的命理解讀"</p>
@@ -45,6 +53,10 @@ pub fn HomePage() -> impl IntoView {
                     <h3><span class="feature-icon">"🧠"</span>" 人格測驗"</h3>
                     <p>"IPIP-15 十五題，約 90 秒，了解你的行為傾向"</p>
                 </div>
+                <A href="/glossary" attr:class="feature">
+                    <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
+                    <p>"紫微、占星、姓名學常見名詞一次看懂"</p>
+                </A>
             </div>
         </div>
     }
