@@ -63,7 +63,7 @@ unset CLOUDFLARE_API_TOKEN && wrangler rollback
 ### Steps
 ```bash
 # Via Cloudflare Dashboard
-1. Go to Workers & Pages → fortunet-frontend
+1. Go to Workers & Pages → fortunet
 2. Click "View builds"
 3. Find last good deployment
 4. Click "..." → "Rollback to this deployment"
@@ -73,7 +73,7 @@ unset CLOUDFLARE_API_TOKEN && wrangler rollback
 # Pages doesn't have direct rollback, redeploy previous commit
 git log --oneline
 git checkout <previous-commit>
-./scripts/build-web.sh   # or: cargo build -p ft-web --target wasm32-unknown-unknown
+crates/web/scripts/build-web.sh   # or: cargo build -p ft-web --target wasm32-unknown-unknown
 unset CLOUDFLARE_API_TOKEN && wrangler pages deploy crates/web/dist --project-name=fortunet
 git checkout main
 ```
