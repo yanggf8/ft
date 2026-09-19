@@ -48,6 +48,18 @@ fn stroke_text(chars: &[CharStrokes]) -> String {
         .join(" ")
 }
 
+/// 已知失真案例的情境註記（spec §2；非失真案例回 None 不顯示）。
+fn sancai_distortion_note(pattern: &str) -> Option<&'static str> {
+    match pattern {
+        "金金金" => Some("傳統 125 組配置表多將「金金金」列為凶（過剛易折），本簡化規則評為吉，兩者結論相反。"),
+        "木木土" => Some("傳統配置表常將「木木土」列為大吉，本簡化規則因木剋土僅評半吉，兩者結論有落差。"),
+        "金水木" | "水木火" | "木火土" | "火土金" | "土金水" => {
+            Some("此為「洩氣」格局：相鄰兩對皆為我生，傳統配置表多視為凶，本簡化規則視為和諧，評級可能偏樂觀。")
+        }
+        _ => None,
+    }
+}
+
 fn grid_row(g: &Grid, single_given: bool) -> impl IntoView + '_ {
     let entry = luck::luck_entry(g.luck_index);
     let note = match g.kind {
@@ -132,6 +144,7 @@ pub fn NamingPage() -> impl IntoView {
 
             {move || report.get().map(|r| {
                 let single_given = r.given.len() == 1;
+                let distortion_note = sancai_distortion_note(&r.sancai.pattern);
                 view! {
                     <div class="card" style="margin-top:1.5rem">
                         <h2 style="margin-bottom:0.5rem">
@@ -172,6 +185,9 @@ pub fn NamingPage() -> impl IntoView {
                         <p class="muted" style="font-size:0.85rem">
                             "三才評級採相生相剋簡化規則，非傳統 125 組配置表，結果僅供參考。"
                         </p>
+                        {distortion_note.map(|note| view! {
+                            <p class="muted" style="font-size:0.85rem;margin-top:0.5rem">{note}</p>
+                        }.into_any())}
 
                         <Show when=move || single_given>
                             <p class="muted" style="font-size:0.85rem;margin-top:0.75rem">
