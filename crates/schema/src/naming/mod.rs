@@ -104,12 +104,15 @@ fn validate(surname: &str, given: &str) -> Result<(), NamingError> {
     if g.len() > 2 {
         return Err(NamingError::GivenTooLong(g.len()));
     }
-    let non_cjk: Vec<char> = s
+    let mut non_cjk: Vec<char> = s
         .iter()
         .chain(&g)
         .copied()
         .filter(|c| !is_cjk(*c))
         .collect();
+    // 同字重複（如「㐀㐀」）只報一次；排序讓訊息順序確定
+    non_cjk.sort_unstable();
+    non_cjk.dedup();
     if !non_cjk.is_empty() {
         return Err(NamingError::NonCjk(non_cjk));
     }
@@ -197,12 +200,15 @@ pub fn analyze(surname: &str, given: &str) -> Result<NamingReport, NamingError> 
     };
     let s = resolve(surname);
     let g = resolve(given);
-    let unknown: Vec<char> = s
+    let mut unknown: Vec<char> = s
         .iter()
         .chain(&g)
         .filter(|(_, v)| v.is_none())
         .map(|(ch, _)| *ch)
         .collect();
+    // 同字重複只報一次；排序讓訊息順序確定
+    unknown.sort_unstable();
+    unknown.dedup();
     if !unknown.is_empty() {
         return Err(NamingError::UnknownChars(unknown));
     }
@@ -303,6 +309,11 @@ mod tests {
             analyze("㐀", "明"),
             Err(NamingError::UnknownChars(vec!['㐀']))
         );
+        // 同字重複只報一次
+        assert_eq!(
+            analyze("㐀", "㐀"),
+            Err(NamingError::UnknownChars(vec!['㐀']))
+        );
     }
 
     #[test]
@@ -334,6 +345,8 @@ mod tests {
             Err(NamingError::NonCjk(vec!['a', 'b']))
         );
         assert_eq!(validate("〇", "明"), Err(NamingError::NonCjk(vec!['〇'])));
+        // 同字重複只報一次
+        assert_eq!(validate("OO", "明"), Err(NamingError::NonCjk(vec!['O'])));
         assert_eq!(validate("王", "明"), Ok(()));
     }
 

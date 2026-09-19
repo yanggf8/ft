@@ -72,9 +72,11 @@ def load_unihan(path=None):
                     if field == "kTotalStrokes":
                         total[cp] = value.split()[0]  # 多值取第一
                     elif field == "kRSUnicode":
-                        # 值如 "85.3 64.3'"；取第一個無 apostrophe（非簡體）的值
-                        vals = [v for v in value.split() if not v.endswith("'")]
-                        rs[cp] = (vals or value.split())[0]
+                        # UAX #38：apostrophe 緊跟部首號（如 "85'.3"；1–3 個皆為簡化形）
+                        # 取第一個無撇（非簡體）的值；全為簡化形 → 不收（resolve 視為缺漏 → skip）
+                        vals = [v for v in value.split() if "'" not in v.split(".", 1)[0]]
+                        if vals:
+                            rs[cp] = vals[0]
     return total, rs
 
 
