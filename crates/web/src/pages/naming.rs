@@ -48,24 +48,13 @@ fn stroke_text(chars: &[CharStrokes]) -> String {
         .join(" ")
 }
 
-/// 已知失真案例的情境註記（spec §2；非失真案例回 None 不顯示）。
-fn sancai_distortion_note(pattern: &str) -> Option<&'static str> {
-    match pattern {
-        "金金金" => Some("傳統 125 組配置表多將「金金金」列為凶（過剛易折），本簡化規則評為吉，兩者結論相反。"),
-        "木木土" => Some("傳統配置表常將「木木土」列為大吉，本簡化規則因木剋土僅評半吉，兩者結論有落差。"),
-        "金水木" | "水木火" | "木火土" | "火土金" | "土金水" => {
-            Some("此為「洩氣」格局：相鄰兩對皆為我生，傳統配置表多視為凶，本簡化規則視為和諧，評級可能偏樂觀。")
-        }
-        _ => None,
-    }
-}
-
-fn grid_row(g: &Grid, single_given: bool) -> impl IntoView + '_ {
+fn grid_row(g: &Grid, outer_fixed_two: bool) -> impl IntoView + '_ {
     let entry = luck::luck_entry(g.luck_index);
     let note = match g.kind {
         naming::GridKind::Heaven => "（祖傳之格，不單獨論吉凶）",
-        // 單名外格固定 2（虛畫 +1）；雙名第二字 1 畫（一/乙）外格也是 2，不可用筆畫判斷
-        naming::GridKind::Outer if single_given => "（單名固定虛畫，意義有限）",
+        // 單姓單名外格＝2（虛畫 +1）；複姓單名外格＝姓1+1（非固定值）、
+        // 雙名第二字 1 畫（一/乙）外格也是 2 — 不可用筆畫判斷
+        naming::GridKind::Outer if outer_fixed_two => "（單名固定虛畫，意義有限）",
         _ => "",
     };
     view! {
@@ -144,7 +133,9 @@ pub fn NamingPage() -> impl IntoView {
 
             {move || report.get().map(|r| {
                 let single_given = r.given.len() == 1;
-                let distortion_note = sancai_distortion_note(&r.sancai.pattern);
+                let outer_fixed_two = r.surname.len() == 1 && single_given;
+                // 失真案例清單單一來源在 schema（sancai::distortion_note），UI 只渲染
+                let distortion_note = naming::sancai::distortion_note(r.sancai.elements);
                 view! {
                     <div class="card" style="margin-top:1.5rem">
                         <h2 style="margin-bottom:0.5rem">
@@ -165,7 +156,7 @@ pub fn NamingPage() -> impl IntoView {
                                 </tr>
                             </thead>
                             <tbody>
-                                {r.grids.iter().map(|g| grid_row(g, single_given)).collect_view()}
+                                {r.grids.iter().map(|g| grid_row(g, outer_fixed_two)).collect_view()}
                             </tbody>
                         </table>
 
@@ -189,11 +180,11 @@ pub fn NamingPage() -> impl IntoView {
                             <p class="muted" style="font-size:0.85rem;margin-top:0.5rem">{note}</p>
                         }.into_any())}
 
-                        <Show when=move || single_given>
+                        {single_given.then(|| view! {
                             <p class="muted" style="font-size:0.85rem;margin-top:0.75rem">
                                 "單名字的地格與外格採「假成一」慣例（虛畫 +1），吉凶意義有限。"
                             </p>
-                        </Show>
+                        }.into_any())}
 
                         <p class="muted" style="font-size:0.8rem;margin-top:1rem">
                             {format!(

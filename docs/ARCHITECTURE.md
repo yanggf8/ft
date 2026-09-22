@@ -183,9 +183,11 @@ changing any colour.**
   api engine_version 體系——無快取可比對）。
 - **版面**：首頁 feature-grid 6 卡 3+3（紫微維持 DOM 第一保 chrome ring）；姓名學與
   名詞解釋為整卡連結 `a.feature`（style.css 兩行擋全域連結樣式）；`/glossary` 為獨立
-  靜態頁（詞條在 `crates/web/src/glossary.rs`，`glossary-1` 已定案，後續意見以修訂版處理）。
-- 已知刻意簡化（spec §2/§3 列冊）：三才為生剋簡表非 125 組古表（金金金/木木土 等失真
-  點有 snapshot 測試鎖定）；81 數理分歧條目採四源投票共識。
+  靜態頁（詞條在 `crates/web/src/glossary.rs`；`glossary-1` 已定案，2026-09-22 修訂 `glossary-1.1`
+  —「日月並明」雙棟之才→棟梁之才，後續意見以修訂版處理並 bump）。
+- 已知刻意簡化（spec §2/§3 列冊）：三才為生剋簡表非 125 組古表——失真案例的情境註記
+  `sancai::distortion_note` 依 elements 計算、單一來源在 schema（金金金/木木土/洩氣局五
+  順生鏈），web 只渲染，snapshot 測試鎖定；81 數理分歧條目採四源投票共識。
 
 ## Engine Versions
 

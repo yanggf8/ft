@@ -31,8 +31,9 @@ pub struct Term {
     pub def: &'static str,
 }
 
-/// 詞條版本（2026-09-18 由初稿定案；後續 stakeholder 意見以修訂版處理並 bump）。
-pub const GLOSSARY_VERSION: &str = "glossary-1";
+/// 詞條版本（2026-09-18 由初稿定案；後續 stakeholder 意見以修訂版處理並 bump。
+/// 2026-09-22 glossary-1.1：「日月並明」雙棟之才 → 棟梁之才，無出處自造詞修正）。
+pub const GLOSSARY_VERSION: &str = "glossary-1.1";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -91,7 +92,7 @@ pub static TERMS: &[Term] = &[
     Term {
         term: "日月並明",
         category: Category::ZiweiPattern,
-        def: "太陽太陰皆處廟旺明亮的組合，主聲名與雙棟之才。",
+        def: "太陽太陰皆處廟旺明亮的組合，主聲名與棟梁之才。",
     },
     Term {
         term: "火貪格",

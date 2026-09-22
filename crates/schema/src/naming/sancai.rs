@@ -117,6 +117,29 @@ pub fn sancai_rating(elements: [Element; 3]) -> LuckClass {
     }
 }
 
+/// 已知失真案例的情境註記（spec §2；非失真案例回 `None` 不顯示）。
+/// 依 `elements` 計算（不解析 pattern 字串）— web 端只渲染，勿複製此清單。
+pub fn distortion_note(elements: [Element; 3]) -> Option<&'static str> {
+    use Element::*;
+    match elements {
+        [Metal, Metal, Metal] => Some(
+            "傳統 125 組配置表多將「金金金」列為凶（過剛易折），本簡化規則評為吉，兩者結論相反。",
+        ),
+        [Wood, Wood, Earth] => Some(
+            "傳統配置表常將「木木土」列為大吉，本簡化規則因木剋土僅評半吉，兩者結論有落差。",
+        ),
+        // 洩氣局：相鄰兩對皆我生的五條順生鏈（金水木｜水木火｜木火土｜火土金｜土金水）
+        [Metal, Water, Wood]
+        | [Water, Wood, Fire]
+        | [Wood, Fire, Earth]
+        | [Fire, Earth, Metal]
+        | [Earth, Metal, Water] => Some(
+            "此為「洩氣」格局：相鄰兩對皆為我生，傳統配置表多視為凶，本簡化規則視為和諧，評級可能偏樂觀。",
+        ),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +226,29 @@ mod tests {
             pair_relation(Element::Wood, Element::Metal),
             PairRelation::Conflicting
         );
+    }
+
+    #[test]
+    fn distortion_note_matches_spec_examples_only() {
+        use Element as E;
+        // spec §2 失真代表例全部有註記
+        assert!(distortion_note([E::Metal, E::Metal, E::Metal]).is_some()); // 金金金
+        assert!(distortion_note([E::Wood, E::Wood, E::Earth]).is_some()); // 木木土
+                                                                          // 洩氣局（相鄰兩對皆我生）五條順生鏈，含 spec §2 明列的金水木、土金水
+        for t in [
+            [E::Metal, E::Water, E::Wood],
+            [E::Water, E::Wood, E::Fire],
+            [E::Wood, E::Fire, E::Earth],
+            [E::Fire, E::Earth, E::Metal],
+            [E::Earth, E::Metal, E::Water],
+        ] {
+            assert!(distortion_note(t).is_some(), "{:?} 應有洩氣註記", t);
+        }
+        // 非失真案例回 None：土金木（一和一衝非洩氣、王小明 fixture）、
+        // 三比和、兩衝都不是 spec §2 列舉的失真案例
+        assert!(distortion_note([E::Earth, E::Metal, E::Wood]).is_none());
+        assert!(distortion_note([E::Wood, E::Wood, E::Wood]).is_none());
+        assert!(distortion_note([E::Water, E::Fire, E::Metal]).is_none());
     }
 
     #[test]
