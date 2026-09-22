@@ -216,10 +216,12 @@ pub fn LoginPage() -> impl IntoView {
                             <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
                         </div>
                         <button
+                            type="button"
                             class="btn-primary"
                             prop:disabled=move || g_loading.get()
                             style="width:100%;background:#fff;color:#111827;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;gap:0.5rem"
-                            on:click=move |_| {
+                            on:click=move |ev| {
+                                ev.prevent_default();
                                 // debounce: 同步檢查＋鎖定，重複點擊直接 no-op
                                 if g_loading.get_untracked() {
                                     return;
@@ -234,7 +236,7 @@ pub fn LoginPage() -> impl IntoView {
                                     url.push_str(&inv);
                                 }
                                 if let Some(win) = web_sys::window() {
-                                    let _ = win.location().set_href(&url);
+                                    let _ = win.location().assign(&url);
                                 }
                             }
                         >
