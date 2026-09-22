@@ -236,7 +236,7 @@ CREATE TABLE IF NOT EXISTS prediction_feedback (
 );
 
 -- ── F5 API 層：cycle 級生成快照（2026-09-04 設計 §2）──
--- Grok P0-4：一週一 profile 一快照；空週也寫（凍結），防週中重測混 profile
+-- Grok P0-4：一週一 profile 一快照；正常週凍結，未開始回報的空週可修正輸入
 CREATE TABLE IF NOT EXISTS prediction_generations (
   user_id      TEXT NOT NULL,
   cycle_id     TEXT NOT NULL,   -- Asia/Taipei 週一 YYYY-MM-DD
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS prediction_generations (
 );
 
 -- ── F4 情境輸入：週期凍結時的五領域強度標記（2026-09-11 設計 §2）──
--- 與 prediction_generations 同一批次原子寫入（db::batch）；凍結後週中不改。
+-- 與 prediction_generations 同一批次原子寫入（db::batch）；有預測/回報後週中不改。
 -- 0–3 由 app 層驗證（route 層 INVALID_STRENGTHS），無 CHECK，沿 repo 慣例。
 CREATE TABLE IF NOT EXISTS prediction_strengths (
   user_id    TEXT NOT NULL,

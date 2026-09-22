@@ -512,8 +512,9 @@ fn plan_slot(
 }
 
 /// 週期生成（cycle 級凍結冪等）。Grok P0-4：一週一 profile 一快照；
-/// 已有 generations 列 → 整次只回現況，絕不補 domain（防週中重測混 profile）。
-/// F4：`strengths` 為本週情境輸入（route 層已驗證 0–3），隨 freeze 凍結，週中不改。
+/// 已有 predictions/checks/feedback 的週 → 整次只回現況，絕不補 domain
+/// （防週中重測混 profile）。只有「空週且尚未開始回報」才允許重新調整 F4 感知。
+/// F4：`strengths` 為本週情境輸入（route 層已驗證 0–3），正常情況隨 freeze 凍結。
 pub async fn generate(
     db: &Turso,
     user_id: &str,
@@ -541,11 +542,43 @@ pub(crate) async fn generate_with_draw(
     .await
     .map_err(db_err)?;
     if frozen.is_some() {
-        let view = list_cycle(db, user_id, cycle_id).await?;
-        return Ok(GenOutcome {
-            generated: false,
-            view,
-        });
+        // 空週是可修正的輸入錯誤：尚未產生 prediction，也沒有任何 F6
+        // 回報，讓使用者可以重新調整感知後再跑一次。兩句 DELETE 放在
+        // 同一個 batch，避免兩個重試同時把同一週解凍。
+        const CLEAR_STRENGTHS_SQL: &str = "DELETE FROM prediction_strengths \
+             WHERE user_id = ?1 AND cycle_id = ?2 \
+               AND EXISTS (SELECT 1 FROM prediction_generations \
+                           WHERE user_id = ?1 AND cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM predictions WHERE user_id = ?1 AND cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM situation_checks WHERE user_id = ?1 AND cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM f8_assignments WHERE user_id = ?1 AND cycle_id = ?2)";
+        const CLEAR_GENERATION_SQL: &str = "DELETE FROM prediction_generations \
+             WHERE user_id = ?1 AND cycle_id = ?2 \
+               AND NOT EXISTS (SELECT 1 FROM predictions WHERE user_id = ?1 AND cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM situation_checks WHERE user_id = ?1 AND cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM prediction_feedback pf \
+                               JOIN predictions p ON p.id = pf.prediction_id \
+                               WHERE p.user_id = ?1 AND p.cycle_id = ?2) \
+               AND NOT EXISTS (SELECT 1 FROM f8_assignments WHERE user_id = ?1 AND cycle_id = ?2)";
+        let uid = db::text(user_id);
+        let cyc = db::text(cycle_id);
+        let clear_params: [&db::Param<'_>; 2] = [&uid, &cyc];
+        let counts = db::batch(
+            db,
+            &[
+                (CLEAR_STRENGTHS_SQL, &clear_params),
+                (CLEAR_GENERATION_SQL, &clear_params),
+            ],
+        )
+        .await
+        .map_err(db_err)?;
+        if counts.get(1).copied().unwrap_or(0) == 0 {
+            let view = list_cycle(db, user_id, cycle_id).await?;
+            return Ok(GenOutcome {
+                generated: false,
+                view,
+            });
+        }
     }
 
     // 2. 最新 complete 側寫（有效側寫不因後續 skip/亂答消失 — 對齊 personality GET）
