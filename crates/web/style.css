@@ -542,6 +542,9 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 }
 .prediction-tuner-caption { display: block; margin-top: 0.15rem; }
 .prediction-tuner-scale { white-space: nowrap; }
+.prediction-tuner-actions { margin: -0.2rem 0 0.6rem; text-align: right; }
+.prediction-tuner-reroll { padding: 0; font-size: 0.75rem; }
+.prediction-tuner-reroll:disabled { opacity: 0.55; cursor: not-allowed; }
 .prediction-tuner-rows { display: grid; gap: 0.5rem; }
 .strength-slider-row {
   display: grid;
