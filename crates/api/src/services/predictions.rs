@@ -1,4 +1,4 @@
-//! F5 predictions 服務層 — 週期生成（cycle 級凍結）＋ F6 兩段式回報。
+//! F5 predictions 服務層 — 週期多批次生成＋ F6 兩段式回報。
 //! Spec: docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md
 //! 測試策略：純函數住 ft-schema（cycle/predict）；本層不 mock、不造假（.testing-rules），
 //! 語意由 route code review + 部署後手動 API 驗證。
@@ -275,13 +275,13 @@ pub struct CycleView {
     pub predictions: Vec<Prediction>,
     pub checks: Vec<SituationCheck>,
     pub feedback: Vec<PredictionFeedback>,
-    /// 該週是否已凍結（prediction_generations 有列）。
+    /// 該週是否至少有一個生成批次（prediction_generations 有列）。
     pub generated: bool,
-    /// 凍結時的 F4 強度快照；未生成或 rules-1 時期的舊週為 None。
+    /// 最新 prediction run 的 F4 強度快照；未生成或 rules-1 時期的舊週為 None。
     pub strengths: Option<DomainStrengths>,
 }
 
-/// 生成結果：`generated` = 本次真的跑了生成管線（false = 該週已凍結/已存在）。
+/// 生成結果：`generated` = 本次真的新增了一個 prediction run。
 pub struct GenOutcome {
     pub generated: bool,
     pub view: CycleView,
@@ -533,55 +533,8 @@ pub(crate) async fn generate_with_draw(
     strengths: &DomainStrengths,
     draw_control: impl Fn() -> bool,
 ) -> Result<GenOutcome, PredictionsError> {
-    // 1. cycle 已凍結？
-    let frozen: Option<GenRow> = db::first(
-        db,
-        "SELECT profile_id FROM prediction_generations WHERE user_id = ?1 AND cycle_id = ?2",
-        &[&db::text(user_id), &db::text(cycle_id)],
-    )
-    .await
-    .map_err(db_err)?;
-    if frozen.is_some() {
-        // 空週是可修正的輸入錯誤：尚未產生 prediction，也沒有任何 F6
-        // 回報，讓使用者可以重新調整感知後再跑一次。兩句 DELETE 放在
-        // 同一個 batch，避免兩個重試同時把同一週解凍。
-        const CLEAR_STRENGTHS_SQL: &str = "DELETE FROM prediction_strengths \
-             WHERE user_id = ?1 AND cycle_id = ?2 \
-               AND EXISTS (SELECT 1 FROM prediction_generations \
-                           WHERE user_id = ?1 AND cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM predictions WHERE user_id = ?1 AND cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM situation_checks WHERE user_id = ?1 AND cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM f8_assignments WHERE user_id = ?1 AND cycle_id = ?2)";
-        const CLEAR_GENERATION_SQL: &str = "DELETE FROM prediction_generations \
-             WHERE user_id = ?1 AND cycle_id = ?2 \
-               AND NOT EXISTS (SELECT 1 FROM predictions WHERE user_id = ?1 AND cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM situation_checks WHERE user_id = ?1 AND cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM prediction_feedback pf \
-                               JOIN predictions p ON p.id = pf.prediction_id \
-                               WHERE p.user_id = ?1 AND p.cycle_id = ?2) \
-               AND NOT EXISTS (SELECT 1 FROM f8_assignments WHERE user_id = ?1 AND cycle_id = ?2)";
-        let uid = db::text(user_id);
-        let cyc = db::text(cycle_id);
-        let clear_params: [&db::Param<'_>; 2] = [&uid, &cyc];
-        let counts = db::batch(
-            db,
-            &[
-                (CLEAR_STRENGTHS_SQL, &clear_params),
-                (CLEAR_GENERATION_SQL, &clear_params),
-            ],
-        )
-        .await
-        .map_err(db_err)?;
-        if counts.get(1).copied().unwrap_or(0) == 0 {
-            let view = list_cycle(db, user_id, cycle_id).await?;
-            return Ok(GenOutcome {
-                generated: false,
-                view,
-            });
-        }
-    }
-
-    // 2. 最新 complete 側寫（有效側寫不因後續 skip/亂答消失 — 對齊 personality GET）
+    // 每次呼叫都建立新的 prediction run；舊 run 與其 feedback 保留。
+    // 最新 complete 側寫仍作為這一批的 profile 快照。
     let profile: Option<ProfileRow> = db::first(
         db,
         "SELECT id, ipip_answers, ocean_measured FROM personality_profiles \
@@ -648,30 +601,32 @@ pub(crate) async fn generate_with_draw(
     let control_flags = reattach_control_flags(&keys, &sel);
     let ledger_ids: Vec<String> = keys.iter().map(|_| uuid::random_uuid()).collect();
 
-    // 4. 凍結 + 插入（單一 Hrana batch = 原子隱含交易；F7 同款）。
-    //    steps[0]=F4 強度快照、steps[1]=cycle 凍結快照、steps[2..]=predictions
-    //    （is_control 逐列帶入 F8 對照旗標）。兩個快照皆 INSERT OR IGNORE：
-    //    併發敗者的整個 batch 是結構性 no-op（predictions 另有 WHERE NOT EXISTS
-    //    原子防呆），以 steps[1] 的 affected==0 偵測「他人已凍結」→ 只回現況，
-    //    絕不補 domain。空週也凍結。
+    // 4. 新 run + 快照 + predictions（單一 Hrana batch = 原子隱含交易）。
+    //    舊 run 不覆蓋；每次呼叫都產生新的 run_id，讓同一週可以累積多次預測。
     let created = clock::now_iso();
     if created.is_empty() {
         return Err(PredictionsError::Db("clock unavailable".into()));
     }
-    const STRENGTHS_INSERT_SQL: &str = "INSERT OR IGNORE INTO prediction_strengths \
+    let run_id = uuid::random_uuid();
+    const RUN_INSERT_SQL: &str = "INSERT INTO prediction_runs \
+         (id, user_id, cycle_id, profile_id, work, love, family, money, health, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)";
+    const STRENGTHS_INSERT_SQL: &str = "INSERT INTO prediction_strengths \
          (user_id, cycle_id, work, love, family, money, health, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)";
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+         ON CONFLICT(user_id, cycle_id) DO UPDATE SET \
+           work = excluded.work, love = excluded.love, family = excluded.family, \
+           money = excluded.money, health = excluded.health, created_at = excluded.created_at";
     const GEN_INSERT_SQL: &str = "INSERT OR IGNORE INTO prediction_generations \
          (user_id, cycle_id, profile_id, generated_at) VALUES (?1, ?2, ?3, ?4)";
     const PRED_INSERT_SQL: &str = "INSERT INTO predictions \
-         (id, user_id, profile_id, cycle_id, domain, trigger, tendency, forecast, \
+         (id, run_id, user_id, profile_id, cycle_id, domain, trigger, tendency, forecast, \
           experiment, anchor_ids, anchor_coverage, source, rules_version, is_control, created_at) \
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'rule_anchor', ?12, ?13, ?14 \
-         WHERE NOT EXISTS (SELECT 1 FROM predictions \
-                           WHERE user_id = ?2 AND cycle_id = ?4 AND domain = ?5)";
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'rule_anchor', ?13, ?14, ?15)";
 
     let uid = db::text(user_id);
     let cyc = db::text(cycle_id);
+    let rid = db::text(&run_id);
     let pid = db::text(&profile.id);
     let ts = db::text(&created);
     let s_work = db::int(strengths.work as i32);
@@ -680,8 +635,7 @@ pub(crate) async fn generate_with_draw(
     let s_money = db::int(strengths.money as i32);
     let s_health = db::int(strengths.health as i32);
 
-    // predictions 的擁有參數（id/anchor_ids 字串須活到 batch 呼叫；
-    // id 於 freeze 前配發 — Codex 終審 #3）
+    // predictions 的擁有參數（id/run_id/anchor_ids 字串須活到 batch 呼叫）
     let preds: Vec<(String, String, &Selected<'static>, bool)> = sel
         .iter()
         .enumerate()
@@ -699,6 +653,7 @@ pub(crate) async fn generate_with_draw(
     for (id, anchor_ids, s, is_control) in &preds {
         owned_lists.push(vec![
             db::text(id),
+            db::text(&run_id),
             db::text(user_id),
             db::text(&profile.id),
             db::text(cycle_id),
@@ -718,29 +673,24 @@ pub(crate) async fn generate_with_draw(
         pred_param_lists.push(l.iter().collect());
     }
 
+    let run_params: [&db::Param<'_>; 10] = [
+        &rid, &uid, &cyc, &pid, &s_work, &s_love, &s_family, &s_money, &s_health, &ts,
+    ];
     let strengths_params: [&db::Param<'_>; 8] = [
         &uid, &cyc, &s_work, &s_love, &s_family, &s_money, &s_health, &ts,
     ];
     let gen_params: [&db::Param<'_>; 4] = [&uid, &cyc, &pid, &ts];
-    let mut stmts: Vec<(&'static str, &[&db::Param<'_>])> = Vec::with_capacity(2 + preds.len());
+    let mut stmts: Vec<(&'static str, &[&db::Param<'_>])> = Vec::with_capacity(3 + preds.len());
+    stmts.push((RUN_INSERT_SQL, &run_params));
     stmts.push((STRENGTHS_INSERT_SQL, &strengths_params));
     stmts.push((GEN_INSERT_SQL, &gen_params));
     for params in &pred_param_lists {
         stmts.push((PRED_INSERT_SQL, params));
     }
 
-    let counts = db::batch(db, &stmts).await.map_err(db_err)?;
-    if counts.get(1).copied().unwrap_or(0) == 0 {
-        // 併發/重試：他人已凍結 → 只回現況（絕不補 domain）
-        let view = list_cycle(db, user_id, cycle_id).await?;
-        return Ok(GenOutcome {
-            generated: false,
-            view,
-        });
-    }
-
-    // 5. F8 帳本(唯一在 batch 外的寫入;純簿記,不承載 F5 原子性 — Codex 終審
-    //    #1 ITT 對帳):存活槽位 → assigned(+落庫 prediction id);被 D2-A 壓掉
+    db::batch(db, &stmts).await.map_err(db_err)?;
+    // 5. F8 帳本(每個 run 一組;唯一在 batch 外的寫入;純簿記,不承載 F5 原子性
+    //    — Codex 終審 #1 ITT 對帳):存活槽位 → assigned(+落庫 prediction id);被 D2-A 壓掉
     //    槽位 → suppressed。所有 id 已於 freeze 前配發。
     for (id, _, s, is_control) in preds.iter() {
         let drawn_arm = if *is_control { "control" } else { "real" };

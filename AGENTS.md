@@ -62,7 +62,7 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 **Generation Tags** (2026-09): `1940s–2010s` selectable as birth attribute (default from `birth_year`), stored as JSON array `users.generation_tags`, embedded into story prompt `【世代語境】`, 1930s/2020s added, prompt thickened to ~1072 chars (fourPillars, majorLimits, isLeap, brightness/sihua, ascendant/houses).
 
-**F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` / `prediction_strengths` 五表 + 4 端點已上線。cycle 級凍結（`prediction_generations` 一週一 profile 快照，空週也凍結；寫入為單一 `db::batch` 原子交易）、forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）；F4 情境輸入（2026-09-11）：generate 必帶五領域強度 0–3、閘門強度 ≥1、love 領域上線（`rules-2`）、D2-A 已推廣為 floor 語意；web `我的命格` PredictionsCard（§5.4.1 措辭回饋；未生成週顯示 F4 輸入，無自動生成）。
+**F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` / `prediction_strengths` / `prediction_runs` 六表 + 4 端點已上線。同週可建立多個 prediction run，舊預測與回饋保留；寫入為單一 `db::batch` 原子交易。forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）；F4 情境輸入（2026-09-11）：generate 必帶五領域強度 0–3、閘門強度 ≥1、love 領域上線（`rules-2`）、D2-A 已推廣為 floor 語意；web `我的命格` PredictionsCard（§5.4.1 措辭回饋；可於同週再次預測）。
 
 ### AI Integration ✅
 
@@ -87,7 +87,7 @@ GET  /api/users/me              # Includes generation_tags (JSON array), billing
 ### F5 Predictions Endpoints (2026-09, spec: docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md)
 ```bash
 GET  /api/predictions?cycleId=   # 當週列表（checks/feedback/predictions；forecast 未收齊時遮罩為 null）
-POST /api/predictions/generate   # 冪等週期生成（cycle_id=Asia/Taipei 週一起算；prediction_generations 凍結）
+POST /api/predictions/generate   # 建立新的週內 prediction run（cycle_id=Asia/Taipei 週一起算）
 PUT  /api/predictions/checks     # F6 第 1 段 situation=absent|occurred（每週每 trigger 一次，去重）
 POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 occurred 後、一次性）
 ```

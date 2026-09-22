@@ -490,11 +490,11 @@ pub struct ListPredictionsResponse {
     pub checks: Vec<SituationCheck>,
     pub predictions: Vec<Prediction>,
     pub feedback: Vec<PredictionFeedback>,
-    /// 該週是否已凍結（prediction_generations 有列）。false = 尚未生成，
+    /// 該週是否至少有一個生成批次（prediction_generations 有列）。false = 尚未生成，
     /// 前端據此顯示 F4 強度輸入而非預測列表。
     #[serde(default)]
     pub generated: bool,
-    /// 凍結時的 F4 強度快照；未生成或舊週（rules-1 時期）為 None。
+    /// 最新一批的 F4 強度快照；未生成或舊週（rules-1 時期）為 None。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strengths: Option<DomainStrengths>,
 }
@@ -502,7 +502,7 @@ pub struct ListPredictionsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneratePredictionsResponse {
     pub cycleId: String,
-    /// 本次呼叫是否真的跑了生成管線（false = 該週已凍結/已存在）。
+    /// 本次呼叫是否真的新增了一個 prediction run。
     pub generated: bool,
     pub predictions: Vec<Prediction>,
     /// 凍結時的 F4 強度快照（echo；含併發敗者路徑）。

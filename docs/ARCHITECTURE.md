@@ -105,14 +105,13 @@ changing any colour.**
 
 - **端點**（`routes/predictions.rs` → `services/predictions.rs`）：
   `GET /api/predictions?cycleId=`（列當週，含 checks/feedback/`generated`/`strengths`）、
-  `POST /api/predictions/generate`（冪等週期生成；**F4 起必帶 body** `{"strengths":{五域 0–3}}`，
+  `POST /api/predictions/generate`（同週可新增多個 prediction run；**F4 起必帶 body** `{"strengths":{五域 0–3}}`，
   缺/越界 → 400 `INVALID_STRENGTHS`）、`PUT /api/predictions/checks`（F6 第 1 段 absent|occurred）、
   `POST /api/predictions/:id/feedback`（F6 第 2 段 hit|miss|other）。
 - **`cycle_id`**：Asia/Taipei 週一起算（`crates/schema/src/cycle.rs` 純函數，毫秒 ISO 解析、週一格式驗證）。
-- **週期生成冪等（F4 原子 batch）**：`prediction_generations` 一週一 profile 快照；generate 的寫入是
-  **單一 `db::batch` 原子交易**（steps[0]=`prediction_strengths` 快照、steps[1]=freeze、
-  steps[2..]=predictions `WHERE NOT EXISTS`）；併發敗者以 steps[1] affected==0 偵測回現況；
-  空週也凍結；週中重測不補 domain、strengths 凍結後不改（防混 profile）。
+- **週期多批次生成（F4 原子 batch）**：`prediction_runs` 每次保存一份 profile＋五域強度快照，
+  同週重新生成會新增 predictions，不覆蓋舊 prediction/feedback；`prediction_generations` 僅保留
+  「本週曾生成」的相容摘要，`prediction_strengths` 回傳最新一批輸入。
 - **F4 領域閘門 × F8 對照籤（2026-09-13 併）**：`predict::GATE_ORDER=[Work,Money,Love,Family,Health]`
   決定 `gated_domains()` 槽位（強度 ≥1 且該域有錨點；work+money+love 目錄每格 ≥2=`rules-2`，
   family/health 恆 0）；每槽獨立 25% 中籤（`draw_control_default`，crypto 不可用=不中籤 fail-closed），

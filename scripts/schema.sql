@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS invites (
 -- cycle_id = Asia/Taipei 週一 00:00 起算的週起始日 YYYY-MM-DD，對齊 7 天視野與 F6 回訪
 CREATE TABLE IF NOT EXISTS predictions (
   id                TEXT PRIMARY KEY,
+  run_id            TEXT,
   user_id           TEXT NOT NULL,
   profile_id        TEXT NOT NULL,
   cycle_id          TEXT NOT NULL,
@@ -197,9 +198,24 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle ON predictions(user_id, cycle_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_profile ON predictions(profile_id);
--- 防呆：一週一領域一列（Grok P0-4；冪等）
-CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_user_cycle_domain
-  ON predictions(user_id, cycle_id, domain);
+CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle_run
+  ON predictions(user_id, cycle_id, run_id);
+
+-- 同一週可有多個預測批次；每批保留當時的感知強度與命格側寫。
+CREATE TABLE IF NOT EXISTS prediction_runs (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  cycle_id   TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  work       INTEGER NOT NULL,
+  love       INTEGER NOT NULL,
+  family     INTEGER NOT NULL,
+  money      INTEGER NOT NULL,
+  health     INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_runs_user_cycle
+  ON prediction_runs(user_id, cycle_id, created_at);
 
 -- F8 對照指派帳本（2026-09-13；spec 2026-09-13-f8-control §0.1）
 -- 每個生成槽位一列 — drawn arm、降級原因、存活/壓制、落庫的 prediction id。
@@ -235,8 +251,8 @@ CREATE TABLE IF NOT EXISTS prediction_feedback (
   FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE
 );
 
--- ── F5 API 層：cycle 級生成快照（2026-09-04 設計 §2）──
--- Grok P0-4：一週一 profile 一快照；正常週凍結，未開始回報的空週可修正輸入
+-- ── F5 API 層：cycle 生成摘要（2026-09-04 設計 §2，後續改為多 run）──
+-- 保留一週是否曾生成的相容摘要；每次生成的完整快照在 prediction_runs。
 CREATE TABLE IF NOT EXISTS prediction_generations (
   user_id      TEXT NOT NULL,
   cycle_id     TEXT NOT NULL,   -- Asia/Taipei 週一 YYYY-MM-DD
@@ -245,8 +261,8 @@ CREATE TABLE IF NOT EXISTS prediction_generations (
   PRIMARY KEY (user_id, cycle_id)
 );
 
--- ── F4 情境輸入：週期凍結時的五領域強度標記（2026-09-11 設計 §2）──
--- 與 prediction_generations 同一批次原子寫入（db::batch）；有預測/回報後週中不改。
+-- ── F4 情境輸入：最新一批五領域強度標記（2026-09-11 設計 §2）──
+-- 每次生成會更新這份 latest snapshot；歷次完整輸入在 prediction_runs。
 -- 0–3 由 app 層驗證（route 層 INVALID_STRENGTHS），無 CHECK，沿 repo 慣例。
 CREATE TABLE IF NOT EXISTS prediction_strengths (
   user_id    TEXT NOT NULL,

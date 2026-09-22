@@ -281,7 +281,10 @@ fn strength_row(
                 prop:value=move || get(&strengths.get()).to_string()
                 prop:disabled=move || {
                     pending_gen.get()
-                        || !matches!(state.get(), PState::NeedStrengths | PState::Empty { .. })
+                        || !matches!(
+                            state.get(),
+                            PState::NeedStrengths | PState::Ready(_) | PState::Empty { .. }
+                        )
                 }
                 on:input=move |ev| {
                     if let Ok(v) = event_target_value(&ev).parse::<u8>() {
@@ -317,12 +320,12 @@ fn strength_tuner(
                     {strength_row("金錢", strengths, pending_gen, state, |s| s.money, |s, v| s.money = v)}
                     {strength_row("健康", strengths, pending_gen, state, |s| s.health, |s, v| s.health = v)}
                 </div>
-                <Show when=move || matches!(state.get(), PState::NeedStrengths | PState::Empty { .. })>
+                <Show when=move || matches!(state.get(), PState::NeedStrengths | PState::Ready(_) | PState::Empty { .. })>
                     <p class="prediction-tuner-hint">
-                        {move || if matches!(state.get(), PState::Empty { .. }) {
-                            "空週仍可繼續調整；全部為 0 代表本週先不產生預測。"
-                        } else {
-                            "調整好之後再產生本週預測；全部為 0 代表本週先不產生預測。"
+                        {move || match state.get() {
+                            PState::Ready(_) => "想換一組角度可以再預測；既有預測與回饋會保留。",
+                            PState::Empty { .. } => "空週仍可繼續調整；全部為 0 代表本週先不產生預測。",
+                            _ => "調整好之後再產生本週預測；全部為 0 代表本週先不產生預測。",
                         }}
                     </p>
                     <button
@@ -339,16 +342,10 @@ fn strength_tuner(
                                 }
                             });
                         }
-                    >{move || if matches!(state.get(), PState::Empty { .. }) {
-                        "重新產生本週預測"
-                    } else {
-                        "產生本週預測"
+                    >{move || match state.get() {
+                        PState::NeedStrengths => "產生本週預測",
+                        _ => "再預測一次",
                     }}</button>
-                </Show>
-                <Show when=move || matches!(state.get(), PState::Ready(_))>
-                    <p class="prediction-tuner-locked">
-                        "本週感知已隨預測固定；這裡保留快照供你查看，下一週會再開放調整。"
-                    </p>
                 </Show>
             </div>
         </Show>
