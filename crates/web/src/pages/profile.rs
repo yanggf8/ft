@@ -231,13 +231,15 @@ fn domain_label(d: DomainWire) -> &'static str {
     }
 }
 
-fn zeros() -> DomainStrengths {
+/// 中性起點：先讓本週有基本感度，使用者仍可把不相關的領域拉回 0。
+/// 1 = 略有感，比全 0 更像可直接微調的 EQ，而不是空白表單。
+fn default_strengths() -> DomainStrengths {
     DomainStrengths {
-        work: 0,
-        love: 0,
-        family: 0,
-        money: 0,
-        health: 0,
+        work: 1,
+        love: 1,
+        family: 1,
+        money: 1,
+        health: 1,
     }
 }
 
@@ -245,7 +247,7 @@ fn is_all_zero(s: &DomainStrengths) -> bool {
     s.work == 0 && s.love == 0 && s.family == 0 && s.money == 0 && s.health == 0
 }
 
-/// F4 五領域 0–3 列（沿用人格測驗的 quiz-choice radio 體例；預設 0，只點有感的）。
+/// F4 五領域 0–3 列（沿用人格測驗的 quiz-choice radio 體例；預設 1，可再調整）。
 /// `get`/`set` 為欄位存取器 — Leptos view 無法動態索引結構體欄位。
 fn strength_level(v: u8) -> &'static str {
     match v {
@@ -309,7 +311,7 @@ fn strength_tuner(
                         <strong>"本週感知調整器"</strong>
                         <span class="prediction-tuner-caption">"像 EQ 一樣，拖曳到最貼近你本週的程度"</span>
                     </div>
-                    <span class="prediction-tuner-scale">"0 無感 · 3 很有感"</span>
+                    <span class="prediction-tuner-scale">"預設 1 略有感 · 0 無感 · 3 很有感"</span>
                 </div>
                 <div class="prediction-tuner-rows">
                     {strength_row("工作", strengths, pending_gen, state, |s| s.work, |s, v| s.work = v)}
@@ -381,7 +383,7 @@ async fn card_init_inner(
                 .unwrap_or(false);
             cycle_seen.set(Some(resp.cycleId.clone()));
             if rollover {
-                strengths.set(zeros());
+                strengths.set(default_strengths());
             }
             if let Some(snapshot) = resp.strengths {
                 strengths.set(snapshot);
@@ -525,7 +527,7 @@ fn PredictionsCard() -> impl IntoView {
     let pending_check = RwSignal::new(None::<TriggerWire>);
     let pending_feedback = RwSignal::new(None::<String>);
     let notice = RwSignal::new(None::<String>);
-    let strengths = RwSignal::new(zeros());
+    let strengths = RwSignal::new(default_strengths());
     let pending_gen = RwSignal::new(false);
     let cycle_seen = RwSignal::new(None::<String>);
 
