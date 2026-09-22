@@ -1,17 +1,15 @@
 //! Profile page — port of `ProfilePage.tsx` into the shared `UserProfile` type.
 
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use leptos::task::spawn_local_scoped_with_cancellation as spawn_local;
 
+use crate::auth::use_auth;
+use crate::components::BirthDataForm;
 use ft_schema::api::{
     CheckSituationRequest, DomainStrengths, DomainWire, FeedbackRequest,
     GeneratePredictionsRequest, ListPredictionsResponse, ResponseWire, SituationWire, TriggerWire,
 };
 use std::collections::HashSet;
-use wasm_bindgen::prelude::*;
-
-use crate::auth::use_auth;
-use crate::components::BirthDataForm;
 
 #[component]
 pub fn ProfilePage() -> impl IntoView {
@@ -148,7 +146,7 @@ fn PersonalityCard() -> impl IntoView {
     {
         let data = data;
         let loading = loading;
-        leptos::task::spawn_local(async move {
+        spawn_local(async move {
             if let Ok(resp) = crate::api::get_personality(false).await {
                 data.set(Some(resp));
             }
@@ -538,39 +536,6 @@ fn PredictionsCard() -> impl IntoView {
         let cycle_seen = cycle_seen;
         spawn_local(async move {
             card_init(&state, &initing, &strengths, &cycle_seen).await;
-        });
-    }
-
-    // P1-2（Grok 二審）：跨週一長駐 /profile — window focus 時重比 cycleId
-    // （經 cycle_seen，任何狀態下都比對，NeedStrengths 中也會重置），
-    // 變了就重跑初始動線（STALE_CYCLE 對 checks 走不到，不能只靠它）。
-    {
-        let state = state;
-        let initing = initing;
-        let strengths = strengths;
-        let cycle_seen = cycle_seen;
-        Effect::new(move |_| {
-            if let Some(win) = web_sys::window() {
-                let cb = Closure::<dyn FnMut()>::new(move || {
-                    let state = state;
-                    let initing = initing;
-                    let strengths = strengths;
-                    let cycle_seen = cycle_seen;
-                    spawn_local(async move {
-                        if let Ok(resp) = crate::api::get_predictions(true).await {
-                            let changed = cycle_seen
-                                .get_untracked()
-                                .map(|c| c != resp.cycleId)
-                                .unwrap_or(false);
-                            if changed {
-                                card_init(&state, &initing, &strengths, &cycle_seen).await;
-                            }
-                        }
-                    });
-                });
-                let _ = win.add_event_listener_with_callback("focus", cb.as_ref().unchecked_ref());
-                cb.forget();
-            }
         });
     }
 
