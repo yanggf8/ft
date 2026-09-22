@@ -39,3 +39,7 @@ crates/api/build/
 
 # Codex CLI local state
 .codex
+
+# Python cache (scripts/ helper tools)
+__pycache__/
+*.pyc
