@@ -249,38 +249,98 @@ fn is_all_zero(s: &DomainStrengths) -> bool {
 
 /// F4 五領域 0–3 列（沿用人格測驗的 quiz-choice radio 體例；預設 0，只點有感的）。
 /// `get`/`set` 為欄位存取器 — Leptos view 無法動態索引結構體欄位。
+fn strength_level(v: u8) -> &'static str {
+    match v {
+        0 => "無感",
+        1 => "略有感",
+        2 => "有感",
+        _ => "很有感",
+    }
+}
+
+/// F4 五領域 EQ 調整列。未生成時可拖曳；週期凍結後保留快照但鎖定，
+/// 避免使用者誤以為改動會回寫已產生、可驗證的本週預測。
 fn strength_row(
     label: &'static str,
-    field: &'static str,
     strengths: RwSignal<DomainStrengths>,
     pending_gen: RwSignal<bool>,
+    state: RwSignal<PState>,
     get: fn(&DomainStrengths) -> u8,
     set: fn(&mut DomainStrengths, u8),
 ) -> impl IntoView {
-    let input_name = format!("f4-{field}");
-    let choices = [0u8, 1, 2, 3];
+    let aria_label = format!("{label}感知強度");
     view! {
-        <fieldset class="quiz-item" style="margin:0">
-            <legend style="font-size:0.85rem">{label}</legend>
-            <div class="quiz-choices" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-                {choices.iter().map(|v| {
-                    let v = *v;
-                    view! {
-                        <label class="quiz-choice">
-                            <input
-                                type="radio"
-                                name=input_name.clone()
-                                value=v
-                                prop:checked=move || get(&strengths.get()) == v
-                                prop:disabled=move || pending_gen.get()
-                                on:change=move |_| strengths.update(|s| set(s, v))
-                            />
-                            <span class="quiz-choice-n" aria-hidden="true">{v}</span>
-                        </label>
+        <label class="strength-slider-row">
+            <span class="strength-slider-label">{label}</span>
+            <input
+                type="range"
+                min="0"
+                max="3"
+                step="1"
+                aria-label=aria_label
+                prop:value=move || get(&strengths.get()).to_string()
+                prop:disabled=move || pending_gen.get() || !matches!(state.get(), PState::NeedStrengths)
+                on:input=move |ev| {
+                    if let Ok(v) = event_target_value(&ev).parse::<u8>() {
+                        strengths.update(|s| set(s, v.min(3)));
                     }
-                }).collect_view()}
+                }
+            />
+            <output class="strength-slider-value">{move || strength_level(get(&strengths.get()))}</output>
+        </label>
+    }
+}
+
+fn strength_tuner(
+    state: RwSignal<PState>,
+    strengths: RwSignal<DomainStrengths>,
+    pending_gen: RwSignal<bool>,
+    notice: RwSignal<Option<String>>,
+) -> impl IntoView {
+    view! {
+        <Show when=move || matches!(state.get(), PState::NeedStrengths | PState::Ready(_) | PState::Empty { .. })>
+            <div class="prediction-tuner">
+                <div class="prediction-tuner-head">
+                    <div>
+                        <strong>"本週感知調整器"</strong>
+                        <span class="prediction-tuner-caption">"像 EQ 一樣，拖曳到最貼近你本週的程度"</span>
+                    </div>
+                    <span class="prediction-tuner-scale">"0 無感 · 3 很有感"</span>
+                </div>
+                <div class="prediction-tuner-rows">
+                    {strength_row("工作", strengths, pending_gen, state, |s| s.work, |s, v| s.work = v)}
+                    {strength_row("感情", strengths, pending_gen, state, |s| s.love, |s, v| s.love = v)}
+                    {strength_row("家庭", strengths, pending_gen, state, |s| s.family, |s, v| s.family = v)}
+                    {strength_row("金錢", strengths, pending_gen, state, |s| s.money, |s, v| s.money = v)}
+                    {strength_row("健康", strengths, pending_gen, state, |s| s.health, |s, v| s.health = v)}
+                </div>
+                <Show when=move || matches!(state.get(), PState::NeedStrengths)>
+                    <p class="prediction-tuner-hint">
+                        "調整好之後再產生本週預測；全部為 0 代表本週先不產生預測。"
+                    </p>
+                    <button
+                        class="btn-primary"
+                        disabled=move || pending_gen.get()
+                        on:click=move |_| {
+                            spawn_local({
+                                let state = state;
+                                let strengths = strengths;
+                                let pending_gen = pending_gen;
+                                let notice = notice;
+                                async move {
+                                    do_generate(&state, &strengths, &pending_gen, &notice).await;
+                                }
+                            });
+                        }
+                    >"產生本週預測"</button>
+                </Show>
+                <Show when=move || matches!(state.get(), PState::Ready(_) | PState::Empty { .. })>
+                    <p class="prediction-tuner-locked">
+                        "本週感知已隨預測固定；這裡保留快照供你查看，下一週會再開放調整。"
+                    </p>
+                </Show>
             </div>
-        </fieldset>
+        </Show>
     }
 }
 
@@ -316,6 +376,9 @@ async fn card_init_inner(
             cycle_seen.set(Some(resp.cycleId.clone()));
             if rollover {
                 strengths.set(zeros());
+            }
+            if let Some(snapshot) = resp.strengths {
+                strengths.set(snapshot);
             }
             if !resp.predictions.is_empty() {
                 state.set(PState::Ready(Box::new(resp)));
@@ -520,6 +583,8 @@ fn PredictionsCard() -> impl IntoView {
                 <p class="error">{move || notice.get().clone().unwrap_or_default()}</p>
             </Show>
 
+            {strength_tuner(state, strengths, pending_gen, notice)}
+
             <Show
                 when=move || matches!(state.get(), PState::Ready(_))
                 fallback=move || {
@@ -530,42 +595,16 @@ fn PredictionsCard() -> impl IntoView {
                             <a href="/personality" class="btn-link" style="text-decoration:none">"前往測驗 →"</a>
                         }.into_any(),
                         PState::NeedStrengths => {
-                            let busy = move || pending_gen.get();
                             view! {
-                                <p class="muted" style="font-size:0.85rem;margin-bottom:0.6rem">
-                                    "這週哪些領域特別有感？沒有的留 0。"
+                                <p class="muted" style="font-size:0.85rem">
+                                    "先用上面的調整器標記這週的感知，再產生預測。"
                                 </p>
-                                <div style="display:grid;gap:0.4rem;margin-bottom:0.6rem">
-                                    {strength_row("工作", "work", strengths, pending_gen, |s| s.work, |s, v| s.work = v)}
-                                    {strength_row("感情", "love", strengths, pending_gen, |s| s.love, |s, v| s.love = v)}
-                                    {strength_row("家庭", "family", strengths, pending_gen, |s| s.family, |s, v| s.family = v)}
-                                    {strength_row("金錢", "money", strengths, pending_gen, |s| s.money, |s, v| s.money = v)}
-                                    {strength_row("健康", "health", strengths, pending_gen, |s| s.health, |s, v| s.health = v)}
-                                </div>
-                                <p class="muted" style="font-size:0.75rem;margin-bottom:0.75rem">
-                                    "目前會產生預測的領域：工作、金錢、感情。全部留 0 表示本週不會產生預測。"
-                                </p>
-                                <button
-                                    class="btn-primary"
-                                    disabled=busy
-                                    on:click=move |_| {
-                                        spawn_local({
-                                            let state = state;
-                                            let strengths = strengths;
-                                            let pending_gen = pending_gen;
-                                            let notice = notice;
-                                            async move {
-                                                do_generate(&state, &strengths, &pending_gen, &notice).await;
-                                            }
-                                        });
-                                    }
-                                >"產生本週預測"</button>
                             }.into_any()
                         }
                         PState::Empty { all_zero } => {
                             if all_zero {
                                 view! {
-                                    <p class="muted">"本週你沒有標記有感的領域，所以沒有產生預測；下週有感的時候再標記就好。"</p>
+                                    <p class="muted">"本週你沒有標記有感的領域，所以沒有產生預測；上面的感知快照會保留到本週結束。下週會再開放調整。"</p>
                                 }.into_any()
                             } else {
                                 view! {

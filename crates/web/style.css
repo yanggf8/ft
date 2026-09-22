@@ -17,6 +17,7 @@
      tighter one is what to sample next time. */
   --void: #0a1733;        /* deep 星空藍 — body gradient near stop */
   --deep-space: #14224a;  /* lighter horizon blue — far stop  */
+  --galaxy-y-offset: clamp(40px, 9vh, 96px); /* keep the Milky-Way band below the hero/nav overlap */
   --heading: #e5e4e2;
   --text: #dde2ec;
   --silver-dim: #a9b0bc;
@@ -118,6 +119,7 @@ body {
   height: 100%;
   pointer-events: none;
   z-index: -2;
+  transform: translateY(var(--galaxy-y-offset));
 }
 
 /* band haze — same -18deg axis as the canvas particles (spec §4) */
@@ -126,7 +128,7 @@ body {
   position: absolute;
   left: -40%;
   right: -40%;
-  top: 50%;
+  top: calc(50% + var(--galaxy-y-offset));
   height: 130vmax;
   transform: translateY(-50%) rotate(-18deg);
   background:
@@ -504,6 +506,53 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 }
 .hour-row { display: flex; gap: 0.5rem; align-items: center; }
 .hour-unknown { display: flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; color: var(--silver-dim); }
+.prediction-tuner {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem 0.85rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px 4px 12px 4px;
+  background: rgba(10, 23, 51, 0.42);
+}
+.prediction-tuner-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+.prediction-tuner-head strong { color: var(--heading); font-size: 0.95rem; }
+.prediction-tuner-caption,
+.prediction-tuner-scale,
+.prediction-tuner-hint,
+.prediction-tuner-locked {
+  color: var(--silver-dim);
+  font-size: 0.75rem;
+}
+.prediction-tuner-caption { display: block; margin-top: 0.15rem; }
+.prediction-tuner-scale { white-space: nowrap; }
+.prediction-tuner-rows { display: grid; gap: 0.5rem; }
+.strength-slider-row {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) 3.5rem;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+}
+.strength-slider-label { color: var(--text); }
+.strength-slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--starlight);
+  cursor: pointer;
+}
+.strength-slider-row input[type="range"]:disabled { cursor: not-allowed; }
+.strength-slider-value {
+  color: var(--starlight);
+  font-size: 0.78rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.prediction-tuner-hint { margin: 0.75rem 0; }
+.prediction-tuner-locked { margin: 0.75rem 0 0; }
 
 /* ── ziwei palace grid ── */
 .chart-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--silver-dim); }
