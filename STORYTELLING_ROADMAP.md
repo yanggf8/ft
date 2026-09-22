@@ -1,5 +1,11 @@
 # 🌌 FortuneT V2 - Storytelling Feature Roadmap
 
+> **文件狀態（2026-09-22）**：這是 2025-01-25 的歷史規劃文件，不是目前的待辦清單。
+> FortuneT 的 P0/P1 generation chain 已在 2026-09 上線；目前實際狀態請以
+> `AGENTS.md`、`CLAUDE.md` 與 `docs/ARCHITECTURE.md` 為準。以下尚未勾選的
+> conversational AI、Cosmic Loom、Soul Symbols、audio 等項目代表未承諾的後續產品方向，
+> 不應解讀為本次 beta 上線的阻塞項目。
+
 ## 📋 Executive Summary
 
 This roadmap defines the phased implementation of "The Cosmic Weave" storytelling layer - a narrative experience that synthesizes Eastern (Zi Wei Dou Shu) and Western (Zodiac) astrology into a unified, emotionally engaging story about the user's life.
