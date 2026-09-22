@@ -413,6 +413,18 @@ main { flex: 1; }
 .cta:active { filter: brightness(0.95); transform: translateY(1px); }
 /* disabled = 處理中/已鎖定（Google 登入 debounce、magic-link 送信中） */
 .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; filter: none; }
+.auth-submit { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.button-spinner {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: button-spin 0.7s linear infinite;
+}
+@keyframes button-spin { to { transform: rotate(360deg); } }
 .btn-block { width: 100%; padding: 1rem 1.5rem; border-radius: 8px; border: none; font-size: 1rem; }
 .btn-link, .back-link { background: none; border: none; color: #cfd6e0; cursor: pointer; }
 .back-link { margin-bottom: 1rem; }
