@@ -95,6 +95,18 @@ POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 
 
 半自動 E2E：`./scripts/predictions-e2e.sh -t <session>`（自己 mint session：造 `login_tokens` 列 + 走 `/api/auth/verify`；已實測整鏈 2026-09-04，並據實測修正 F7 `db::batch` 的 Hrana v2 請求形狀 `{"type":"batch","batch":{"steps":[...]}}`）。
 
+### Practice Endpoints (2026-10-20, spec: docs/superpowers/specs/2026-10-20-weekly-practice-design.md)
+```bash
+GET    /api/practice                  # 總覽（cycleId/practiceEpoch/當週+前週摘要/進行中計畫/最近 10 筆回報）
+GET    /api/practice/history          # 已結束計畫分頁（cursor, limit 1..20）
+GET    /api/practice/plans/:id/attempts # 指定計畫回報分頁
+POST   /api/practice/plans            # 建立/更換計畫（requestId 冪等、expectedEpoch 防過期分頁）
+POST   /api/practice/plans/:id/attempts # 記一次嘗試（tried+helpfulness 或 obstacle，requestId 冪等）
+POST   /api/practice/plans/:id/end    # 結束計畫（冪等）
+DELETE /api/practice                  # 刪全部練習資料並 practice_epoch+1
+```
+前置：只需登入。不讀人格、命盤、F5 預測或 F8 對照資料。2026-10-20 已遷移正式 Turso（`scripts/migrations/2026-10-20-practice.sql`）並部署；登入態 E2E 待補驗。
+
 ### Deployed Infrastructure
 
 | Component | Status | URL/ID |
@@ -115,7 +127,7 @@ POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 
 | `IFLOW_API_KEY` | Primary AI |
 | `GROQ_API_KEY` | Secondary AI |
 | `CEREBRAS_API_KEY` | Tertiary AI |
-| `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret) |
+| `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret)；`/health/db` 回 401 `token expired` 時輪換：`turso db tokens create fortunet --group \| wrangler secret put TURSO_AUTH_TOKEN`（2026-10-20 已輪換為 never-expire group token） |
 
 ---
 
@@ -147,7 +159,7 @@ ft/
 │   ├── api/                    # ft-api (fortunet-api, routes/ + durable_objects/ + services/)
 │   │   └── src/
 │   │       ├── lib.rs          # #[event(fetch)] + CORS/headers
-│   │       ├── routes/         # auth, users, charts, oauth, admin_invites, personality, predictions
+│   │       ├── routes/         # auth, users, charts, oauth, admin_invites, personality, predictions, practice
 │   │       ├── durable_objects/# SessionDO, AIMutexDO
 │   │       └── services/       # billing, birth_hash (incl. generation_tags), engine, ai/prompts, generation, predictions (F5)
 │   └── web/                    # ft-web (Leptos CSR, generation.rs synced with api)
@@ -261,6 +273,6 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 
 ---
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-10-20
 **API URL**: https://fortunet-api.yanggf.workers.dev
 **Workspace**: Cargo (`ft-api` / `ft-worker` / `ft-web` / `ft-schema` / `ft-ziwei` / `ft-western` / `ft-big5`)

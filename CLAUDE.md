@@ -80,8 +80,8 @@ Detailed walkthrough — routes, DOs, services, engines, frontend, F5 design not
 notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map:
 
 - `crates/schema` — shared DTOs (`api` wire contract, `storage` DO format) + pure feature
-  logic (`symbolic`, `predict`, `anchors`, `cycle`, `naming` 姓名學 v1); single source of
-  truth, no TS drift.
+  logic (`symbolic`, `predict`, `anchors`, `cycle`, `naming` 姓名學 v1, `practice`
+  本週小練習題庫與契約); single source of truth, no TS drift.
 - `crates/domain/{ziwei,western,big5}` — engines (ziwei wraps x-iztro; western = real
   ephemeris; big5 = F1 scoring).
 - `crates/worker` — `fortunet-engine` Worker (service binding `FT_ENGINE`).
