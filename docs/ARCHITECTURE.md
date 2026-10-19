@@ -8,7 +8,8 @@
 - `crates/schema` — shared DTOs. **`api`** (request/response contract both Worker and Web
   deserialize) and **`storage`** (DO storage key/format for bit-compat), plus pure feature
   logic / static truth tables: `items` (IPIP-15), `symbolic`, `predict`, `anchors`, `cycle`,
-  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18). This crate is the single source
+  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18), and `practice`
+  (本週小練習題庫、驗證與 API wire contract). This crate is the single source
   of truth that removes TS↔Rust drift.
 - `crates/domain/ziwei` — ZiWei engine (wraps `x-iztro`).
 - `crates/domain/western` — Western engine (hybrid: `solar-ephemeris` Moon + `vsop87` planets).
@@ -22,7 +23,7 @@
 - **Entry**: `lib.rs` — `#[event(fetch)]`, OPTIONS preflight, security headers, CORS
   (exact-hostname allowlist), x-request-id, JSON 404 normalization.
 - **Routes** (`routes/`): `auth.rs`, `users.rs`, `charts.rs`, `personality.rs` (F1 + F3
-  overlay + 資格矩陣), `predictions.rs`, `admin_invites.rs`, `oauth.rs`
+  overlay + 資格矩陣), `predictions.rs`, `practice.rs`, `admin_invites.rs`, `oauth.rs`
   (+ `common.rs` shared helpers: `auth_user`, rate limit, `body_too_large` 64 KiB cap,
   `embed_meta`, `extracted_version`).
 - **Durable Objects** (`durable_objects/`):
@@ -40,7 +41,8 @@
   `invite` (邀請碼 + `valid_expires_iso`), `login_token` (magic-link tokens).
 - **Database** — `users`, `interpretations`, `personality_profiles` + F5 四表
   (`predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations`) +
-  `invites` + `oauth_exchanges`. `subscriptions`/`usage_tracking`/`ai_quota` are provisioned
+  `invites` + `oauth_exchanges` + `practice_plans`/`practice_attempts`.
+  `subscriptions`/`usage_tracking`/`ai_quota` are provisioned
   but unused. `services/db.rs` speaks Hrana over `worker::Fetch`; the `libsql` crate's own
   `cloudflare` feature is unusable here because it pins `worker ^0.6` against our 0.8.
 
@@ -57,11 +59,27 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
   `exchange_oauth_code`, `fetch_overlay`).
 - **Pages**: `Home`, `Login`, `Profile`, `Personality` (quiz + F3 overlay), `Divination`
   (ziwei/western), `Story`, `Admin`, `Naming`＋`Glossary`（2026-09-18 起公開頁，免登入）。
-- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PredictionsCard`
-  （F5 本週預測 — F6 兩段式動線）；`glossary.rs` 靜態詞條（名詞解釋頁渲染）。
+- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PracticeCard`
+  （本週小練習）與 `PredictionsCard`（F5 本週預測 — F6 兩段式動線）；`glossary.rs`
+  靜態詞條（名詞解釋頁渲染）。
 - Uses `ft-schema::api` types directly — no wire-type drift.
 - `crates/web/_headers` — Pages 安全標頭(HSTS/CSP/X-Frame-Options/nosniff/Referrer/
   Permissions-Policy);`build-web.sh` 會複製進 dist。
+
+## 本週小練習（2026-10-20，已部署）
+
+登入者在「我的命格」自選固定題庫中的一個日常行動，記錄是否嘗試及主觀幫助程度，
+可以換動作、結束、查看分頁歷史或刪除全部練習資料。`ft_schema::practice` 是前後端
+共用契約與題庫；API 的七個 `/api/practice` 路由在 `routes/practice.rs`；
+`scripts/schema.sql` 是新資料庫權威，既有 Turso 使用
+`scripts/migrations/2026-10-20-practice.sql` 一次性遷移。單一進行中計畫由部分唯一索引
+保護；`requestId` 用於建立與回報重試，`users.practice_epoch` 阻止刪除後的過期分頁
+重新建立資料。每週摘要跨同週所有計畫合計，以台北週一起算。
+
+練習不讀人格分數、命盤、F5 預測或 F8 對照組資料，亦不把練習紀錄寫入 F5/F8。
+本功能是自助行動與回顧，不提供診斷或神經回饋。完整產品與資料契約見
+`docs/superpowers/specs/2026-10-20-weekly-practice-design.md`。2026-10-20 已遷移正式
+Turso 並部署 API 與前端，`verify-deployment.sh` 全過，未登入探測 `/api/practice` 回 401。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 

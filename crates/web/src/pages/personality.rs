@@ -428,7 +428,7 @@ pub fn PersonalityPage() -> impl IntoView {
                                             .and_then(|window| {
                                                 window
                                                     .confirm_with_message(
-                                                        "研究揭露：人格資料將用於匿名研究對照。確定刪除全部人格資料？",
+                                                        "研究揭露：人格資料將用於匿名研究對照。確定刪除全部人格資料？小練習紀錄須在「我的命格」另行刪除。",
                                                     )
                                                     .ok()
                                             })
