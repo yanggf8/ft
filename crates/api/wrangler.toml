@@ -18,6 +18,12 @@ class_name = "AIMutexDO"
 name = "RATE_LIMIT"
 class_name = "RateLimitDO"
 
+# Workers AI — palm v1 特徵抽取（spec docs/superpowers/specs/2026-10-27-palm-v1-design.md）：
+# llama-4-scout 主環＋llama-3.2-11b-vision 備環（皆免費層模型，每日 10k neurons 內零成本）。
+# binding 不需 API key、不出站；REST 等效打 /accounts/{id}/ai/run/（spike 已實證）。
+[ai]
+binding = "AI"
+
 # R2 Storage
 [[r2_buckets]]
 binding = "STORAGE"
