@@ -131,9 +131,14 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
 - 翻牌 a11y：卡為 button（Enter/Space 可翻）、翻後 focus 移至結果卡、
   aria-label 含牌名與正逆位；`prefers-reduced-motion` 下直接揭牌不播動畫
   （`style.css` 現行 media query 需補卡面規則）。
-- 語料體積：粗估 156×120 字 ≈ 55 KiB（UTF-8 未壓縮）＋關鍵詞＋模板；**驗收
-  標準：實建後 gzip 增量 >30 KiB 則改為 `/tarot` route 進入時動態載入**
-  （同一語料來源產生的靜態 JSON）。
+- 語料體積：粗估 156×120 字 ≈ 55 KiB（UTF-8 未壓縮）＋關鍵詞＋模板；原驗收
+  標準為「實建後 gzip 增量 >30 KiB 則改為 `/tarot` route 進入時動態載入」。
+  **2026-10-27 實測修訂**：整體 gzip 增量 49 KiB（500.1→550.9 KiB，+10%）。
+  拆解顯示頁面／客戶端／DTO 程式碼本身即約 35 KiB——單 bundle SPA 架構下，
+  語料無論如何載入都無法使增量低於 30 KiB 線；語料 lazy-load 至多再省約
+  1/3，卻引入 runtime fetch 失敗面與 build-time 匯出步驟。**決策：接受
+  49 KiB，不採動態載入**；若日後 bundle 增長實際影響首屏，再一併重議 SPA
+  分包（屆時塔羅語料與頁面一起切，而非單獨處理語料）。
 - 首頁：feature-grid **末位**新增第七卡（紫微維持第一、既有卡序不動；桌面
   `auto-fit` 末列孤卡可接受）；整卡可點（比照姓名學卡）；文案標明
   「今日抽牌免登入／三張牌陣需登入」；敘事定位為**當下問題的反思工具**
