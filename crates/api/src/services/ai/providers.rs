@@ -1,17 +1,16 @@
-//! AI provider calls — mirrors backend/src/services/ai/iflow.ts + the inline Groq/
-//! Cerebras calls in ai-mutex-do.ts:callProvider.
+//! AI provider calls — one adapter per provider in the failover chain.
 //!
-//! iFlow (GLM-4.6) is a dedicated adapter; Groq & Cerebras go through the
-//! OpenAI-compatible /chat/completions endpoint with the same JSON envelope.
-//! All three use `Fetch::Request` with a JSON body and a 45s timeout (mirrors
-//! `AbortSignal.timeout(45000)` in the TS version).
+//! Groq & Cerebras both go through the OpenAI-compatible /chat/completions
+//! endpoint with the same JSON envelope. Each uses `Fetch::Request` with a JSON
+//! body and a 45s timeout. The chain shrank to these two on 2026-10-27, when
+//! the former primary's free tier ended; Groq is now priority 1 and Cerebras
+//! priority 2.
 
 use std::time::Duration;
 
 use super::prompts::{build_prompt, get_system_prompt};
 use worker::{Delay, Error, Fetch, Headers, Method, Request, RequestInit};
 
-pub const IFLOW_API_URL: &str = "https://apis.iflow.cn/v1/chat/completions";
 pub const GROQ_BASE: &str = "https://api.groq.com/openai/v1";
 pub const CEREBRAS_BASE: &str = "https://api.cerebras.ai/v1";
 
@@ -50,7 +49,6 @@ pub async fn call_provider(
     });
 
     let (url, auth) = match name {
-        "iflow" => (IFLOW_API_URL.to_string(), format!("Bearer {}", api_key)),
         "groq" => (
             format!("{}/chat/completions", GROQ_BASE),
             format!("Bearer {}", api_key),

@@ -23,7 +23,6 @@ unset CLOUDFLARE_API_TOKEN && wrangler [command]
 ```bash
 unset CLOUDFLARE_API_TOKEN && wrangler deploy
 unset CLOUDFLARE_API_TOKEN && wrangler deployments list
-unset CLOUDFLARE_API_TOKEN && wrangler secret put IFLOW_API_KEY
 unset CLOUDFLARE_API_TOKEN && wrangler pages deploy dist --project-name=fortunet
 turso db shell fortunet "SELECT COUNT(*) FROM users"
 ```
@@ -68,9 +67,10 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 | Priority | Provider | Model | 特點 |
 |----------|----------|-------|------|
-| Primary | iFlow | GLM-4.6 | 敘事最佳、溫柔專業 |
-| Secondary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
-| Tertiary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
+| Primary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
+| Secondary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
+
+> iFlow（前 Primary，GLM-4.6）免費服務已於 2026-10-27 終止（key 一律被拒），已自鏈中移除，未加入替代 provider。
 
 **AIMutexDO**: serialized (1 concurrent), `MAX_QUEUE_DEPTH=8`, `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource tracking (`requests/tokens/errors/lastError/latencySum/failovers`), 45s provider timeout, offline stub when all fail. `SessionDO` key `session`, 7-day TTL.
 
@@ -112,9 +112,8 @@ POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 
 
 | Secret | Purpose |
 |--------|---------|
-| `IFLOW_API_KEY` | Primary AI |
-| `GROQ_API_KEY` | Secondary AI |
-| `CEREBRAS_API_KEY` | Tertiary AI |
+| `GROQ_API_KEY` | Primary AI |
+| `CEREBRAS_API_KEY` | Secondary AI |
 | `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret) |
 
 ---
@@ -242,7 +241,7 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 - Workers: ~10 req/day (testing)
 - Turso: libSQL (no D1 cap)
 - DO: session + AI mutex (queue 8 / 60s)
-- AI: free tiers (iFlow/Groq/Cerebras) within $0
+- AI: free tiers (Groq/Cerebras) within $0
 
 **Free Tier Limits**: Workers 100K/day, DO 400K/day, R2 10GB, Turso free.
 

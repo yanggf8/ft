@@ -28,7 +28,7 @@
 - **我的命格** - Unified profile: personality, generation story, Wuxing/BaZi, Western summary
 - **本週預測 (F5)** - 每週可驗證的情境預測（work/money × T1–T6 規則錨點），F6 兩段式回饋（先問情境、再核對預測），forecast 於情境收齊後才揭露
 - **Generation Tags** - Birth-year derived tags (1940s–2010s), selectable as birth attribute for story grounding
-- **AI Interpretation** - 3-provider failover (iFlow → Groq → Cerebras), serialized via AIMutexDO, 45s provider timeout
+- **AI Interpretation** - 2-provider failover (Groq → Cerebras), serialized via AIMutexDO, 45s provider timeout
 - **Free Trial** - 30 days for all new users
 - **Auth** - Passwordless email + Google OAuth (state cookie, session via SessionDO, 7-day TTL)
 
@@ -43,7 +43,7 @@
 - **Engine**: Isolated Worker `fortunet-engine` via service binding (`FT_ENGINE`), ZiWei `x-iztro` + Western `vsop87`
 - **Database**: Turso (libSQL, Hrana over Fetch — `worker ^0.8` compat, no D1)
 - **Cache**: Durable Objects — `SessionDO` + `AIMutexDO` (queue depth 8, 60s wait, 1 concurrent)
-- **AI**: iFlow GLM-4.6, Groq Kimi-K2, Cerebras Llama-3.3-70b
+- **AI**: Groq Kimi-K2, Cerebras Llama-3.3-70b
 
 ---
 
@@ -136,7 +136,7 @@ Recent highlights (2026-09): `我的命盤` → `我的命格` rename, Wuxing+Ba
 - **Backend**: Rust, Cloudflare Workers (`workers-rs` 0.8), Durable Objects
 - **Engine**: Rust, `x-iztro` (ZiWei), `solar-ephemeris` + `vsop87` (Western)
 - **Database**: Turso (libSQL, Hrana over `worker::Fetch`)
-- **AI**: iFlow / Groq / Cerebras (free tiers, failover)
+- **AI**: Groq / Cerebras (free tiers, failover)
 - **Shared DTOs**: `ft-schema` crate (wire + storage contract)
 
 ---

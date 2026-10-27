@@ -79,8 +79,8 @@
 **AI Test Results**:
 | Chart Type | Response Time | Quality (1-5) | Provider Used |
 |------------|---------------|---------------|---------------|
-| ZiWei | ___ sec | ___ | iFlow / Groq / Cerebras |
-| Western | ___ sec | ___ | iFlow / Groq / Cerebras |
+| ZiWei | ___ sec | ___ | Groq / Cerebras |
+| Western | ___ sec | ___ | Groq / Cerebras |
 
 ### Cross-Browser Testing
 - [ ] Chrome (desktop) - all features work

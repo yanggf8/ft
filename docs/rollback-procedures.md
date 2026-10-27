@@ -156,10 +156,13 @@ turso db shell fortunet < scripts/schema.sql
 
 ## Scenario 5: AI Provider Failures
 
-### Issue: Primary Provider (iFlow) Down
+### Issue: Primary Provider (Groq) Down
 
-**Automatic**: Failover to Groq (secondary)
+**Automatic**: Failover to Cerebras (secondary)
 **Manual**: Check AI Mutex DO logs
+
+> Historical: the original primary (iFlow) ended its free tier on 2026-10-27 and was
+> removed from the chain entirely; Groq became primary and no replacement was added.
 
 ### Issue: All Providers Down
 
@@ -210,7 +213,6 @@ unset CLOUDFLARE_API_TOKEN && wrangler deploy   # from crates/api, or: ./scripts
 **Immediate**:
 ```bash
 # Rotate all secrets
-unset CLOUDFLARE_API_TOKEN && wrangler secret put IFLOW_API_KEY
 unset CLOUDFLARE_API_TOKEN && wrangler secret put GROQ_API_KEY
 unset CLOUDFLARE_API_TOKEN && wrangler secret put CEREBRAS_API_KEY
 ```

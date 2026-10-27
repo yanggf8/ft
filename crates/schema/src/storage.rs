@@ -70,8 +70,11 @@ pub struct ExResourceError {
     pub message: String,
 }
 
-/// Provider names as used in `AIMutexDO` keys and the exresource `provider` field.
-pub const AIMUTEX_PROVIDERS: [&str; 3] = ["iflow", "groq", "cerebras"];
+/// Provider names as used in `AIMutexDO` keys and the exresource `provider` field,
+/// in failover-priority order (Groq first, Cerebras second). 2 providers since
+/// 2026-10-27, when the former primary's free tier ended and it was removed from
+/// the chain with no replacement.
+pub const AIMUTEX_PROVIDERS: [&str; 2] = ["groq", "cerebras"];
 
 /// Storage key under which `SessionDO` keeps its one session value.
 pub const SESSION_KEY: &str = "session";
@@ -84,4 +87,17 @@ pub fn rpm_key(provider: &str) -> String {
 /// Build the `exresource:{provider}:{date}` key. `date` is `YYYY-MM-DD` (UTC).
 pub fn exresource_key(provider: &str, date: &str) -> String {
     format!("exresource:{}:{}", provider, date)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AIMUTEX_PROVIDERS;
+
+    /// Pins the failover chain to 2 providers, in priority order: Groq first,
+    /// Cerebras second. The former primary's free tier ended 2026-10-27 and it
+    /// was removed from the chain entirely (no replacement added).
+    #[test]
+    fn failover_chain_is_groq_then_cerebras() {
+        assert_eq!(AIMUTEX_PROVIDERS.as_slice(), ["groq", "cerebras"]);
+    }
 }

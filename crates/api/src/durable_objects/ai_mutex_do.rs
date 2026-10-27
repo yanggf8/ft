@@ -1,12 +1,13 @@
-//! AI Mutex Durable Object — mirrors backend/src/durable-objects/ai-mutex-do.ts.
+//! AI Mutex Durable Object.
 //!
-//! - 3-provider failover: iFlow → Groq → Cerebras
+//! - 2-provider failover: Groq → Cerebras (the former primary's free tier
+//!   ended 2026-10-27; it was removed from the chain with no replacement)
 //! - Serializes requests (1 concurrent at a time; backpressure sheds load)
 //! - Tracks exresource (requests/tokens/errors/latency/failovers) per provider/day
 //! - rpm / rpd limits enforced before each provider call
 //!
-//! Storage keys (`rpm:{provider}`, `exresource:{provider}:{date}`) match the JS
-//! version so the Stage B in-place deploy keeps AI metrics intact (see
+//! Storage keys (`rpm:{provider}`, `exresource:{provider}:{date}`) keep their
+//! established shape, so previously recorded metrics stay readable (see
 //! `ft_schema::storage::MinuteRecord` / `ExResource`).
 
 // Field names below are semantic (JSON keys from the TS AIMutexDO request body:
@@ -23,16 +24,8 @@ use crate::services::clock;
 
 const MAX_QUEUE_DEPTH: usize = 8;
 const MAX_QUEUE_WAIT_MS: f64 = 60000.0;
-const RPM_LIMITS: [(&str, u32, f64); 3] = [
-    ("iflow", 1, f64::INFINITY),
-    ("groq", 30, 14400.0),
-    ("cerebras", 30, 14400.0),
-];
-const RPD_LIMITS: [(&str, f64); 3] = [
-    ("iflow", f64::INFINITY),
-    ("groq", 14400.0),
-    ("cerebras", 14400.0),
-];
+const RPM_LIMITS: [(&str, u32, f64); 2] = [("groq", 30, 14400.0), ("cerebras", 30, 14400.0)];
+const RPD_LIMITS: [(&str, f64); 2] = [("groq", 14400.0), ("cerebras", 14400.0)];
 
 struct QueuedEntry {
     queued_at: f64,
@@ -374,7 +367,6 @@ impl AIMutexDO {
 
 fn model_for(provider: &str) -> &'static str {
     match provider {
-        "iflow" => "GLM-4.6",
         "groq" => "openai/gpt-oss-20b",
         "cerebras" => "gpt-oss-120b",
         _ => "",

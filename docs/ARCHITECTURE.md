@@ -28,8 +28,9 @@
 - **Durable Objects** (`durable_objects/`):
   - `SessionDO` — key `"session"`, 7-day TTL. `get` deletes expired; `refresh` extends.
   - `AIMutexDO` — true serialization (1 concurrent via `queue`+`oneshot`), `MAX_QUEUE_DEPTH=8`,
-    `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource metrics, 3-provider failover
-    (iFlow → Groq → Cerebras) with a 45s provider timeout, and an offline stub when all
+    `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource metrics, 2-provider failover
+    (Groq → Cerebras；前任 primary 於 2026-10-27 免費服務終止後移除、未替代) with a 45s
+    provider timeout, and an offline stub when all
     providers fail.
   - `RateLimitDO` — cross-isolate persistent rate limiting, 8 shards (`rl:0..rl:7`).
 - **Services** (`services/`): `billing` (30-day trial), `birth_hash` (bit-for-bit JS-compatible),

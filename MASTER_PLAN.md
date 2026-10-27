@@ -399,13 +399,13 @@ CREATE INDEX idx_subscriptions_provider_ref ON subscriptions(provider, original_
 
 | Priority | Provider | Model | 特點 |
 |----------|----------|-------|------|
-| Primary | iFlow | GLM-4.6 | 敘事最佳、溫柔專業 |
-| Secondary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
-| Tertiary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
+| ~~Primary~~ | iFlow | GLM-4.6 | Superseded: 免費服務 2026-10-27 終止（key 一律被拒），已移出鏈、未替代 |
+| Primary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
+| Secondary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
 
 #### Implementation: `backend/src/durable-objects/ai-mutex-do.ts`
 
-> Superseded: Rust implementation in `crates/api/src/durable_objects/ai_mutex.rs` (`AIMutexDO`, `queue`+`oneshot` serialisation, `MAX_QUEUE_DEPTH=8`, 3-provider failover `iFlow → Groq → Cerebras`).
+> Superseded: Rust implementation in `crates/api/src/durable_objects/ai_mutex.rs` (`AIMutexDO`, `queue`+`oneshot` serialisation, `MAX_QUEUE_DEPTH=8`, 3-provider failover `iFlow → Groq → Cerebras`). 2026-10-27 起 iFlow 免費服務終止，鏈改為 2-provider `Groq → Cerebras`。
 
 *Original `ai-mutex-do.ts` (1 concurrent + exresource tracking) 已刪除 → 已由 `crates/api/src/durable_objects/ai_mutex.rs` / `crates/api/src/services/ai/` 取代。*
 
@@ -474,7 +474,7 @@ GET  /api/billing/entitlements
 ### Phase 2 Exit Criteria
 - [x] Zi Wei engine ported and tested
 - [x] Zodiac engine ported and tested
-- [x] AI integration with 3-provider failover (iFlow/Groq/Cerebras)
+- [x] AI integration with 3-provider failover (iFlow/Groq/Cerebras) — iFlow 免費服務 2026-10-27 終止，現為 2-provider (Groq/Cerebras)
 - [x] exresource tracking implemented
 - [x] Trial period billing (30 days free)
 - [ ] Native app IAP integration (App Store / Play Store)

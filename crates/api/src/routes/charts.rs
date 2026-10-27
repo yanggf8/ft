@@ -716,14 +716,12 @@ async fn get_birth_data(db: &db::Turso, user: &str) -> Result<UserBirthRow, Resp
 }
 
 fn anything_configured(ctx: &RouteContext<()>) -> bool {
-    let res = ["IFLOW_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY"]
-        .iter()
-        .any(|name| {
-            ctx.env
-                .secret(name)
-                .map(|s| !s.to_string().is_empty())
-                .unwrap_or(false)
-        });
+    let res = ["GROQ_API_KEY", "CEREBRAS_API_KEY"].iter().any(|name| {
+        ctx.env
+            .secret(name)
+            .map(|s| !s.to_string().is_empty())
+            .unwrap_or(false)
+    });
     res
 }
 
@@ -743,9 +741,6 @@ async fn call_ai_mutex(
         .and_then(|id| id.get_stub())
         .map_err(|_| error::error("ai unavailable", 503))?;
     let mut keys_map = serde_json::Map::new();
-    if let Some(v) = secret_or(&ctx.env, "IFLOW_API_KEY") {
-        keys_map.insert("iflow".to_string(), serde_json::Value::String(v));
-    }
     if let Some(v) = secret_or(&ctx.env, "GROQ_API_KEY") {
         keys_map.insert("groq".to_string(), serde_json::Value::String(v));
     }

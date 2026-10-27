@@ -40,7 +40,7 @@
 ### AI Interpretation
 - [ ] POST /api/charts/interpret (ZiWei)
 - [ ] POST /api/charts/interpret (Western)
-- [ ] AI provider failover (iFlow → Groq → Cerebras)
+- [ ] AI provider failover (Groq → Cerebras)
 - [ ] AI error handling
 - [ ] Rate limiting on AI calls
 
@@ -122,9 +122,9 @@ it('should complete full user flow', async () => {
 ### Priority 2: AI Failover
 ```typescript
 // 2. AI provider failover (requires API key manipulation)
-it('should failover to Groq when iFlow fails', async () => {
-  // This requires testing with invalid iFlow key
-  // Would catch: failover logic, Groq integration, error handling
+it('should failover to Cerebras when Groq fails', async () => {
+  // This requires testing with invalid Groq key
+  // Would catch: failover logic, Cerebras integration, error handling
 });
 ```
 

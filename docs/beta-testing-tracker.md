@@ -71,9 +71,9 @@
 - Error rate: ___% (Target: < 1%)
 
 ### AI Provider Stats
-- iFlow requests: ___ (success: ___, failed: ___)
-- Groq requests: ___ (success: ___, failed: ___)
-- Cerebras requests: ___ (success: ___, failed: ___)
+(iFlow retired 2026-10-27 — free tier ended, removed from the chain; no longer tracked)
+- Groq (primary) requests: ___ (success: ___, failed: ___)
+- Cerebras (secondary) requests: ___ (success: ___, failed: ___)
 - Failover events: ___
 
 ---
