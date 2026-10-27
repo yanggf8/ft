@@ -57,6 +57,10 @@ pub fn HomePage() -> impl IntoView {
                     <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
                     <p>"紫微、占星、姓名學常見名詞一次看懂"</p>
                 </A>
+                <A href="/tarot" attr:class="feature">
+                    <h3><span class="feature-icon">"🃏"</span>" 塔羅"</h3>
+                    <p>"今日抽牌免登入；三張牌陣解牌需登入，當下問題的反思工具"</p>
+                </A>
             </div>
         </div>
     }

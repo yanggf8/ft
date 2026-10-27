@@ -31,13 +31,25 @@ pub fn LoginPage() -> impl IntoView {
     // flow. It is exchanged (POST) for the session, so the session id itself
     // never rides any URL. Failure reads as "link expired": show the form with
     // a hint and let the user retry.
+    // ?next=（塔羅設計定稿）：登入回流目標。僅收本站相對路徑；存
+    // sessionStorage 供 /auth/verify 成功後取用——magic-link 信件會離開
+    // 本頁，URL 參數帶不過去。
+    if let Some(next) = crate::query_param("next") {
+        if crate::valid_login_next(&next) {
+            let _ = web_sys::window()
+                .and_then(|w| w.session_storage().ok())
+                .and_then(|s| s)
+                .map(|s| s.set_item("login_next", &next));
+        }
+    }
+
     if let Some(code) = crate::query_param("oauth_code") {
         if !code.is_empty() {
             spawn_local(async move {
                 match api::exchange_oauth_code(&code).await {
                     Ok(_) => {
                         if let Some(win) = web_sys::window() {
-                            let _ = win.location().set_href("/");
+                            let _ = win.location().set_href(&crate::take_login_next());
                         }
                     }
                     Err(_) => error.set("Google 登入連結已過期或已使用，請重新登入".to_string()),

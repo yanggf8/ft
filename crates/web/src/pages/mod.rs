@@ -7,6 +7,7 @@ mod naming;
 mod personality;
 mod profile;
 mod story;
+mod tarot;
 
 pub use admin::AdminPage;
 pub use divination::DivinationPage;
@@ -17,3 +18,5 @@ pub use naming::NamingPage;
 pub use personality::PersonalityPage;
 pub use profile::ProfilePage;
 pub use story::StoryPage;
+pub use tarot::TarotPage;
+pub use tarot::TarotSpreadPage;

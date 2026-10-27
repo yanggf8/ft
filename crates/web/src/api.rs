@@ -10,6 +10,7 @@ use ft_schema::practice::{
     CreatePracticeAttemptRequest, CreatePracticePlanRequest, PracticeAttempt, PracticeAttemptPage,
     PracticeHistoryPage, PracticeOverview, PracticePlan,
 };
+use ft_schema::tarot::{TarotDrawRequest, TarotHistoryPage, TarotReadingView};
 use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -421,6 +422,50 @@ pub async fn get_practice_attempts(
         None => format!("/api/practice/plans/{plan_id}/attempts"),
     };
     get_json(&path, true).await
+}
+
+// ── 塔羅 v1b（docs/ARCHITECTURE.md §Tarot）──
+
+/// `POST /api/tarot/draw` — 三張牌陣（request_id 冪等；同鍵同 body 重放回原結果，
+/// 201／200 皆成功）。
+pub async fn tarot_draw(body: &TarotDrawRequest) -> Result<TarotReadingView, ApiErr> {
+    send_json(Request::post(&url("/api/tarot/draw")), body).await
+}
+
+/// `GET /api/tarot/readings` — 歷史分頁（items + nextCursor）。
+pub async fn tarot_history(cursor: Option<&str>) -> Result<TarotHistoryPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/tarot/readings?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => "/api/tarot/readings".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+/// `DELETE /api/tarot/readings/:id` — 單筆刪除（不存在／他人／重刪 → 404）。
+pub async fn tarot_delete(id: &str) -> Result<(), ApiErr> {
+    let resp = with_auth(Request::delete(&url(&format!("/api/tarot/readings/{id}"))))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let _: serde_json::Value = decode(resp).await?;
+    Ok(())
+}
+
+/// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。
+pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
+    #[derive(Deserialize)]
+    struct DeletedCount {
+        deleted: i64,
+    }
+    let resp = with_auth(Request::delete(&url("/api/tarot/readings")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let n: DeletedCount = decode(resp).await?;
+    Ok(n.deleted)
 }
 
 pub async fn delete_practice() -> Result<(), ApiErr> {
