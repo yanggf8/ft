@@ -81,23 +81,34 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 `docs/superpowers/specs/2026-10-20-weekly-practice-design.md`。2026-10-20 已遷移正式
 Turso 並部署 API 與前端，`verify-deployment.sh` 全過，未登入探測 `/api/practice` 回 401。
 
-## 塔羅牌（2026-10-27，v1 已實作）
+## 塔羅牌（2026-10-27，v1＋v2 已上線）
 
 兩段式：v1a「今日抽牌」公開頁（`/tarot`，免登入零 API——決定性抽牌
 `ft_schema::tarot::daily_draw`，種子＝台北日期＋localStorage 32-hex 裝置種子，
 明文不防重擲）與 v1b 三張牌陣（`/tarot/spread`，登入）。`ft_schema::tarot` 是
-前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，`TAROT_CORPUS_VERSION`）、
-注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋拒絕取樣，演算法由
-`TAROT_DRAW_ALGO_VERSION` 鎖定，golden test 釘死）、`taipei_today`
-（重用 cycle.rs UTC+8 純算術）。API 四個 `/api/tarot` 路由在 `routes/tarot.rs`：
-處理順序＝IP 限流→auth→body cap→parse→驗證→冪等（`UNIQUE(user_id, request_id)`
-重放回原結果／異 body 409）→uid 24h 限流→`secure_bytes` CSPRNG（fail-closed，
-明文禁 `Math::random`）→寫入；DELETE 404 不洩存在性。DB：`tarot_readings`
-（schema.sql＋`scripts/migrations/2026-10-27-tarot.sql`）。語料人工終校見
-issue #3。塔羅資料永不寫入 predictions／prediction_feedback／f8_assignments。
-v2（AI 命盤感知解牌）契約在同 spec 第二部分——含 AIMutexDO 佇列須先從
-`thread_local!` 遷 per-instance、`stub:true` 視為 failed 等 v2 前置。
-完整設計與三家審查軌跡：`docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
+前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，`TAROT_CORPUS_VERSION="2"`
+經 Claude 校對 8 條修正）、注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋
+拒絕取樣，演算法由 `TAROT_DRAW_ALGO_VERSION` 鎖定，golden test 釘死）、
+`taipei_today`（重用 cycle.rs UTC+8 純算術）。API 五個 `/api/tarot` 路由在
+`routes/tarot.rs`：draw 處理順序＝IP 限流→auth→body cap→parse→驗證→冪等
+（`UNIQUE(user_id, request_id)` 重放回原結果／異 body 409）→uid 24h 限流→
+`secure_bytes` CSPRNG（fail-closed，明文禁 `Math::random`）→寫入；DELETE 404
+不洩存在性。**v2 AI 命盤感知解牌**（同日上線）：`POST .../:id/interpret`——
+auth→讀取（done 冪等不計次）→IP/user **strict** 限流（fail-closed，3＋10 次/
+24h，進入 AI 呼叫即計）→AIMutexDO **專屬實例** `id_from_name("tarot")`→
+`stub:true` 一律視為 failed→`ai_*` 欄位（規則式 interpretation 永不覆寫；
+UPDATE first-wins 防雙分頁競態）；`?chart=0`＝純塔羅（紫微＋F4 全不外送）；
+chartSummary 組裝在 route 層（isLifePalace 主星——wire 值 `main` 非 `major`）。
+AIMutexDO 佇列已從 `thread_local!` 遷 `QueueState` 實例欄位（per-DO-instance；
+thread_local 是 per-isolate 會跨實例共享）。`rate_limit_strict` 在 common.rs。
+DB：`tarot_readings`（migrations：2026-10-27-tarot / -tarot-ai / -tarot-ai-context）。
+**美術**：78 張卡面＋卡背在 `crates/web/assets/tarot/`（museimage 產製、
+cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製）；
+卡面 CSS 1:2 原生比例、逆位 180°、直向 ≤480px 斷點（RWD）。首頁 feature-grid
+塔羅卡排最前（chrome ring 主打位）＋NEW 徽章——2026-10-27 用戶指示，取代
+原「紫微第一」決策。塔羅資料永不寫入 predictions／prediction_feedback／
+f8_assignments。完整設計與三家（Muse/Codex/Opus）七輪審查軌跡：
+`docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 

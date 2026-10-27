@@ -107,6 +107,12 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   `<script type="module" src="/boot.js">` 引用，`build-web.sh` 負責複製）。
   把啟動器改回 inline 會重演「app 不 mount」的全站停擺。改 `index.html`/`_headers`
   後必須在瀏覽器載入 `dist/`（套用同款 header）驗證再部署。
+- **塔羅（2026-10-27 全案）**：三版本常數（`TAROT_CORPUS_VERSION`／
+  `DRAW_ALGO_VERSION`／`PROMPT_VERSION`）在 `crates/schema/src/tarot`，改語料／
+  演算法／prompt 必 bump；塔羅資料永不寫入 predictions/prediction_feedback/
+  f8_assignments；星曜 type 的 wire 值是 `main`（非 iztro 的 `major`）；AI 路徑
+  限流一律 `rate_limit_strict`（fail-closed）、AIMutexDO 走專屬實例
+  `id_from_name("tarot")`；卡面在 `crates/web/assets/tarot/`（build-web.sh 複製）。
 - `galaxy.js` 的拒絕迴圈用 `for(;;)`，**不要**用 `do-while` + `continue`（`g` 未定義
   時會退出迴圈回傳 undefined → NaN → 動畫迴圈死亡；見 gauss() 註解與 commit 324bb73）。
 - `predict::GATE_ORDER`（work→money→love→family→health）同時決定 F4 `gated_domains()`

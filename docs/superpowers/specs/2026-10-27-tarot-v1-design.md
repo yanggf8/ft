@@ -126,8 +126,9 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
 - **登入回流（定案）**：公開頁 CTA → `/login?next=/tarot/spread`；login 頁支援
   `next` 參數（**僅接受本站相對路徑：開頭 `/` 且非 `//` 與 `/\`，並測 `%2F%2F` 與 `/%5C` 案例，否則 fallback
   `/profile`**——防 open redirect；未帶參數行為不變）。
-- 卡面符號化：**先交付樣本**（大牌×2、小牌×2、正逆位樣式、手機尺寸）再估
-  全套工時——獨立設計交付，非 CSS 順手之作。
+- 卡面：~~符號化~~ → **2026-10-27 已升級為 AI 生成美術**（museimage、
+  cosmic-silver 方向、78＋1 張入 `assets/tarot/`；符號化版本被完全取代，
+  「RWS 自托管 v3+ 議題」隨之消失——生成圖無掃描授權問題）。
 - 翻牌 a11y：卡為 button（Enter/Space 可翻）、翻後 focus 移至結果卡、
   aria-label 含牌名與正逆位；`prefers-reduced-motion` 下直接揭牌不播動畫
   （`style.css` 現行 media query 需補卡面規則）。
@@ -159,9 +160,9 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
 
 ---
 
-## 第二部分：v2 契約（AI 命盤感知解牌——v2 開工前凍結版）
+## 第二部分：v2 契約（AI 命盤感知解牌——已於 2026-10-27 實作上線，Muse 三輪審查後放行）
 
-前置：v1 上線後才動工。以下為 v2 實作前須定案的契約（吸收 Muse 二輪＋Codex 初審）。
+以下 14 條契約全數落地（含審後增補：S2 ai_chart_context、S8 first-wins；依用戶「按建議執行」指示，原記錄不採的 S2/S8 亦已實作）。
 
 1. **AI 欄位遷移（與 v1 schema 相容，定案）**：新增可空欄位 `ai_interpretation
    TEXT`、`ai_status TEXT CHECK (done|failed)`（同步端點無 pending，見第 12 點）、`ai_prompt_version TEXT`、
