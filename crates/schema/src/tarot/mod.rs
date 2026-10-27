@@ -223,9 +223,36 @@ pub fn normalize_question(q: &str) -> Option<String> {
     Some(t.to_string())
 }
 
-/// requestId 形狀檢查（比照 practice `valid_request_id`：len == 36）。
+/// requestId 形狀檢查（比照 practice `valid_request_id`：UUID 形狀——
+/// 8/13/18/23 為 `-`、其餘為 hex）。
 pub fn valid_tarot_request_id(id: &str) -> bool {
     id.len() == 36
+        && id.bytes().enumerate().all(|(i, b)| {
+            if [8, 13, 18, 23].contains(&i) {
+                b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
+}
+
+/// question 超過 200 字元（`validate_question` 的錯誤型別）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuestionTooLong;
+
+/// Route 端 question 驗證（spec 定案：trim 後空＝未填、存 NULL；
+/// 僅 >200 字元回 `Err`）。
+pub fn validate_question(q: Option<&str>) -> Result<Option<String>, QuestionTooLong> {
+    let Some(t) = q.map(str::trim) else {
+        return Ok(None);
+    };
+    if t.is_empty() {
+        return Ok(None);
+    }
+    if t.chars().count() > 200 {
+        return Err(QuestionTooLong);
+    }
+    Ok(Some(t.to_string()))
 }
 
 #[cfg(test)]
@@ -424,6 +451,10 @@ mod tests {
     #[test]
     fn request_id_shape_matches_practice() {
         assert!(valid_tarot_request_id(
+            "01234567-89ab-cdef-0123-456789abcdef"
+        ));
+        // 無連字號的 36 字 hex 不合法（practice 為完整 UUID 形狀檢查）
+        assert!(!valid_tarot_request_id(
             "0123456789abcdef0123456789abcdef0123"
         ));
         assert!(!valid_tarot_request_id("short"));

@@ -16,9 +16,9 @@ use super::common::{
 use super::practice::page_query;
 use super::R;
 use ft_schema::tarot::{
-    assemble_interpretation, normalize_question, shuffle_three, valid_tarot_request_id,
-    TarotCardView, TarotDrawRequest, TarotHistoryPage, TarotReadingView, MIN_ENTROPY_BYTES,
-    TAROT_CORPUS_VERSION,
+    assemble_interpretation, shuffle_three, valid_tarot_request_id, validate_question,
+    QuestionTooLong, TarotCardView, TarotDrawRequest, TarotHistoryPage, TarotReadingView,
+    MIN_ENTROPY_BYTES, TAROT_CORPUS_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use worker::*;
@@ -131,10 +131,12 @@ pub fn register(router: R<'static>) -> R<'static> {
       let user = match auth_user(&req, &ctx).await { Ok(u) => u, Err(e) => return Ok(e) };
       if body_too_large(&req) { return Ok(error::error_code("payload too large", "PAYLOAD_TOO_LARGE", 413)) }
       let body: TarotDrawRequest = match req.json().await { Ok(v) => v, Err(_) => return Ok(error::error_code("Invalid JSON", "INVALID_JSON", 400)) };
-      let question = match body.question.as_deref().map(normalize_question) {
-        None => None,
-        Some(None) => return Ok(error::error_code("Invalid question", "INVALID_TAROT", 400)),
-        Some(Some(q)) => Some(q),
+      // spec：trim 後空＝未填存 NULL；僅 >200 字回 400
+      let question = match validate_question(body.question.as_deref()) {
+        Ok(q) => q,
+        Err(QuestionTooLong) => {
+            return Ok(error::error_code("Invalid question", "INVALID_TAROT", 400))
+        }
       };
       if body.spread != "three" || !valid_tarot_request_id(&body.request_id) {
         return Ok(error::error_code("Invalid tarot draw", "INVALID_TAROT", 400));

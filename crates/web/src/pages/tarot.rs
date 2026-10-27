@@ -131,14 +131,17 @@ pub fn TarotPage() -> impl IntoView {
                     // 分支內組好（每次呼叫新建）：footer 閉包 move 分支本地值，
                     // 外層閉包只 borrow `date` —— 保持 Fn（leptos view 要求）。
                     let footer = format!(
-                        "依台北時間每日更新（今天：{date}）；語料版本 {}、抽牌演算法版本 {}。",
-                        TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION
+                        "牌 {}・依台北時間每日更新（今天：{date}）；語料版本 {}、抽牌演算法版本 {}。",
+                        d.card.id, TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION
                     );
                     view! {
                         <button
                             class="tarot-card"
                             class:flipped=move || flipped.get()
-                            on:click=move |_| flipped.set(true)
+                            on:click=move |_| {
+                                flipped.set(true);
+                                focus_element("tarot-daily-result");
+                            }
                             aria-label=move || if flipped.get() {
                                 aria_flipped.clone()
                             } else {
@@ -161,7 +164,7 @@ pub fn TarotPage() -> impl IntoView {
                         </button>
 
                         <Show when=move || flipped.get()>
-                            <div class="card" style="margin-top:1.5rem">
+                            <div class="card" id="tarot-daily-result" tabindex="-1" style="margin-top:1.5rem">
                                 <p style="margin:0 0 0.5rem 0">
                                     <span class="star">{d.card.name}</span>
                                     <span class="muted" style="margin-left:0.5rem">
@@ -193,6 +196,16 @@ pub fn TarotPage() -> impl IntoView {
 // ═══ v1b：三張牌陣（登入）═══
 
 const SPREAD_LABELS: [&str; 3] = ["現況", "阻礙", "建議"];
+
+/// 翻牌後 focus 移至結果卡（spec a11y 定案；元素帶 tabindex="-1"）。
+fn focus_element(id: &str) {
+    use wasm_bindgen::JsCast;
+    let _ = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id(id))
+        .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+        .map(|el| el.focus());
+}
 
 fn tarot_request_id() -> Option<String> {
     web_sys::window()?
@@ -228,14 +241,13 @@ pub fn TarotSpreadPage() -> impl IntoView {
     let items = RwSignal::new(Vec::<TarotReadingView>::new());
     let next_cursor = RwSignal::new(None::<String>);
     let history_error = RwSignal::new(String::new());
+    let history_note = RwSignal::new(String::new());
     let loading_history = RwSignal::new(false);
     // 兩段式刪除確認（無 timer）：Some(id)＝已上膛、再點才執行；"__all__"＝整批
     let armed_delete = RwSignal::new(None::<String>);
 
     let refresh_history = move || {
-        let items = items;
         let next_cursor = next_cursor;
-        let history_error = history_error;
         spawn_local(async move {
             match api::tarot_history(None).await {
                 Ok(page) => {
@@ -336,6 +348,9 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                 let mut v = revealed.get_untracked();
                                 if i < 3 { v[i] = true; }
                                 revealed.set(v);
+                                if v.iter().all(|b| *b) {
+                                    focus_element("tarot-spread-result");
+                                }
                             };
                             let is_revealed = move || revealed.get()[i.min(2)];
                             view! {
@@ -374,7 +389,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                     {move || all_revealed.get().then(|| {
                         let q_note = question_note.clone();
                         view! {
-                            <div class="card" style="margin-top:1.5rem">
+                            <div class="card" id="tarot-spread-result" tabindex="-1" style="margin-top:1.5rem">
                                 <h2 style="margin-bottom:0.75rem">"解牌"</h2>
                                 {q_note.map(|q| view! {
                                     <p class="muted" style="margin:0 0 0.75rem 0">{format!("「{q}」")}</p>
@@ -390,6 +405,9 @@ pub fn TarotSpreadPage() -> impl IntoView {
             })}
 
             <h2 style="margin:2rem 0 0.75rem 0">"歷史紀錄"</h2>
+            <Show when=move || !history_note.get().is_empty()>
+                <p class="muted" style="margin:0 0 0.5rem 0">{move || history_note.get()}</p>
+            </Show>
             <Show when=move || !history_error.get().is_empty()>
                 <p class="error">{move || history_error.get()}</p>
             </Show>
@@ -408,11 +426,15 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                     if is_armed() {
                                         armed_delete.set(None);
                                         spawn_local(async move {
-                                            if api::tarot_delete_all().await.is_ok() {
-                                                items.set(Vec::new());
-                                                next_cursor.set(None);
-                                            } else {
-                                                history_error.set("刪除失敗，請稍後再試。".to_string());
+                                            match api::tarot_delete_all().await {
+                                                Ok(n) => {
+                                                    items.set(Vec::new());
+                                                    next_cursor.set(None);
+                                                    history_note.set(format!("已刪除 {n} 筆"));
+                                                }
+                                                Err(_) => {
+                                                    history_error.set("刪除失敗，請稍後再試。".to_string())
+                                                }
                                             }
                                         });
                                     } else {
@@ -420,7 +442,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                     }
                                 }
                             >
-                                {move || if armed.get_untracked().as_deref() == Some("__all__") {
+                                {move || if armed.get().as_deref() == Some("__all__") {
                                     "確定刪除全部紀錄？再點一次執行".to_string()
                                 } else {
                                     "刪除全部紀錄".to_string()
@@ -441,7 +463,6 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         .map(|q| format!("「{q}」"))
                         .unwrap_or_else(|| "無特定問題".to_string());
                     let date = item.created_at.split_once('T').map(|(d, _)| d.to_string()).unwrap_or_else(|| item.created_at.clone());
-                    let armed_delete = armed_delete;
                     view! {
                         <div class="card" style="margin-top:1rem">
                             <p class="muted" style="margin:0 0 0.25rem 0;font-size:0.85rem">
@@ -456,17 +477,21 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                         armed_delete.set(None);
                                         let id_for_del = id.clone();
                                         spawn_local(async move {
-                                            if api::tarot_delete(&id_for_del).await.is_ok() {
-                                                items.update(|v| v.retain(|r| r.id != id_for_del));
-                                            } else {
-                                                history_error.set("刪除失敗，請稍後再試。".to_string());
+                                            match api::tarot_delete(&id_for_del).await {
+                                                Ok(()) | Err(crate::api::ApiErr::Api { status: 404, .. }) => {
+                                                    // 404＝他處已刪／重刪 → 同步移除該列
+                                                    items.update(|v| v.retain(|r| r.id != id_for_del));
+                                                }
+                                                Err(_) => {
+                                                    history_error.set("刪除失敗，請稍後再試。".to_string())
+                                                }
                                             }
                                         });
                                     } else {
                                         armed_delete.set(Some(id.clone()));
                                     }
                                 }>
-                                    {move || if armed_delete.get_untracked().as_deref() == Some(id_label.as_str()) {
+                                    {move || if armed_delete.get().as_deref() == Some(id_label.as_str()) {
                                         "確定刪除？再點一次".to_string()
                                     } else {
                                         "刪除".to_string()
@@ -477,16 +502,13 @@ pub fn TarotSpreadPage() -> impl IntoView {
                     }.into_any()
                 }).collect_view()}
                 {move || next_cursor.get().map(|cursor| {
-                    let next_cursor = next_cursor;
                     view! {
                         <div style="margin-top:1rem">
                             <button class="btn-link" on:click=move |_| {
                                 if loading_history.get_untracked() { return; }
                                 loading_history.set(true);
                                 let cursor = cursor.clone();
-                                let items = items;
                                 let next_cursor = next_cursor;
-                                let history_error = history_error;
                                 let loading_history = loading_history;
                                 spawn_local(async move {
                                     match api::tarot_history(Some(&cursor)).await {

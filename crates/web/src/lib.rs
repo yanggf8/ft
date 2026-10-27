@@ -70,8 +70,10 @@ fn Protected(children: ChildrenFn) -> impl IntoView {
 }
 
 /// `?next=` 安全規則（塔羅設計定稿）：僅本站相對路徑——開頭 `/` 且非 `//`
-/// 與 `/\`，防 open redirect（含 `%2F%2F`／`%5C` 編碼變體，query_param
-/// 解碼後會落入本規則）。
+/// 與 `/\`，防 open redirect。編碼變體行為（檢視確認）：`%2F%2F…` 不以
+/// `/` 開頭（query_param 不解碼）→ 驗證不過 fallback；`/%5C` 會通過驗證，
+/// 但僅導向同源 404 路徑，無法離站；未編碼 `/\`（瀏覽器正規化為 `//` 的
+/// 離站向量）被明文 `starts_with("/\")` 擋下。
 pub(crate) fn valid_login_next(p: &str) -> bool {
     p.starts_with('/') && !p.starts_with("//") && !p.starts_with("/\\")
 }
