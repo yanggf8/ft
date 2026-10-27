@@ -349,3 +349,23 @@ CREATE TABLE IF NOT EXISTS tarot_readings (
   UNIQUE(user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);
+
+-- 手相 v1（spec P12，2026-10-27）：照片永不落庫——只有特徵與規則式解讀快照；
+-- image_sha256 為 sha256(base64 字串) hex 指紋，僅供使用者自己的重放偵測
+-- （冪等比對），不進 wire 不進 log、不可重建影像。ai_chart_context 三段：
+-- NULL＝v1 無 AI 步驟；0/1＝v2 interpret（未用/已用命盤 context）。
+CREATE TABLE IF NOT EXISTS palm_readings (
+  id               TEXT PRIMARY KEY,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_id       TEXT NOT NULL,
+  hand             TEXT NOT NULL CHECK (hand IN ('left', 'right')),
+  image_sha256     TEXT NOT NULL,
+  features_json    TEXT NOT NULL,
+  interpretation   TEXT NOT NULL,
+  corpus_version   TEXT NOT NULL,
+  features_version TEXT NOT NULL,
+  created_at       TEXT NOT NULL,
+  ai_chart_context INTEGER,
+  UNIQUE(user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_palm_user_created ON palm_readings(user_id, created_at);

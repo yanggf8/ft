@@ -34,12 +34,18 @@ pub const MAX_BODY_BYTES: u64 = 65_536;
 /// Content-Length 超過 [`MAX_BODY_BYTES`](上限)(缺 header — chunked — 時放行,
 /// 交給平台上限)。
 pub fn body_too_large(req: &Request) -> bool {
+    body_too_large_with(req, MAX_BODY_BYTES)
+}
+
+/// palm v1（spec P3）：自訂上限版 body cap——palm 專用 512KiB（Content-Length，
+/// chunked 為全站既有面，明文接受）。`body_too_large` 委派此函式。
+pub fn body_too_large_with(req: &Request, cap: u64) -> bool {
     req.headers()
         .get("content-length")
         .ok()
         .flatten()
         .and_then(|v| v.parse::<u64>().ok())
-        .is_some_and(|n| n > MAX_BODY_BYTES)
+        .is_some_and(|n| n > cap)
 }
 
 pub async fn auth_user(req: &Request, ctx: &RouteContext<()>) -> Result<String, Response> {

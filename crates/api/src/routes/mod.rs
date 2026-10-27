@@ -14,6 +14,7 @@ mod auth;
 mod charts;
 mod common;
 mod oauth;
+mod palm;
 mod personality;
 mod practice;
 mod predictions;
@@ -31,7 +32,8 @@ pub fn router(_env: Env) -> R<'static> {
     let f: R<'static> = predictions::register(p);
     let pr: R<'static> = practice::register(f);
     let t: R<'static> = tarot::register(pr);
-    let ai: R<'static> = admin_invites::register(t);
+    let pa: R<'static> = palm::register(t);
+    let ai: R<'static> = admin_invites::register(pa);
 
     ai.get_async("/health", |_, ctx: RouteContext<()>| async move {
         let env_label = ctx

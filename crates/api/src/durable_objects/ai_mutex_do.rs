@@ -33,9 +33,10 @@ const RPD_LIMITS: [(&str, f64); 2] = [("groq", 14400.0), ("cerebras", 14400.0)];
 /// 緩解 adv 樣本 JSON 截斷（§6.2）。
 const PALM_PROVIDER: &str = "workers-ai";
 const PALM_RPM: u32 = 30;
+/// 模型名單一來源在 `ft_schema::palm::wire`（route 品質閘共用，防漂移）。
 const PALM_CHAIN: [(&str, u32); 2] = [
-    ("@cf/meta/llama-4-scout-17b-16e-instruct", 2048),
-    ("@cf/meta/llama-3.2-11b-vision-instruct", 3072),
+    (ft_schema::palm::wire::SCOUT_MODEL, 2048),
+    (ft_schema::palm::wire::BACKUP_MODEL, 3072),
 ];
 
 struct QueuedEntry {

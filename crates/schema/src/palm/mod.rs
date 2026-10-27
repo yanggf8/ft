@@ -10,6 +10,7 @@
 //! 擋 VLM 幻覺欄位（spec P7）。
 
 pub mod corpus;
+pub mod wire;
 
 use std::collections::HashMap;
 
