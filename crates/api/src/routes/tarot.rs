@@ -54,6 +54,7 @@ struct ReadingRow {
     ai_status: Option<String>,
     ai_provider: Option<String>,
     ai_model: Option<String>,
+    ai_chart_context: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -117,6 +118,7 @@ fn row_view(row: &ReadingRow) -> Result<TarotReadingView> {
         ai_status: row.ai_status.clone(),
         ai_provider: row.ai_provider.clone(),
         ai_model: row.ai_model.clone(),
+        ai_chart_context: row.ai_chart_context.map(|v| v != 0),
     })
 }
 
@@ -233,12 +235,14 @@ struct ChartDataRow {
 /// 組 AI 用 chartData（spec §Tarot v2-5/6/8/9/10）：牌陣＋question＋
 /// chartSummary（命盤摘要：紫微最新命宮主星／五行局＋F4 **當週**自評強度）。
 /// 資料最小化：不含出生時地；無命盤／無當週強度 → 缺項跳過（降級矩陣）。
+/// 回傳 (chartData, 是否使用命盤 context)——後者存 `ai_chart_context`
+/// 供前端文案區分（Muse 前審 S2／契約 #9）。
 async fn build_tarot_chart_data(
     db: &db::Turso,
     user: &str,
     row: &ReadingRow,
     include_chart: bool,
-) -> Result<serde_json::Value> {
+) -> Result<(serde_json::Value, bool)> {
     let cards: Vec<TarotCardView> = serde_json::from_str(&row.cards)?;
     let cards_json: Vec<serde_json::Value> = cards
         .iter()
@@ -296,7 +300,7 @@ async fn build_tarot_chart_data(
                 .map(|stars| {
                     stars
                         .iter()
-                        .filter(|st| st.get("type").and_then(|t| t.as_str()) == Some("major"))
+                        .filter(|st| st.get("type").and_then(|t| t.as_str()) == Some("main"))
                         .filter_map(|st| {
                             let name = st.get("name").and_then(|n| n.as_str())?;
                             let bright = st.get("brightness").and_then(|b| b.as_str());
@@ -319,21 +323,25 @@ async fn build_tarot_chart_data(
             }
         }
     }
-    // F4 當週自評強度（僅當週 cycle_id；無當週列＝無此 context）
+    // F4 當週自評強度（僅當週 cycle_id；無當週列＝無此 context）。純塔羅
+    // （include_chart=false）一併跳過——命盤 context 定義含 F4 五域（契約
+    // #8），勾「純塔羅」不得外送任何命盤衍生資料（Muse 複審 B1）。
     let now = clock::now_iso();
-    if let Some(cycle) = ft_schema::cycle::week_start_asia_taipei(&now) {
-        let s: Option<StrengthRow> = db::first(
+    if include_chart {
+        if let Some(cycle) = ft_schema::cycle::week_start_asia_taipei(&now) {
+            let s: Option<StrengthRow> = db::first(
             db,
             "SELECT work, love, family, money, health FROM prediction_strengths WHERE user_id=?1 AND cycle_id=?2",
             &[&db::text(user), &db::text(&cycle)],
         )
         .await
         .unwrap_or(None);
-        if let Some(s) = s {
-            parts.push(format!(
-                "本週自評強度（0–3）：工作{}、金錢{}、感情{}、家庭{}、健康{}",
-                s.work, s.money, s.love, s.family, s.health
-            ));
+            if let Some(s) = s {
+                parts.push(format!(
+                    "本週自評強度（0–3）：工作{}、金錢{}、感情{}、家庭{}、健康{}",
+                    s.work, s.money, s.love, s.family, s.health
+                ));
+            }
         }
     }
 
@@ -342,11 +350,15 @@ async fn build_tarot_chart_data(
     } else {
         Some(parts.join("；"))
     };
-    Ok(serde_json::json!({
-        "cards": cards_json,
-        "question": row.question,
-        "chartSummary": summary,
-    }))
+    let used = summary.is_some();
+    Ok((
+        serde_json::json!({
+            "cards": cards_json,
+            "question": row.question,
+            "chartSummary": summary,
+        }),
+        used,
+    ))
 }
 
 /// 冪等比對：spread＋正規化後 question（設計定稿）。
@@ -414,6 +426,7 @@ pub fn register(router: R<'static>) -> R<'static> {
         Ok(1) => Ok(json(&TarotReadingView {
           id, question, spread: body.spread, cards, interpretation, corpus_version: TAROT_CORPUS_VERSION.into(), created_at: now,
           ai_interpretation: None, ai_status: None, ai_provider: None, ai_model: None,
+          ai_chart_context: None,
         }, 201)),
         failed => {
           // UNIQUE 衝突或傳輸錯誤後的回查（同 practice 先例：先讀冪等鍵再分類）
@@ -458,27 +471,41 @@ pub fn register(router: R<'static>) -> R<'static> {
         .and_then(|u| u.query().map(|q| q.to_string()))
         .map(|q| !q.split('&').any(|kv| kv == "chart=0"))
         .unwrap_or(true);
-      let chart_data = match build_tarot_chart_data(&db, &user, &row, include_chart).await {
-        Ok(v) => v,
-        Err(_) => return Ok(db_error()),
-      };
+      let (chart_data, chart_used) =
+        match build_tarot_chart_data(&db, &user, &row, include_chart).await {
+          Ok(v) => v,
+          Err(_) => return Ok(db_error()),
+        };
       let outcome = call_tarot_ai(&ctx, &chart_data).await;
       let now = clock::now_iso();
       let (ai_text, status, provider, model) = match outcome {
         Ok(o) => (Some(o.interpretation), "done", Some(o.provider), Some(o.model)),
         Err(()) => (None, "failed", None, None),
       };
-      let n = db::exec_changes(&db,
-        "UPDATE tarot_readings SET ai_interpretation=?1, ai_status=?2, ai_prompt_version=?3, ai_provider=?4, ai_model=?5, ai_generated_at=?6          WHERE id=?7 AND user_id=?8",
-        &[&db::opt_text(ai_text.as_deref()),&db::text(status),&db::text(TAROT_PROMPT_VERSION),
-          &db::opt_text(provider.as_deref()),&db::opt_text(model.as_deref()),&db::text(&now),
-          &db::text(&id),&db::text(&user)]).await;
+      // S8 伺服端防護（first-wins）：另一分頁已完成（done）則不覆寫，敗者
+      // 回查回贏者結果。兩邊都進了 AI 呼叫＝都計次（同步無 pending 的取捨）。
+      let n = db::exec_changes(
+        &db,
+        "UPDATE tarot_readings SET ai_interpretation=?1, ai_status=?2, ai_prompt_version=?3, ai_provider=?4, ai_model=?5, ai_generated_at=?6, ai_chart_context=?9          WHERE id=?7 AND user_id=?8 AND (ai_status IS NULL OR ai_status != 'done')",
+        &[
+          &db::opt_text(ai_text.as_deref()),
+          &db::text(status),
+          &db::text(TAROT_PROMPT_VERSION),
+          &db::opt_text(provider.as_deref()),
+          &db::opt_text(model.as_deref()),
+          &db::text(&now),
+          &db::text(&id),
+          &db::text(&user),
+          &db::int(i32::from(chart_used)),
+        ],
+      )
+      .await;
       match n {
-        Ok(1) => match reading_by_id(&db, &user, &id).await {
+        Ok(_) => match reading_by_id(&db, &user, &id).await {
           Ok(Some(updated)) => match row_view(&updated) { Ok(v) => Ok(json(&v, 200)), Err(_) => Ok(db_error()) },
           _ => Ok(db_error()),
         },
-        _ => Ok(db_error()),
+        Err(_) => Ok(db_error()),
       }
     })
     .get_async("/api/tarot/readings", |req, ctx| async move {
@@ -545,6 +572,7 @@ mod tests {
             ai_status: None,
             ai_provider: None,
             ai_model: None,
+            ai_chart_context: None,
         }
     }
 

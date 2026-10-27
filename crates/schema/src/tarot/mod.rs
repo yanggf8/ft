@@ -91,6 +91,9 @@ pub struct TarotReadingView {
     pub ai_provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai_model: Option<String>,
+    /// AI 解牌是否使用命盤 context（None＝從未嘗試）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_chart_context: Option<bool>,
 }
 
 /// v1b wire DTO — 歷史分頁（比照 practice 分頁形狀：items + nextCursor）。

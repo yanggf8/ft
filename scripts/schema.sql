@@ -345,6 +345,7 @@ CREATE TABLE IF NOT EXISTS tarot_readings (
   ai_provider       TEXT,
   ai_model          TEXT,
   ai_generated_at   TEXT,
+  ai_chart_context  INTEGER,          -- 1=AI 解牌含命盤摘要；0=純塔羅
   UNIQUE(user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);

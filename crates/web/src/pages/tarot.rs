@@ -414,6 +414,10 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         let q_note = question_note.clone();
                         let ai_text = ai_text.clone();
                         let ai_text_check = ai_text.clone();
+                        let ai_context_note = match r.ai_chart_context {
+                            Some(false) => Some("（未使用命盤背景）".to_string()),
+                            _ => None,
+                        };
                         let ai_provider_note = ai_provider_note.clone();
                         let reading_id = reading_id.clone();
                         view! {
@@ -429,7 +433,10 @@ pub fn TarotSpreadPage() -> impl IntoView {
 
                                 {move || ai_text.clone().map(|text| view! {
                                     <div style="margin-top:1.25rem;border-top:1px solid var(--glass-border);padding-top:1rem">
-                                        <h3 style="margin-bottom:0.5rem">"AI 整合解牌"</h3>
+                                        <h3 style="margin-bottom:0.5rem">
+                                            "AI 整合解牌"
+                                            {ai_context_note.clone()}
+                                        </h3>
                                         <p style="white-space:pre-line;margin:0">{text}</p>
                                         {ai_provider_note.clone().map(|note| view! {
                                             <p class="muted" style="font-size:0.8rem;margin:0.75rem 0 0 0">{note}</p>
@@ -572,10 +579,15 @@ pub fn TarotSpreadPage() -> impl IntoView {
                     }
                     let interpretation = item.interpretation.clone();
                     // 先組好再嵌入（避免巢狀 view 剖析問題）
+                    let ai_context = item.ai_chart_context;
                     let ai_block = item.ai_interpretation.as_deref().map(|ai| {
+                        let ctx_note = match ai_context {
+                            Some(false) => "（未使用命盤背景）",
+                            _ => "",
+                        };
                         view! {
                             <div style="margin-top:0.75rem;border-top:1px solid var(--glass-border);padding-top:0.5rem">
-                                <p style="margin:0;font-size:0.9rem">"AI 整合解牌（娛樂參考）"</p>
+                                <p style="margin:0;font-size:0.9rem">{format!("AI 整合解牌（娛樂參考）{ctx_note}")}</p>
                                 <p style="white-space:pre-line;margin:0.25rem 0 0 0;font-size:0.9rem">{ai}</p>
                             </div>
                         }
