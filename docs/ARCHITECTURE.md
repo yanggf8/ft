@@ -113,6 +113,45 @@ cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製�
 f8_assignments。完整設計與三家（Muse/Codex/Opus）七輪審查軌跡：
 `docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
 
+## 手相（2026-10-28，v1 已上線）
+
+兩段式：L0 教學公開頁（`/palm`，免登入零 API——掌形 SVG 線稿教學圖
+（currentColor，兼作拍攝導引 overlay，一物三用）＋提問式示範＋隱私卡）與
+`/palm/capture`（Protected：P6 二段式知情 localStorage `palm_ai_notice`
+fail-closed→左右手→`getUserMedia` facingMode environment（`_headers`
+`camera=(self)`；`camera_open_gen` 世代守衛防 pending 競態）＋掌形導引
+overlay→拍照 ≤768px WebP q80 退 jpeg（canvas toDataURL）→data URL 預覽→
+P22 結果（規則式快照＋特徵中文標籤，absent＝此線不明顯／unknown＝未能判讀）
+→歷史兩段刪除、刪後重取列表；fallback `<input capture>`→img EXIF 自動轉正）。
+**AI 鏈純 Workers AI 兩環**（spec §6.2 選型終局，使用者裁示 OR／外部直連皆
+不採）：`@cf/meta/llama-4-scout-17b`（max_tokens 2048；品質閘
+`GATE_THRESHOLD_SCOUT=0.3`）→`@cf/meta/llama-3.2-11b-vision`（3072；品質閘
+只靠 quality 欄——confidence 不可校準）；AIMutexDO 專屬實例
+`id_from_name("palm")`、`env.ai("AI")` binding 就地不出站、回應**雙形**
+（`result.response`／`choices`）都要解、全敗 503 `AI_ALL_FAILED` fail-closed
+絕不 stub（rpm 觸頂同碼、log `rpm_blocked=` 區分）、`finish_reason=length`→
+500 `AI_TRUNCATED`（終局不 failover）；模型常數 `SCOUT_MODEL` 在
+`ft_schema::palm::wire` 單一來源（DO PALM_CHAIN 與 route 品質閘共用）。
+API 四端點 `routes/palm.rs`：analyze 順序＝cheap IP fail-open 20/min→auth→
+512KiB 專用 cap（`body_too_large_with`）→驗證（單一實質約束 imageBase64
+≤682,667 字）→sha256 指紋→冪等（比對 hand＋image_sha256，UNIQUE(user_id,
+request_id)）→IP strict 15/24h→uid strict 3/24h **refundable**→DO→**P8a
+退款閉環**（Queue 結局退且不占額度；422 品質閘占 `palm:refund:{uid}` 3/24h
+才退；AI_PARSE_FAILED／AI_TRUNCATED／全敗／成功不退——RateLimitDO `/refund`
+＋check 回 resetAt 票根）→P8b 圍籬剝除 strict parse→品質閘 422
+`PALM_QUALITY_LOW`→`assemble_palm_interpretation` 規則式快照落庫；DO outcome
+code 轉發封閉集（四契約碼白名單）。schema `ft_schema::palm`：列舉全含
+unknown、`deny_unknown_fields` 擋幻覺、`PALM_FEATURES_VERSION`（抽取 prompt
+＋特徵 schema 同版）；DB `palm_readings`（corpus/features 兩版欄；
+`ai_chart_context` 三段留 v2）。**紅線**：照片永不落庫（指紋＝sha256(base64
+字串) 不進 wire/log）；手相資料永不寫入 predictions／prediction_feedback／
+f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結構化抽取
+非命理散文——tarot 同款例外，v2 interpret 上線時補回）。L0 示意為站內 SVG
+線稿（標示「示意圖，非真人手掌」）。驗證：`verify-deployment.sh` Test 8c
+（四端點 401）；名詞解釋含手相 9 詞（glossary-1.3）。完整設計（三輪外部
+審查＋spike 11 模型實測）：
+`docs/superpowers/specs/2026-10-27-palm-v1-design.md`。
+
 ## 興趣探索 v1（2026-10-27，設計中、未實作）
 
 「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
