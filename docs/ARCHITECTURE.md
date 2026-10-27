@@ -112,6 +112,17 @@ cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製�
 f8_assignments。完整設計與三家（Muse/Codex/Opus）七輪審查軌跡：
 `docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
 
+## 興趣探索 v1（2026-10-27，設計中、未實作）
+
+「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
+Armstrong 等人（2008）公開領域 RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
+只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。預定
+`ft_schema::interest`（題庫＋計分＋`INTEREST_INSTRUMENT_VERSION`）、`interest_results`
+表＋`users.interest_epoch`、四個 `/api/interest` 路由；不接命盤／AI，不寫入 F5/F8，
+與小練習只有連結。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
+要求自行驗證而不採用。**實作前置**：取得論文全文確認公開領域聲明與題目原文。
+設計：`docs/superpowers/specs/2026-10-27-interest-explore-design.md`。
+
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 
 All styling is plain CSS in `crates/web/style.css`; no Rust owns a token.
