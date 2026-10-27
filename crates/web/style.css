@@ -882,7 +882,7 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .tarot-card {
   display: block;
   width: min(220px, 60vw);
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 1 / 2; /* 生成圖原生 1:2——零裁切，塔羅實牌比例 */
   background: none;
   border: none;
   padding: 0;
@@ -1022,4 +1022,36 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
   background: var(--glass-bg);
+}
+
+/* ═══ 塔羅直向/手機（2026-10-27 RWD）═══ */
+@media (max-width: 480px) {
+  .tarot-card {
+    width: min(240px, 62vw);
+  }
+  .tarot-card--sm {
+    width: min(104px, 30vw);
+  }
+  .tarot-trio {
+    gap: 0.5rem;
+  }
+  .tarot-caption {
+    padding: 1.1rem 0.4rem 0.5rem;
+  }
+  .tarot-card--sm .tarot-caption {
+    padding: 0.9rem 0.3rem 0.4rem;
+  }
+  .tarot-name {
+    font-size: 1rem;
+  }
+  .tarot-card--sm .tarot-name {
+    font-size: 0.9rem;
+  }
+  .tarot-card--sm .tarot-badge {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.55rem;
+  }
+  .tarot-slot-label {
+    font-size: 0.8rem;
+  }
 }
