@@ -10,6 +10,7 @@ pub enum Category {
     Ziwei,
     ZiweiPattern,
     Western,
+    Tarot,
     Naming,
 }
 
@@ -19,6 +20,7 @@ impl Category {
             Category::Ziwei => "紫微斗數",
             Category::ZiweiPattern => "紫微格局",
             Category::Western => "西洋占星",
+            Category::Tarot => "塔羅",
             Category::Naming => "姓名學",
         }
     }
@@ -32,8 +34,9 @@ pub struct Term {
 }
 
 /// 詞條版本（2026-09-18 由初稿定案；後續 stakeholder 意見以修訂版處理並 bump。
-/// 2026-09-22 glossary-1.1：「日月並明」雙棟之才 → 棟梁之才，無出處自造詞修正）。
-pub const GLOSSARY_VERSION: &str = "glossary-1.1";
+/// 2026-09-22 glossary-1.1：「日月並明」雙棟之才 → 棟梁之才，無出處自造詞修正。
+/// 2026-10-27 glossary-1.2：加塔羅 7 條——塔羅上線後名詞解釋未涵蓋（使用者指出））。
+pub const GLOSSARY_VERSION: &str = "glossary-1.2";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -129,6 +132,42 @@ pub static TERMS: &[Term] = &[
         term: "宮位",
         category: Category::Western,
         def: "星盤十二個人生領域區塊，如第一宮自我、第七宮伴侶。",
+    },
+    // 塔羅（glossary-1.2——站上實際使用的牌組與玩法）
+    Term {
+        term: "塔羅牌",
+        category: Category::Tarot,
+        def: "78 張牌組的占卜工具，抽牌對應當下處境，作為反思的引子。",
+    },
+    Term {
+        term: "大阿爾克那",
+        category: Category::Tarot,
+        def: "22 張主牌，從愚者到世界，象徵人生旅程的重大主題。",
+    },
+    Term {
+        term: "小阿爾克那",
+        category: Category::Tarot,
+        def: "權杖、聖杯、寶劍、錢幣四組花色各 14 張，對應日常生活的具體事件。",
+    },
+    Term {
+        term: "正位",
+        category: Category::Tarot,
+        def: "牌面正立抽出，牌義依原本方向解讀。",
+    },
+    Term {
+        term: "逆位",
+        category: Category::Tarot,
+        def: "牌面倒立抽出，常解讀為能量的受阻或內化，邀請你換個角度看。",
+    },
+    Term {
+        term: "牌陣",
+        category: Category::Tarot,
+        def: "抽牌的位置安排，每個位置代表問題的一個切面。",
+    },
+    Term {
+        term: "三張牌陣",
+        category: Category::Tarot,
+        def: "現況、阻礙、建議三張的入門牌陣，本站三張牌解牌採用的形式。",
     },
     // 姓名學
     Term {
