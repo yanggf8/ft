@@ -1,7 +1,29 @@
 //! Prompt builders — mirrors backend/src/services/ai/prompts.ts verbatim.
 
+/// 命理解讀共用護欄（紫微／西洋／人生故事）：命盤只描述傾向與反思素材；
+/// 不把天賦或能力寫成注定，不借用遺傳、腦科學、IQ 或研究數據背書。
+const GUARDRAIL_ZH: &str = "命盤描述的是傾向與自我反思的素材，不是注定的天賦或能力上限：請用「可能」「傾向」等措辭，並指出可以透過練習、環境與選擇發展的方向。不得引用遺傳、腦科學、智商、統計數據或「研究證實」來支持命理論述；不得提供醫療、法律或財務的確定性斷言（可鼓勵尋求專業協助）。";
+const GUARDRAIL_EN: &str = "Treat the chart as describing tendencies and material for self-reflection, not fixed talents or ability ceilings: use hedged language and point to ways practice, environment and choices can develop them. Do not cite genetics, neuroscience, IQ, statistics or \"research shows\" to support astrological claims, and do not make definitive medical, legal or financial assertions (encourage professional help where relevant).";
+
 /// `getSystemPrompt(chartType, language)`.
 pub fn get_system_prompt(chart_type: &str, language: Option<&str>) -> String {
+    if chart_type == "tarot" {
+        return base_system_prompt(chart_type, language);
+    }
+    // 與 base_system_prompt 的語言分支一致：西洋盤預設英文，其餘預設中文
+    let english = match chart_type {
+        "ziwei" | "story" => language == Some("en"),
+        _ => language != Some("zh"),
+    };
+    let base = base_system_prompt(chart_type, language);
+    if english {
+        format!("{base} {GUARDRAIL_EN}")
+    } else {
+        format!("{base}{GUARDRAIL_ZH}")
+    }
+}
+
+fn base_system_prompt(chart_type: &str, language: Option<&str>) -> String {
     if chart_type == "tarot" {
         // spec §Tarot v2-5：娛樂與自我反思定位；禁醫療/法律/財務確定性斷言
         return "你是溫和的塔羅解讀者。塔羅是娛樂與自我反思的工具：從牌義與正逆位出發，幫助使用者看見當下的處境與可行的行動。你不得提供醫療、法律或財務的確定性斷言（可鼓勵尋求專業協助），不預言註定的結局，語氣給予能動性。全程使用台灣繁體中文。"
@@ -632,4 +654,37 @@ fn build_tarot_prompt(chart: &serde_json::Value) -> String {
     }
     out.push_str("\n\n請整合三張牌與提問，寫一段 250–400 字的整合解牌：先點出整體訊息，再依「現況→阻礙→建議」展開，最後給一個今天就能做的具體反思或行動。");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guardrail_matches_prompt_language() {
+        for (ct, lang) in [
+            ("ziwei", None),
+            ("ziwei", Some("zh")),
+            ("story", None),
+            ("western", Some("zh")),
+        ] {
+            let p = get_system_prompt(ct, lang);
+            assert!(p.ends_with(GUARDRAIL_ZH), "{ct} {lang:?}");
+        }
+        for (ct, lang) in [
+            ("ziwei", Some("en")),
+            ("story", Some("en")),
+            ("western", None),
+            ("western", Some("en")),
+        ] {
+            let p = get_system_prompt(ct, lang);
+            assert!(p.ends_with(GUARDRAIL_EN), "{ct} {lang:?}");
+        }
+    }
+
+    #[test]
+    fn tarot_prompt_unchanged() {
+        let p = get_system_prompt("tarot", None);
+        assert!(!p.contains(GUARDRAIL_ZH) && !p.contains(GUARDRAIL_EN));
+    }
 }

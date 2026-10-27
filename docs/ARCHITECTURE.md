@@ -34,7 +34,9 @@
     providers fail.
   - `RateLimitDO` — cross-isolate persistent rate limiting, 8 shards (`rl:0..rl:7`).
 - **Services** (`services/`): `billing` (30-day trial), `birth_hash` (bit-for-bit JS-compatible),
-  `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers),
+  `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers；紫微／西洋／人生故事
+  system prompt 共用 `GUARDRAIL_ZH/EN`：命盤只談傾向、不把天賦寫成注定、不借遺傳／腦科學／IQ／研究數據背書、
+  禁醫療法律財務確定性斷言；塔羅另有專屬 prompt 不疊加),
   `predictions` (F5: 週期生成/遮罩/鎖定), `chart_resolver` (overlay 的型別化命盤解析 — 唯讀、
   結構驗證、engine 失敗降級), `clock`, `uuid`, `db` (Turso client over Hrana HTTP + `batch`
   原子批次 + the bind helpers), `oauth` (Google flow helpers + one-time exchange),

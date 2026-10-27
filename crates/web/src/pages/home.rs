@@ -46,7 +46,7 @@ pub fn HomePage() -> impl IntoView {
                 </div>
                 <div class="feature">
                     <h3><span class="feature-icon">"⭐"</span>" 西洋占星"</h3>
-                    <p>"星座與行星位置分析，探索性格與天賦"</p>
+                    <p>"星座與行星位置分析，探索性格傾向與成長方向"</p>
                 </div>
                 <A href="/naming" attr:class="feature">
                     <h3><span class="feature-icon">"✒️"</span>" 姓名學"</h3>
