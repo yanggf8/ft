@@ -71,37 +71,6 @@ fn draw_today() -> Option<DrawnCard> {
     tarot::daily_draw(seed.as_bytes())
 }
 
-/// 大阿爾克那顯示羅馬數字（0 為愚者）、小阿爾克那顯示花色記號＋序號。
-fn card_symbol(id: &str) -> String {
-    let Some((suit, num)) = id.split_once('_') else {
-        return "?".to_string();
-    };
-    let n: u8 = num.parse().unwrap_or(0);
-    match suit {
-        "major" => {
-            if n == 0 {
-                "0".to_string()
-            } else {
-                const VALS: [(u32, &str); 5] =
-                    [(10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")];
-                let mut n = u32::from(n);
-                let mut s = String::new();
-                for (v, sym) in VALS {
-                    while n >= v {
-                        s.push_str(sym);
-                        n -= v;
-                    }
-                }
-                s
-            }
-        }
-        "wands" => format!("杖 {n}"),
-        "cups" => format!("杯 {n}"),
-        "swords" => format!("劍 {n}"),
-        _ => format!("幣 {n}"),
-    }
-}
-
 #[component]
 pub fn TarotPage() -> impl IntoView {
     let auth = crate::auth::use_auth();
@@ -150,15 +119,17 @@ pub fn TarotPage() -> impl IntoView {
                         >
                             <div class="tarot-inner">
                                 <div class="tarot-face tarot-back" aria-hidden="true">
-                                    <span class="tarot-back-mark">"✶"</span>
-                                    <span class="tarot-back-brand">"FortuneT"</span>
+                                    <img class="tarot-art" src={card_art("back")} alt="" loading="lazy" />
                                 </div>
                                 <div class="tarot-face tarot-front">
-                                    <span class="tarot-symbol" class:reversed=d.reversed>
-                                        {card_symbol(d.card.id)}
+                                    <img class="tarot-art" class:reversed=d.reversed
+                                        src={card_art(d.card.id)}
+                                        alt={format!("{}（{}）", d.card.name, orientation)}
+                                        loading="lazy" />
+                                    <span class="tarot-caption">
+                                        <span class="tarot-name">{d.card.name}</span>
+                                        <span class="tarot-badge">{orientation}</span>
                                     </span>
-                                    <span class="tarot-name">{d.card.name}</span>
-                                    <span class="tarot-badge">{orientation}</span>
                                 </div>
                             </div>
                         </button>
@@ -198,6 +169,11 @@ pub fn TarotPage() -> impl IntoView {
 const SPREAD_LABELS: [&str; 3] = ["現況", "阻礙", "建議"];
 
 /// 翻牌後 focus 移至結果卡（spec a11y 定案；元素帶 tabindex="-1"）。
+/// 卡面美術 URL（/assets/tarot/{id}.webp——build-web.sh 複製 assets/）
+fn card_art(id: &str) -> String {
+    format!("/assets/tarot/{id}.webp")
+}
+
 fn focus_element(id: &str) {
     use wasm_bindgen::JsCast;
     let _ = web_sys::window()
@@ -392,15 +368,18 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                     >
                                         <div class="tarot-inner">
                                             <div class="tarot-face tarot-back" aria-hidden="true">
-                                                <span class="tarot-back-mark">"✶"</span>
+                                                <img class="tarot-art" src={card_art("back")} alt="" loading="lazy" />
                                             </div>
                                             <div class="tarot-face tarot-front">
-                                                <span class="tarot-symbol" class:reversed=c.reversed>
-                                                    {card_symbol(&c.id.clone())}
-                                                </span>
-                                                <span class="tarot-name">{c.name.clone()}</span>
-                                                <span class="tarot-badge">
-                                                    {if c.reversed { "逆位" } else { "正位" }}
+                                                <img class="tarot-art" class:reversed=c.reversed
+                                                    src={card_art(&c.id.clone())}
+                                                    alt={format!("{}（{}）", c.name, if c.reversed { "逆位" } else { "正位" })}
+                                                    loading="lazy" />
+                                                <span class="tarot-caption">
+                                                    <span class="tarot-name">{c.name.clone()}</span>
+                                                    <span class="tarot-badge">
+                                                        {if c.reversed { "逆位" } else { "正位" }}
+                                                    </span>
                                                 </span>
                                             </div>
                                         </div>

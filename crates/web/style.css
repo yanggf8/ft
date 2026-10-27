@@ -919,6 +919,32 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   justify-content: center;
   gap: 0.6rem;
 }
+.tarot-face {
+  overflow: hidden;
+}
+.tarot-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tarot-art.reversed {
+  transform: rotate(180deg);
+}
+.tarot-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.75rem 0.5rem 0.75rem;
+  background: linear-gradient(transparent, rgba(10, 23, 51, 0.88));
+}
 .tarot-back {
   background:
     radial-gradient(1.2px 1.2px at 25% 20%, var(--silver-faint) 45%, transparent 55%),
