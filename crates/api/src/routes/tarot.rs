@@ -237,6 +237,7 @@ async fn build_tarot_chart_data(
     db: &db::Turso,
     user: &str,
     row: &ReadingRow,
+    include_chart: bool,
 ) -> Result<serde_json::Value> {
     let cards: Vec<TarotCardView> = serde_json::from_str(&row.cards)?;
     let cards_json: Vec<serde_json::Value> = cards
@@ -253,31 +254,57 @@ async fn build_tarot_chart_data(
         .collect();
 
     let mut parts: Vec<String> = Vec::new();
-    // 紫微命盤摘要（最新 ziwei chart；命宮主星＋五行局）
-    let chart: Option<ChartDataRow> = db::first(
-        db,
-        "SELECT chart_data FROM interpretations WHERE user_id=?1 AND divination_type='ziwei' ORDER BY updated_at DESC LIMIT 1",
-        &[&db::text(user)],
-    )
-    .await?;
+    // 紫微命盤摘要（最新 ziwei chart；主星＋亮度）。契約 #9：查詢失敗降級為
+    // 無摘要續跑（純塔羅仍可解），不讓摘要故障炸掉整支端點。
+    let chart: Option<ChartDataRow> = if include_chart {
+        db::first(
+            db,
+            "SELECT chart_data FROM interpretations WHERE user_id=?1 AND divination_type='ziwei' ORDER BY updated_at DESC LIMIT 1",
+            &[&db::text(user)],
+        )
+        .await
+        .unwrap_or(None)
+    } else {
+        None
+    };
     if let Some(chart) = chart {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&chart.chart_data) {
             let five = v
                 .pointer("/fiveElement")
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
+            // isLifePalace 定位（較 name==命宮 穩）；只取主星並附亮度
             let ming_stars = v
                 .pointer("/palaces")
                 .and_then(|x| x.as_array())
                 .and_then(|arr| {
-                    arr.iter()
-                        .find(|p| p.get("name").and_then(|n| n.as_str()) == Some("命宮"))
+                    arr.iter().find(|p| {
+                        p.get("isLifePalace")
+                            .and_then(|b| b.as_bool())
+                            .unwrap_or(false)
+                    })
+                })
+                .or_else(|| {
+                    v.pointer("/palaces")
+                        .and_then(|x| x.as_array())
+                        .and_then(|arr| {
+                            arr.iter()
+                                .find(|p| p.get("name").and_then(|n| n.as_str()) == Some("命宮"))
+                        })
                 })
                 .and_then(|p| p.get("stars").and_then(|x| x.as_array()))
                 .map(|stars| {
                     stars
                         .iter()
-                        .filter_map(|st| st.get("name").and_then(|n| n.as_str()))
+                        .filter(|st| st.get("type").and_then(|t| t.as_str()) == Some("major"))
+                        .filter_map(|st| {
+                            let name = st.get("name").and_then(|n| n.as_str())?;
+                            let bright = st.get("brightness").and_then(|b| b.as_str());
+                            Some(match bright {
+                                Some(b) => format!("{name}（{b}）"),
+                                None => name.to_string(),
+                            })
+                        })
                         .collect::<Vec<_>>()
                         .join("、")
                 });
@@ -300,7 +327,8 @@ async fn build_tarot_chart_data(
             "SELECT work, love, family, money, health FROM prediction_strengths WHERE user_id=?1 AND cycle_id=?2",
             &[&db::text(user), &db::text(&cycle)],
         )
-        .await?;
+        .await
+        .unwrap_or(None);
         if let Some(s) = s {
             parts.push(format!(
                 "本週自評強度（0–3）：工作{}、金錢{}、感情{}、家庭{}、健康{}",
@@ -401,12 +429,10 @@ pub fn register(router: R<'static>) -> R<'static> {
       }
     })
     .post_async("/api/tarot/readings/:id/interpret", |req, ctx| async move {
-      // v2 AI 整合解牌（spec §Tarot v2）：IP strict 限流最先 → auth → 讀取
-      // （done 冪等回原結果、不計次）→ uid strict 限流（進入 AI 呼叫即計）→
-      // AIMutex 專屬實例 → stub 偵測 → 更新 ai_* 欄位（規則式永不覆寫）。
-      if !rate_limit_strict(&ctx, &format!("tarot:ai:ip:{}", client_ip(&req)), AI_IP_LIMIT, AI_WINDOW_MS).await {
-        return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
-      }
+      // v2 AI 整合解牌（spec §Tarot v2）：auth → 讀取（done 冪等回原結果，
+      // 不計次——401/404/重放皆不消耗額度）→ IP strict → uid strict（兩者皆
+      // 「進入 AI 呼叫即計」邊界之後才計）→ AIMutex 專屬實例 → stub 偵測 →
+      // 更新 ai_* 欄位（規則式永不覆寫）。
       let user = match auth_user(&req, &ctx).await { Ok(u) => u, Err(e) => return Ok(e) };
       let id = ctx.param("id").cloned().unwrap_or_default();
       if !valid_tarot_request_id(&id) { return Ok(error::error_code("Invalid reading", "INVALID_TAROT", 400)) }
@@ -419,10 +445,20 @@ pub fn register(router: R<'static>) -> R<'static> {
       if row.ai_status.as_deref() == Some("done") {
         return Ok(match row_view(&row) { Ok(v) => json(&v, 200), Err(_) => db_error() });
       }
+      if !rate_limit_strict(&ctx, &format!("tarot:ai:ip:{}", client_ip(&req)), AI_IP_LIMIT, AI_WINDOW_MS).await {
+        return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
+      }
       if !rate_limit_strict(&ctx, &format!("tarot:ai:{}", user), AI_USER_LIMIT, AI_WINDOW_MS).await {
         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
       }
-      let chart_data = match build_tarot_chart_data(&db, &user, &row).await {
+      // include_chart=0 → 純塔羅（契約 #7：命盤感知為可控制選項）
+      let include_chart = req
+        .url()
+        .ok()
+        .and_then(|u| u.query().map(|q| q.to_string()))
+        .map(|q| !q.split('&').any(|kv| kv == "chart=0"))
+        .unwrap_or(true);
+      let chart_data = match build_tarot_chart_data(&db, &user, &row, include_chart).await {
         Ok(v) => v,
         Err(_) => return Ok(db_error()),
       };

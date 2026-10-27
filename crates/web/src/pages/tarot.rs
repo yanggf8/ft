@@ -239,6 +239,21 @@ pub fn TarotSpreadPage() -> impl IntoView {
     let error = RwSignal::new(String::new());
     let ai_loading = RwSignal::new(false);
     let ai_error = RwSignal::new(String::new());
+    // 純塔羅（契約 #7）：不含命盤 context；首次知情明示（契約 #6 第二層）
+    let pure_tarot = RwSignal::new(false);
+    let ai_notice_pending = RwSignal::new(
+        web_sys::window()
+            .and_then(|w| w.local_storage().ok())
+            .and_then(|s| s)
+            .map(|s| s.get_item("tarot_ai_notice").ok().flatten().is_none())
+            .unwrap_or(false),
+    );
+    let store_ai_notice = move || {
+        let _ = web_sys::window()
+            .and_then(|w| w.local_storage().ok())
+            .and_then(|s| s)
+            .map(|s| s.set_item("tarot_ai_notice", "1"));
+    };
 
     let items = RwSignal::new(Vec::<TarotReadingView>::new());
     let next_cursor = RwSignal::new(None::<String>);
@@ -429,7 +444,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                             <p class="muted" style="font-size:0.8rem;margin:0 0 0.5rem 0">
                                                 "AI 解讀會將你的問題與命盤摘要（不含出生資料）傳送至第三方 AI 服務生成。"
                                             </p>
-                                            {move || if ai_failed {
+                                            {move || if !ai_error.get().is_empty() {
                                                 view! {
                                                     <p class="error" style="margin:0 0 0.5rem 0">
                                                         {move || ai_error.get()}
@@ -438,23 +453,47 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                             } else {
                                                 view! { <span></span> }.into_any()
                                             }}
+                                            <Show when=move || ai_notice_pending.get()>
+                                                <p class="muted" style="font-size:0.8rem;margin:0.5rem 0">
+                                                    "首次使用提醒：AI 解讀由第三方服務生成，僅供娛樂與自我反思，再點一次即開始。"
+                                                </p>
+                                            </Show>
+                                            <label style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.85rem;margin:0.25rem 0 0.5rem 0">
+                                                <input type="checkbox"
+                                                    prop:checked=move || pure_tarot.get()
+                                                    on:input=move |ev| pure_tarot.set(event_target_checked(&ev))
+                                                />
+                                                "純塔羅（不含命盤背景）"
+                                            </label>
                                             <button
                                                 class="btn-link"
                                                 disabled=move || ai_loading.get()
                                                 on:click=move |_| {
                                                     if ai_loading.get_untracked() { return; }
+                                                    // 首次知情（契約 #6）：首次點擊先明示，再點才送出
+                                                    if ai_notice_pending.get_untracked() {
+                                                        ai_notice_pending.set(false);
+                                                        store_ai_notice();
+                                                        return;
+                                                    }
                                                     ai_loading.set(true);
                                                     ai_error.set(String::new());
                                                     let id = reading_id.clone();
+                                                    let include_chart = !pure_tarot.get_untracked();
                                                     spawn_local(async move {
-                                                        match api::tarot_interpret(&id).await {
+                                                        match api::tarot_interpret(&id, include_chart).await {
                                                             Ok(v) => {
-                                                                reading.set(Some(v));
-                                                                ai_error.set(String::new());
+                                                                // S8：AI 進行中若已抽新牌，不覆蓋新結果
+                                                                if reading.get_untracked().as_ref().map(|r| r.id.as_str()) == Some(id.as_str()) {
+                                                                    if v.ai_status.as_deref() == Some("failed") {
+                                                                        ai_error.set("AI 服務暫時無法使用，可稍後再試一次。".to_string());
+                                                                    }
+                                                                    reading.set(Some(v));
+                                                                }
                                                             }
                                                             Err(e) => ai_error.set(
                                                                 if matches!(&e, api::ApiErr::Api { status: 429, .. }) {
-                                                                    "AI 解牌次數已達上限（每 24 小時 3 次），請明天再試。".to_string()
+                                                                    "次數已達上限，請稍後再試（24 小時內最多 3 次）。".to_string()
                                                                 } else {
                                                                     "AI 服務暫時無法使用，可稍後再試一次。".to_string()
                                                                 },
@@ -532,6 +571,16 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         chips.push(format!("{}：{}（{}）", SPREAD_LABELS[i], c.name, if c.reversed { "逆位" } else { "正位" }));
                     }
                     let interpretation = item.interpretation.clone();
+                    // 先組好再嵌入（避免巢狀 view 剖析問題）
+                    let ai_block = item.ai_interpretation.as_deref().map(|ai| {
+                        view! {
+                            <div style="margin-top:0.75rem;border-top:1px solid var(--glass-border);padding-top:0.5rem">
+                                <p style="margin:0;font-size:0.9rem">"AI 整合解牌（娛樂參考）"</p>
+                                <p style="white-space:pre-line;margin:0.25rem 0 0 0;font-size:0.9rem">{ai}</p>
+                            </div>
+                        }
+                        .into_any()
+                    });
                     let question_line = item.question.clone()
                         .map(|q| format!("「{q}」"))
                         .unwrap_or_else(|| "無特定問題".to_string());
@@ -543,6 +592,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                             </p>
                             <p style="margin:0 0 0.5rem 0">{chips.join("　")}</p>
                             <p class="muted" style="white-space:pre-line;margin:0">{interpretation}</p>
+                            {ai_block}
                             <div style="margin-top:0.5rem">
                                 <button class="btn-link" on:click=move |_| {
                                     let this_id = id.clone();

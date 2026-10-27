@@ -234,7 +234,7 @@ impl AIMutexDO {
     async fn handle_request(&self, mut req: Request) -> Result<Response> {
         let body: InterpretMsg = match req.json().await {
             Ok(b) => b,
-            Err(e) => {
+            Err(_) => {
                 return Err(Error::from("invalid body"));
             }
         };

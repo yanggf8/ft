@@ -154,7 +154,7 @@ else
 fi
 
 # Test 8b: tarot endpoints are routed and auth-guarded (401 without a session).
-# (IP rate limit 20/min is far above probe volume; auth fires before body parse.)
+# (auth fires before any rate limit on these paths — 401 probes consume no quota)
 echo -n "8b. Tarot endpoints (401 without auth)... "
 TAROT_OK=1
 for probe in \

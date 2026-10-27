@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
 前置：v1 上線後才動工。以下為 v2 實作前須定案的契約（吸收 Muse 二輪＋Codex 初審）。
 
 1. **AI 欄位遷移（與 v1 schema 相容，定案）**：新增可空欄位 `ai_interpretation
-   TEXT`、`ai_status TEXT CHECK (pending|done|failed)`、`ai_prompt_version TEXT`、
+   TEXT`、`ai_status TEXT CHECK (done|failed)`（同步端點無 pending，見第 12 點）、`ai_prompt_version TEXT`、
    `ai_provider TEXT`、`ai_model TEXT`、`ai_generated_at TEXT`。**規則式
    `interpretation` 永不覆寫**（歷史快照原則）；AI 失敗＝`ai_status=failed`＋
    空 `ai_interpretation`＋前端重試入口；AI 成功前顯示規則式解讀。附
