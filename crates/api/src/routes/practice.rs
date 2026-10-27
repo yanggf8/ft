@@ -168,7 +168,9 @@ fn parse_cursor(cursor: &str) -> Option<(&str, &str)> {
     Some((stamp, id))
 }
 
-fn page_query(query: Option<&str>) -> Result<(usize, Option<(String, String)>), worker::Response> {
+pub(crate) fn page_query(
+    query: Option<&str>,
+) -> Result<(usize, Option<(String, String)>), worker::Response> {
     let mut limit = 20usize;
     let mut cursor = None;
     if let Some(q) = query {

@@ -81,6 +81,15 @@ pub struct TarotReadingView {
     pub created_at: String,
 }
 
+/// v1b wire DTO — 歷史分頁（比照 practice 分頁形狀：items + nextCursor）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TarotHistoryPage {
+    pub items: Vec<TarotReadingView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+
 /// UTC ISO 時刻 → Asia/Taipei（UTC+8，無 DST）當日 `YYYY-MM-DD`。
 /// 台北日界契約（v1a 種子用）；不可解析 → `None`（fail-closed，比照 cycle.rs）。
 pub fn taipei_today(utc_iso: &str) -> Option<String> {

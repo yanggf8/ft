@@ -322,3 +322,22 @@ CREATE TABLE IF NOT EXISTS prediction_strengths (
   created_at TEXT NOT NULL,
   PRIMARY KEY (user_id, cycle_id)
 );
+
+-- ── 塔羅 v1b：三張牌陣抽牌紀錄（2026-10-27 設計定稿）──
+-- 冪等：UNIQUE(user_id, request_id)，重放回原結果（route 層處理）。
+-- cards = JSON 字串（wire 形狀 [{id,name,reversed,position}]，TEXT 存 JSON 慣例）。
+-- interpretation = 規則式成品快照；corpus_version 對應 ft_schema TAROT_CORPUS_VERSION。
+-- 紅線：塔羅資料永不寫入 predictions/prediction_feedback/f8_assignments。
+CREATE TABLE IF NOT EXISTS tarot_readings (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_id     TEXT NOT NULL,
+  question       TEXT,              -- 選填，≤200 字元，trim 後空存 NULL（私密自述，可刪）
+  spread         TEXT NOT NULL CHECK (spread IN ('three')),
+  cards          TEXT NOT NULL,
+  interpretation TEXT NOT NULL,
+  corpus_version TEXT NOT NULL,
+  created_at     TEXT NOT NULL,
+  UNIQUE(user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);
