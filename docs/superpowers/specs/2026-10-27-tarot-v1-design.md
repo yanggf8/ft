@@ -139,7 +139,7 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
   1/3，卻引入 runtime fetch 失敗面與 build-time 匯出步驟。**決策：接受
   49 KiB，不採動態載入**；若日後 bundle 增長實際影響首屏，再一併重議 SPA
   分包（屆時塔羅語料與頁面一起切，而非單獨處理語料）。
-- 首頁：feature-grid **末位**新增第七卡（紫微維持第一、既有卡序不動；桌面
+- 首頁：feature-grid 新增塔羅卡——**2026-10-27 用戶指示改為排最前**（取代原「末位新增、紫微維持第一」決策：chrome ring 主打位隨 DOM 首位轉移至塔羅）＋NEW 小圖標；桌面
   `auto-fit` 末列孤卡可接受）；整卡可點（比照姓名學卡）；文案標明
   「今日抽牌免登入／三張牌陣需登入」；敘事定位為**當下問題的反思工具**
   （紫微／西洋是命盤、Big5 是人格、F5 是本週預測——塔羅不引用命盤資料，

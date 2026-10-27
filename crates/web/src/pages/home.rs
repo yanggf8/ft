@@ -33,6 +33,13 @@ pub fn HomePage() -> impl IntoView {
                 </Show>
             </div>
             <div class="feature-grid">
+                <A href="/tarot" attr:class="feature">
+                    <h3>
+                        <span class="feature-icon">"🃏"</span>" 塔羅"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>"今日抽牌免登入；三張牌陣解牌需登入，當下問題的反思工具"</p>
+                </A>
                 <div class="feature">
                     <h3><span class="feature-icon">"🔮"</span>" 紫微斗數"</h3>
                     <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
@@ -56,10 +63,6 @@ pub fn HomePage() -> impl IntoView {
                 <A href="/glossary" attr:class="feature">
                     <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
                     <p>"紫微、占星、姓名學常見名詞一次看懂"</p>
-                </A>
-                <A href="/tarot" attr:class="feature">
-                    <h3><span class="feature-icon">"🃏"</span>" 塔羅"</h3>
-                    <p>"今日抽牌免登入；三張牌陣解牌需登入，當下問題的反思工具"</p>
                 </A>
             </div>
         </div>

@@ -982,3 +982,18 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .tarot-card--sm {
   width: min(150px, 28vw);
 }
+
+/* ═══ 塔羅首頁主打卡 NEW 徽章（2026-10-27，最新功能標記）═══ */
+.feature-new {
+  display: inline-block;
+  vertical-align: 0.35em;
+  margin-left: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--starlight);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  background: var(--glass-bg);
+}
