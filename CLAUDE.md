@@ -102,6 +102,9 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
 - Route-level request bodies are capped at 64 KiB (`body_too_large` in `routes/common.rs`)
   — new body-parsing routes must call it before `req.json()`.
 - Route code must not echo DB/engine error detail to clients (generic `"db error"` only).
+- 命理 AI 解讀（紫微／西洋／人生故事）system prompt 一律帶 `GUARDRAIL_ZH/EN`
+  （`services/ai/prompts.rs`）：傾向非注定、不借遺傳／腦科學／IQ／研究數據背書；
+  新增 chart type 時必須沿用，測試 `guardrail_matches_prompt_language` 守門。
 - **CSP 紅線（2026-09-11 事故）**：`_headers` 的 `script-src 'self' 'wasm-unsafe-eval'`
   **擋 inline script** — wasm 啟動器必須留在外部檔 `boot.js`（`index.html` 以
   `<script type="module" src="/boot.js">` 引用，`build-web.sh` 負責複製）。
