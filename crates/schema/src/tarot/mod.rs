@@ -13,10 +13,13 @@ pub use catalog::{TarotCard, CATALOG};
 use serde::{Deserialize, Serialize};
 
 /// 語料版本（比照 `PRACTICE_CATALOG_VERSION`；改版 bump）。
-pub const TAROT_CORPUS_VERSION: &str = "1";
+pub const TAROT_CORPUS_VERSION: &str = "2";
 
 /// 種子編碼＋PRNG 演算法版本——改演算法必 bump，否則「同日同裝置同牌」會靜默改變。
 pub const TAROT_DRAW_ALGO_VERSION: &str = "1";
+
+/// v2 AI 解牌 prompt 版本（spec §Tarot v2-7；改 prompt 模板必 bump）。
+pub const TAROT_PROMPT_VERSION: &str = "1";
 
 /// 洗牌熵下限（bytes）；不足即 `None`（fail-closed，不降級弱隨機）。
 pub const MIN_ENTROPY_BYTES: usize = 32;
@@ -79,6 +82,15 @@ pub struct TarotReadingView {
     pub interpretation: String,
     pub corpus_version: String,
     pub created_at: String,
+    // ── v2 AI 解牌（None＝從未嘗試；failed＝AI 不可用，規則式解讀仍在）──
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_interpretation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_model: Option<String>,
 }
 
 /// v1b wire DTO — 歷史分頁（比照 practice 分頁形狀：items + nextCursor）。
@@ -262,7 +274,7 @@ mod tests {
     // ── 版本常數 ──
     #[test]
     fn version_constants_are_pinned() {
-        assert_eq!(TAROT_CORPUS_VERSION, "1");
+        assert_eq!(TAROT_CORPUS_VERSION, "2");
         assert_eq!(TAROT_DRAW_ALGO_VERSION, "1");
     }
 
