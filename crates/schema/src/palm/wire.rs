@@ -15,8 +15,9 @@ pub const MAX_IMAGE_BASE64_CHARS: usize = 682_667;
 /// P3 mime 宣告白名單。
 pub const PALM_MIMES: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
 
-/// P13 請求 DTO（wire 鍵 camelCase；deny 擋多餘欄位）。
-#[derive(Debug, serde::Deserialize)]
+/// P13 請求 DTO（wire 鍵 camelCase；deny 擋多餘欄位）。api 收（Deserialize）、
+/// web 送（Serialize）——雙向 derive。
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PalmAnalyzeRequest {
     pub request_id: String,
@@ -73,8 +74,8 @@ pub fn gate_min_confidence(model: &str) -> Option<f32> {
 }
 
 /// P17 回應 view（camelCase；ai 欄位 skip-if-none；interpretation／features
-/// 恆回傳）。
-#[derive(Debug, serde::Serialize)]
+/// 恆回傳）。api 送（Serialize）、web 收（Deserialize）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PalmReadingView {
     pub id: String,
@@ -87,8 +88,8 @@ pub struct PalmReadingView {
     pub ai_chart_context: Option<bool>,
 }
 
-/// 歷史分頁（比照 `TarotHistoryPage`）。
-#[derive(Debug, serde::Serialize)]
+/// 歷史分頁（比照 `TarotHistoryPage`；api 送、web 收）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PalmHistoryPage {
     pub items: Vec<PalmReadingView>,

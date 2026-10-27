@@ -17,8 +17,8 @@ use leptos_router::path;
 use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
 use crate::pages::{
-    AdminPage, DivinationPage, GlossaryPage, HomePage, LoginPage, NamingPage, PersonalityPage,
-    ProfilePage, StoryPage, TarotPage, TarotSpreadPage,
+    AdminPage, DivinationPage, GlossaryPage, HomePage, LoginPage, NamingPage, PalmCapturePage,
+    PalmL0Page, PersonalityPage, ProfilePage, StoryPage, TarotPage, TarotSpreadPage,
 };
 
 #[component]
@@ -41,6 +41,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/naming") view=NamingPage/>
                     <Route path=path!("/tarot") view=TarotPage/>
                     <Route path=path!("/tarot/spread") view=|| view! { <Protected><TarotSpreadPage/></Protected> }/>
+                    <Route path=path!("/palm") view=PalmL0Page/>
+                    <Route path=path!("/palm/capture") view=|| view! { <Protected><PalmCapturePage/></Protected> }/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>

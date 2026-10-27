@@ -6,6 +6,7 @@
 //! the email; a session is minted solely by `verify_email`.
 
 use ft_schema::api::*;
+use ft_schema::palm::wire::{PalmAnalyzeRequest, PalmHistoryPage, PalmReadingView};
 use ft_schema::practice::{
     CreatePracticeAttemptRequest, CreatePracticePlanRequest, PracticeAttempt, PracticeAttemptPage,
     PracticeHistoryPage, PracticeOverview, PracticePlan,
@@ -472,6 +473,50 @@ pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
         deleted: i64,
     }
     let resp = with_auth(Request::delete(&url("/api/tarot/readings")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let n: DeletedCount = decode(resp).await?;
+    Ok(n.deleted)
+}
+
+// ── 手相 v1（docs/superpowers/specs/2026-10-27-palm-v1-design.md）──
+
+/// `POST /api/palm/analyze` — 拍照抽取＋規則式解讀（requestId 冪等；同鍵同 body
+/// 重放回原結果，201/200 皆成功；422 PALM_QUALITY_LOW＝照片品質不足請重拍）。
+pub async fn palm_analyze(body: &PalmAnalyzeRequest) -> Result<PalmReadingView, ApiErr> {
+    send_json(Request::post(&url("/api/palm/analyze")), body).await
+}
+
+/// `GET /api/palm/readings` — 歷史分頁（items + nextCursor）。
+pub async fn palm_history(cursor: Option<&str>) -> Result<PalmHistoryPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/palm/readings?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => "/api/palm/readings".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+/// `DELETE /api/palm/readings/:id` — 單筆刪除（不存在／他人／重刪 → 404）。
+pub async fn palm_delete(id: &str) -> Result<(), ApiErr> {
+    let resp = with_auth(Request::delete(&url(&format!("/api/palm/readings/{id}"))))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let _: serde_json::Value = decode(resp).await?;
+    Ok(())
+}
+
+/// `DELETE /api/palm/readings` — 整批刪除，回刪除筆數。
+pub async fn palm_delete_all() -> Result<i64, ApiErr> {
+    #[derive(Deserialize)]
+    struct DeletedCount {
+        deleted: i64,
+    }
+    let resp = with_auth(Request::delete(&url("/api/palm/readings")))
         .send()
         .await
         .map_err(|e| ApiErr::Network(e.to_string()))?;

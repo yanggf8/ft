@@ -1055,3 +1055,137 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
     font-size: 0.8rem;
   }
 }
+
+/* ── palm v1（/palm 教學＋/palm/capture 拍攝；色彩一律既有 token）── */
+.palm-figure {
+  color: var(--silver-dim);
+}
+.palm-figure line,
+.palm-figure path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.palm-figure .palm-line {
+  stroke-width: 2;
+}
+.palm-figure text {
+  fill: var(--silver-faint);
+  font-size: 9px;
+}
+.palm-demo {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+.palm-demo .palm-figure {
+  width: 130px;
+  flex-shrink: 0;
+}
+.palm-figure-note {
+  font-size: 0.75rem;
+  margin: 0.5rem 0 0 0;
+}
+.palm-steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  line-height: 1.9;
+}
+.palm-hand-toggle {
+  display: inline-flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.palm-hand-btn {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--silver-faint);
+  border-radius: 999px;
+  padding: 0.35rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.palm-hand-btn.active {
+  color: var(--heading);
+  border-color: var(--silver-dim);
+}
+.palm-video-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  background: var(--void);
+}
+.palm-video {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: cover;
+}
+.palm-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--heading);
+  opacity: 0.55;
+}
+.palm-overlay .palm-figure {
+  width: min(52vw, 240px);
+}
+.palm-overlay .palm-figure line,
+.palm-overlay .palm-figure path {
+  stroke-width: 3;
+  stroke-dasharray: 10 8;
+}
+.palm-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.palm-preview-img {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+}
+.palm-preview-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.palm-file-label {
+  display: inline-block;
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+.palm-file-input {
+  display: none;
+}
+.palm-file-img {
+  display: none;
+}
+.palm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.palm-chip {
+  font-size: 0.8rem;
+  color: var(--silver-dim);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+}
+@media (max-width: 560px) {
+  .palm-demo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
