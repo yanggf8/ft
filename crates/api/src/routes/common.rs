@@ -318,6 +318,64 @@ pub async fn rate_limit_strict(
     }
 }
 
+/// palm v1（spec P8a）：可退款版 [`rate_limit_strict`]——`Some(reset_at)` 表示
+/// 「已計次且放行」，`reset_at` 是該視窗的識別票根（DO `/check` 原樣回傳）；
+/// `None` 表示拒絕或 fail-closed（未計次，呼叫端不得退款）。refund 語意見
+/// [`refund_strict`]。
+pub async fn rate_limit_strict_refundable(
+    ctx: &RouteContext<()>,
+    key: &str,
+    limit: u32,
+    window_ms: f64,
+) -> Option<f64> {
+    let shard = fnv1a_64(key.as_bytes()) % u64::from(RATE_LIMIT_SHARDS);
+    let do_name = format!("rl:{}", shard);
+    let ns = ctx.env.durable_object("RATE_LIMIT").ok()?;
+    let stub = ns
+        .id_from_name(&do_name)
+        .and_then(|id| id.get_stub())
+        .ok()?;
+    let body = serde_json::json!({ "key": key, "limit": limit, "windowMs": window_ms });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
+    let req = Request::new_with_init("http://do/check", &init).ok()?;
+    let mut res = stub.fetch_with_request(req).await.ok()?;
+    if res.status_code() != 200 {
+        return None;
+    }
+    let v: serde_json::Value = res.json().await.ok()?;
+    if !v.get("allowed").and_then(|a| a.as_bool()).unwrap_or(false) {
+        return None;
+    }
+    v.get("resetAt").and_then(|r| r.as_f64())
+}
+
+/// palm v1（spec P8a）：返還一次已計次（低品質 422 路徑）。**best-effort**——
+/// DO 不可用只 log 不阻回應（寧可少計不可多計）；核銷失敗（跨視窗/見底）
+/// 由 DO 端 `apply_refund` 冪等吸收，呼叫端無需分辨。
+pub async fn refund_strict(ctx: &RouteContext<()>, key: &str, reset_at: f64) {
+    let shard = fnv1a_64(key.as_bytes()) % u64::from(RATE_LIMIT_SHARDS);
+    let do_name = format!("rl:{}", shard);
+    let Ok(ns) = ctx.env.durable_object("RATE_LIMIT") else {
+        return;
+    };
+    let Ok(stub) = ns.id_from_name(&do_name).and_then(|id| id.get_stub()) else {
+        return;
+    };
+    let body = serde_json::json!({ "key": key, "resetAt": reset_at });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
+    let Ok(req) = Request::new_with_init("http://do/refund", &init) else {
+        return;
+    };
+    match stub.fetch_with_request(req).await {
+        Ok(r) if r.status_code() == 200 => {}
+        _ => console_error!("palm refund failed for {}", key),
+    }
+}
+
 /// Deterministic tiny hash (FNV-1a 64) for DO sharding — stable across isolates
 /// and releases, unlike `DefaultHasher` whose algorithm is unspecified.
 fn fnv1a_64(bytes: &[u8]) -> u64 {

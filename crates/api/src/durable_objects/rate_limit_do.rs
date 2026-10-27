@@ -20,7 +20,7 @@ use worker::*;
 use crate::services::clock;
 
 /// One counter per namespaced key. Mirrors the old `(count, reset)` entry.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RateCounter {
     count: u32,
@@ -40,6 +40,9 @@ impl DurableObject for RateLimitDO {
     async fn fetch(&self, mut req: Request) -> Result<Response> {
         match req.path().as_str() {
             "/check" => self.check(&mut req).await,
+            // palm v1（spec P8a）：低品質 422 返還 uid 額度——僅核銷「原視窗」
+            // 的已計次（跨視窗拒退、下限 0、重複退被下限吸收；冪等安全）。
+            "/refund" => self.refund(&mut req).await,
             _ => Response::error("Not found", 404),
         }
     }
@@ -129,7 +132,27 @@ impl RateLimitDO {
         Response::from_json(&serde_json::json!({
             "allowed": allowed,
             "retryAfterMs": retry_after_ms,
+            // palm v1：route 端 refund 需原視窗識別（Codex B3——防跨視窗扣到新視窗）。
+            "resetAt": counter.reset_at,
         }))
+    }
+
+    /// POST /refund — body `{key, resetAt}` -> `{ok, count}`。核銷同一視窗的
+    /// 一次計數（`apply_refund` 為純函式，見 tests）。
+    async fn refund(&self, req: &mut Request) -> Result<Response> {
+        let body: RefundBody = req.json().await.map_err(|_| Error::from("invalid body"))?;
+        let storage_key = format!("rl:{}", body.key);
+        let stored: Option<RateCounter> = self.state.storage().get(&storage_key).await?;
+        let prev_count = stored.as_ref().map(|c| c.count).unwrap_or(0);
+        let updated = apply_refund(stored, body.reset_at);
+        let count = match &updated {
+            Some(c) => {
+                self.state.storage().put(&storage_key, c).await?;
+                c.count
+            }
+            None => prev_count,
+        };
+        Response::from_json(&serde_json::json!({ "ok": true, "count": count }))
     }
 
     /// Arm the sweep alarm ~1s out when none is scheduled. `get_alarm` is a
@@ -154,4 +177,71 @@ struct CheckBody {
     key: String,
     limit: u32,
     window_ms: f64,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RefundBody {
+    key: String,
+    reset_at: f64,
+}
+
+/// refund 核心邏輯（純函式）：僅當儲存的視窗 `reset_at` 與票根完全相同才退
+/// 一次（浮點原樣回傳往返不失真）；跨視窗／不存在／已見底 → `None`（不動）。
+fn apply_refund(stored: Option<RateCounter>, ticket_reset_at: f64) -> Option<RateCounter> {
+    let c = stored?;
+    if c.reset_at != ticket_reset_at || c.count == 0 {
+        return None;
+    }
+    Some(RateCounter {
+        count: c.count - 1,
+        reset_at: c.reset_at,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn counter(count: u32, reset_at: f64) -> RateCounter {
+        RateCounter { count, reset_at }
+    }
+
+    #[test]
+    fn refund_same_window_decrements() {
+        let c = counter(2, 1_000.0);
+        assert_eq!(
+            apply_refund(Some(c.clone()), 1_000.0),
+            Some(counter(1, 1_000.0))
+        );
+    }
+
+    #[test]
+    fn refund_cross_window_is_noop() {
+        // 視窗已輪替：退票不許扣新視窗（Codex B3）
+        let c = counter(1, 2_000.0);
+        assert_eq!(apply_refund(Some(c), 1_000.0), None);
+    }
+
+    #[test]
+    fn refund_saturates_at_zero() {
+        let c = counter(0, 1_000.0);
+        assert_eq!(apply_refund(Some(c), 1_000.0), None);
+        // 重複退第二次（count 已 1→0 之後）也被下限吸收
+        let c2 = counter(1, 1_000.0);
+        assert_eq!(apply_refund(Some(c2), 1_000.0), Some(counter(0, 1_000.0)));
+    }
+
+    #[test]
+    fn refund_missing_counter_is_noop() {
+        assert_eq!(apply_refund(None, 1_000.0), None);
+    }
+
+    #[test]
+    fn refund_check_body_camel_case() {
+        let b: RefundBody =
+            serde_json::from_str(r#"{"key":"palm:ai:u1","resetAt":123.5}"#).unwrap();
+        assert_eq!(b.key, "palm:ai:u1");
+        assert_eq!(b.reset_at, 123.5);
+    }
 }
