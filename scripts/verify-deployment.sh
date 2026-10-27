@@ -179,6 +179,32 @@ else
   FAILED=1
 fi
 
+# Test 8c: palm endpoints are routed and auth-guarded (401 without a session).
+# (auth fires before any rate limit on these paths — 401 probes consume no quota)
+echo -n "8c. Palm endpoints (401 without auth)... "
+PALM_OK=1
+for probe in \
+  "POST|/api/palm/analyze" \
+  "GET|/api/palm/readings" \
+  "DELETE|/api/palm/readings/00000000-0000-0000-0000-000000000000" \
+  "DELETE|/api/palm/readings"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    PALM_OK=0
+  fi
+done
+if [ "$PALM_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"
