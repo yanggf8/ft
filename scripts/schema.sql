@@ -338,6 +338,13 @@ CREATE TABLE IF NOT EXISTS tarot_readings (
   interpretation TEXT NOT NULL,
   corpus_version TEXT NOT NULL,
   created_at     TEXT NOT NULL,
+  -- v2 AI 解牌（2026-10-27-tarot-ai.sql 遷移同步）：規則式快照永不覆寫
+  ai_interpretation TEXT,
+  ai_status         TEXT CHECK (ai_status IN ('done', 'failed')),
+  ai_prompt_version TEXT,
+  ai_provider       TEXT,
+  ai_model          TEXT,
+  ai_generated_at   TEXT,
   UNIQUE(user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);

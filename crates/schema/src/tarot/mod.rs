@@ -102,6 +102,11 @@ pub struct TarotHistoryPage {
     pub next_cursor: Option<String>,
 }
 
+/// 依 id 查牌（組 AI prompt／歷史重渲染用）。
+pub fn card_by_id(id: &str) -> Option<&'static TarotCard> {
+    CATALOG.iter().find(|c| c.id == id)
+}
+
 /// UTC ISO 時刻 → Asia/Taipei（UTC+8，無 DST）當日 `YYYY-MM-DD`。
 /// 台北日界契約（v1a 種子用）；不可解析 → `None`（fail-closed，比照 cycle.rs）。
 pub fn taipei_today(utc_iso: &str) -> Option<String> {
@@ -458,6 +463,14 @@ mod tests {
         assert_eq!(normalize_question(&two_hundred), Some(two_hundred.clone()));
         let two_oh_one = "字".repeat(201);
         assert_eq!(normalize_question(&two_oh_one), None, ">200 字 → None");
+    }
+
+    #[test]
+    fn card_by_id_finds_and_rejects() {
+        assert_eq!(card_by_id("major_00").map(|c| c.name), Some("愚者"));
+        assert_eq!(card_by_id("pentacles_14").map(|c| c.name), Some("錢幣國王"));
+        assert!(card_by_id("major_99").is_none());
+        assert!(card_by_id("nope").is_none());
     }
 
     #[test]

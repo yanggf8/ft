@@ -160,6 +160,7 @@ TAROT_OK=1
 for probe in \
   "POST|/api/tarot/draw" \
   "GET|/api/tarot/readings" \
+  "POST|/api/tarot/readings/00000000-0000-0000-0000-000000000000/interpret" \
   "DELETE|/api/tarot/readings"
 do
   METHOD="${probe%%|*}"

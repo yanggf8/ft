@@ -454,6 +454,12 @@ pub async fn tarot_delete(id: &str) -> Result<(), ApiErr> {
     Ok(())
 }
 
+/// `POST /api/tarot/readings/:id/interpret` — AI 整合解牌（同步；已完成者冪等
+/// 回原結果）。回傳更新後的 reading（含 ai 欄位）。
+pub async fn tarot_interpret(id: &str) -> Result<TarotReadingView, ApiErr> {
+    post_empty(&format!("/api/tarot/readings/{id}/interpret")).await
+}
+
 /// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。
 pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
     #[derive(Deserialize)]

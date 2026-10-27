@@ -237,6 +237,8 @@ pub fn TarotSpreadPage() -> impl IntoView {
     let revealed = RwSignal::new([false, false, false]);
     let drawing = RwSignal::new(false);
     let error = RwSignal::new(String::new());
+    let ai_loading = RwSignal::new(false);
+    let ai_error = RwSignal::new(String::new());
 
     let items = RwSignal::new(Vec::<TarotReadingView>::new());
     let next_cursor = RwSignal::new(None::<String>);
@@ -340,6 +342,13 @@ pub fn TarotSpreadPage() -> impl IntoView {
                 let question_note = r.question.clone();
                 let interpretation = r.interpretation.clone();
                 let corpus_version = r.corpus_version.clone();
+                let ai_text = r.ai_interpretation.clone();
+                let ai_provider_note = r
+                    .ai_provider
+                    .clone()
+                    .map(|p| format!("AI 服務：{p}・娛樂與自我反思用途，非專業建議"));
+                let reading_id = r.id.clone();
+                let ai_failed = r.ai_status.as_deref() == Some("failed");
                 let cards = r.cards.clone();
                 view! {
                     <div class="tarot-trio" role="group" aria-label="三張牌陣結果">
@@ -388,6 +397,10 @@ pub fn TarotSpreadPage() -> impl IntoView {
 
                     {move || all_revealed.get().then(|| {
                         let q_note = question_note.clone();
+                        let ai_text = ai_text.clone();
+                        let ai_text_check = ai_text.clone();
+                        let ai_provider_note = ai_provider_note.clone();
+                        let reading_id = reading_id.clone();
                         view! {
                             <div class="card" id="tarot-spread-result" tabindex="-1" style="margin-top:1.5rem">
                                 <h2 style="margin-bottom:0.75rem">"解牌"</h2>
@@ -398,6 +411,66 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                 <p class="muted" style="font-size:0.8rem;margin:1rem 0 0 0">
                                     {format!("語料版本 {}", corpus_version.clone())}
                                 </p>
+
+                                {move || ai_text.clone().map(|text| view! {
+                                    <div style="margin-top:1.25rem;border-top:1px solid var(--glass-border);padding-top:1rem">
+                                        <h3 style="margin-bottom:0.5rem">"AI 整合解牌"</h3>
+                                        <p style="white-space:pre-line;margin:0">{text}</p>
+                                        {ai_provider_note.clone().map(|note| view! {
+                                            <p class="muted" style="font-size:0.8rem;margin:0.75rem 0 0 0">{note}</p>
+                                        }.into_any())}
+                                    </div>
+                                }.into_any())}
+
+                                {move || if ai_text_check.is_none() {
+                                    let reading_id = reading_id.clone();
+                                    view! {
+                                        <div style="margin-top:1.25rem;border-top:1px solid var(--glass-border);padding-top:1rem">
+                                            <p class="muted" style="font-size:0.8rem;margin:0 0 0.5rem 0">
+                                                "AI 解讀會將你的問題與命盤摘要（不含出生資料）傳送至第三方 AI 服務生成。"
+                                            </p>
+                                            {move || if ai_failed {
+                                                view! {
+                                                    <p class="error" style="margin:0 0 0.5rem 0">
+                                                        {move || ai_error.get()}
+                                                    </p>
+                                                }.into_any()
+                                            } else {
+                                                view! { <span></span> }.into_any()
+                                            }}
+                                            <button
+                                                class="btn-link"
+                                                disabled=move || ai_loading.get()
+                                                on:click=move |_| {
+                                                    if ai_loading.get_untracked() { return; }
+                                                    ai_loading.set(true);
+                                                    ai_error.set(String::new());
+                                                    let id = reading_id.clone();
+                                                    spawn_local(async move {
+                                                        match api::tarot_interpret(&id).await {
+                                                            Ok(v) => {
+                                                                reading.set(Some(v));
+                                                                ai_error.set(String::new());
+                                                            }
+                                                            Err(e) => ai_error.set(
+                                                                if matches!(&e, api::ApiErr::Api { status: 429, .. }) {
+                                                                    "AI 解牌次數已達上限（每 24 小時 3 次），請明天再試。".to_string()
+                                                                } else {
+                                                                    "AI 服務暫時無法使用，可稍後再試一次。".to_string()
+                                                                },
+                                                            ),
+                                                        }
+                                                        ai_loading.set(false);
+                                                    });
+                                                }
+                                            >
+                                                {move || if ai_loading.get() { "AI 解讀中…" } else if ai_failed { "重試 AI 整合解牌" } else { "AI 整合解牌" }}
+                                            </button>
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    view! { <span></span> }.into_any()
+                                }}
                             </div>
                         }.into_any()
                     })}

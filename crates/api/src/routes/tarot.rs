@@ -12,14 +12,16 @@ use super::super::{
 };
 use super::common::{
     apply_cache_headers, auth_user, body_too_large, client_ip, ok_json, rate_limit,
+    rate_limit_strict,
 };
 use super::practice::page_query;
 use super::R;
 use ft_schema::tarot::{
-    assemble_interpretation, shuffle_three, valid_tarot_request_id, validate_question,
+    assemble_interpretation, card_by_id, shuffle_three, valid_tarot_request_id, validate_question,
     QuestionTooLong, TarotCardView, TarotDrawRequest, TarotHistoryPage, TarotReadingView,
-    MIN_ENTROPY_BYTES, TAROT_CORPUS_VERSION,
+    MIN_ENTROPY_BYTES, TAROT_CORPUS_VERSION, TAROT_PROMPT_VERSION,
 };
+
 use serde::{Deserialize, Serialize};
 use worker::*;
 
@@ -30,6 +32,12 @@ const IP_WINDOW_MS: f64 = 60_000.0;
 /// RateLimitDO 語意，設計定稿明文取捨）。
 const USER_LIMIT: u32 = 20;
 const USER_WINDOW_MS: f64 = 86_400_000.0;
+
+/// v2 AI 限流（spec §Tarot v2-13）：皆 24h 固定視窗、`rate_limit_strict`
+/// （fail-closed）；計次邊界＝進入 AI 呼叫即計（含 queue-full 與失敗）。
+const AI_USER_LIMIT: u32 = 3;
+const AI_IP_LIMIT: u32 = 10;
+const AI_WINDOW_MS: f64 = 86_400_000.0;
 
 const POSITIONS: [&str; 3] = ["situation", "obstacle", "advice"];
 
@@ -42,6 +50,10 @@ struct ReadingRow {
     interpretation: String,
     corpus_version: String,
     created_at: String,
+    ai_interpretation: Option<String>,
+    ai_status: Option<String>,
+    ai_provider: Option<String>,
+    ai_model: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -101,6 +113,10 @@ fn row_view(row: &ReadingRow) -> Result<TarotReadingView> {
         interpretation: row.interpretation.clone(),
         corpus_version: row.corpus_version.clone(),
         created_at: row.created_at.clone(),
+        ai_interpretation: row.ai_interpretation.clone(),
+        ai_status: row.ai_status.clone(),
+        ai_provider: row.ai_provider.clone(),
+        ai_model: row.ai_model.clone(),
     })
 }
 
@@ -115,6 +131,194 @@ async fn reading_by_request(
         &[&db::text(user), &db::text(request_id)],
     )
     .await
+}
+
+async fn reading_by_id(db: &db::Turso, user: &str, id: &str) -> Result<Option<ReadingRow>> {
+    db::first(
+        db,
+        "SELECT * FROM tarot_readings WHERE id=?1 AND user_id=?2 LIMIT 1",
+        &[&db::text(id), &db::text(user)],
+    )
+    .await
+}
+
+/// v2 AI 成功結果（DO 回應解析後）。
+struct AiOk {
+    interpretation: String,
+    provider: String,
+    model: String,
+}
+
+/// 呼 AIMutexDO **專屬實例**（`id_from_name("tarot")`，spec §Tarot v2-4）。
+/// 任何失敗（DO 不可用／503 queue-full／非 200／**`stub:true`**——spec v2-11
+/// 一律視為 failed／空解讀）回 `Err`；呼叫端記 `ai_status=failed`。
+async fn call_tarot_ai(ctx: &RouteContext<()>, chart_data: &serde_json::Value) -> Result<AiOk, ()> {
+    let ns = ctx.env.durable_object("AI_MUTEX").map_err(|_| ())?;
+    let stub = ns
+        .id_from_name("tarot")
+        .and_then(|id| id.get_stub())
+        .map_err(|_| ())?;
+    let mut keys_map = serde_json::Map::new();
+    for (env_key, name) in [
+        ("IFLOW_API_KEY", "iflow"),
+        ("GROQ_API_KEY", "groq"),
+        ("CEREBRAS_API_KEY", "cerebras"),
+    ] {
+        if let Ok(v) = ctx.env.secret(env_key) {
+            let v = v.to_string();
+            if !v.is_empty() {
+                keys_map.insert(name.to_string(), serde_json::Value::String(v));
+            }
+        }
+    }
+    let body = serde_json::json!({
+        "keys": serde_json::Value::Object(keys_map),
+        "interpretRequest": {
+            "chartType": "tarot",
+            "chartData": chart_data,
+            "language": "zh",
+        },
+    });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
+    let req = Request::new_with_init("https://ai-mutex/interpret", &init).map_err(|_| ())?;
+    let mut res = stub.fetch_with_request(req).await.map_err(|_| ())?;
+    if res.status_code() != 200 {
+        // 503 = queue full / 全 provider 失敗；其他非 200 同樣視為失敗
+        return Err(());
+    }
+    let data: serde_json::Value = res.json().await.map_err(|_| ())?;
+    if data.get("stub").and_then(|v| v.as_bool()).unwrap_or(false) {
+        // spec v2-11：stub 文案不得入庫——一律視為 failed
+        return Err(());
+    }
+    let interpretation = data
+        .get("interpretation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if interpretation.trim().is_empty() {
+        return Err(());
+    }
+    Ok(AiOk {
+        interpretation,
+        provider: data
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        model: data
+            .get("model")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+    })
+}
+
+#[derive(Deserialize)]
+struct StrengthRow {
+    work: i32,
+    love: i32,
+    family: i32,
+    money: i32,
+    health: i32,
+}
+
+#[derive(Deserialize)]
+struct ChartDataRow {
+    chart_data: String,
+}
+
+/// 組 AI 用 chartData（spec §Tarot v2-5/6/8/9/10）：牌陣＋question＋
+/// chartSummary（命盤摘要：紫微最新命宮主星／五行局＋F4 **當週**自評強度）。
+/// 資料最小化：不含出生時地；無命盤／無當週強度 → 缺項跳過（降級矩陣）。
+async fn build_tarot_chart_data(
+    db: &db::Turso,
+    user: &str,
+    row: &ReadingRow,
+) -> Result<serde_json::Value> {
+    let cards: Vec<TarotCardView> = serde_json::from_str(&row.cards)?;
+    let cards_json: Vec<serde_json::Value> = cards
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "name": c.name,
+                "reversed": c.reversed,
+                "position": c.position,
+                "meaning": card_by_id(&c.id).map(|t| if c.reversed { t.reversed } else { t.upright }),
+            })
+        })
+        .collect();
+
+    let mut parts: Vec<String> = Vec::new();
+    // 紫微命盤摘要（最新 ziwei chart；命宮主星＋五行局）
+    let chart: Option<ChartDataRow> = db::first(
+        db,
+        "SELECT chart_data FROM interpretations WHERE user_id=?1 AND divination_type='ziwei' ORDER BY updated_at DESC LIMIT 1",
+        &[&db::text(user)],
+    )
+    .await?;
+    if let Some(chart) = chart {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&chart.chart_data) {
+            let five = v
+                .pointer("/fiveElement")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            let ming_stars = v
+                .pointer("/palaces")
+                .and_then(|x| x.as_array())
+                .and_then(|arr| {
+                    arr.iter()
+                        .find(|p| p.get("name").and_then(|n| n.as_str()) == Some("命宮"))
+                })
+                .and_then(|p| p.get("stars").and_then(|x| x.as_array()))
+                .map(|stars| {
+                    stars
+                        .iter()
+                        .filter_map(|st| st.get("name").and_then(|n| n.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("、")
+                });
+            match ming_stars {
+                Some(stars) if !stars.is_empty() => {
+                    parts.push(format!("命宮主星：{stars}"));
+                }
+                _ => parts.push("命宮無主星（借對宮）".to_string()),
+            }
+            if !five.is_empty() {
+                parts.push(format!("五行局：{five}"));
+            }
+        }
+    }
+    // F4 當週自評強度（僅當週 cycle_id；無當週列＝無此 context）
+    let now = clock::now_iso();
+    if let Some(cycle) = ft_schema::cycle::week_start_asia_taipei(&now) {
+        let s: Option<StrengthRow> = db::first(
+            db,
+            "SELECT work, love, family, money, health FROM prediction_strengths WHERE user_id=?1 AND cycle_id=?2",
+            &[&db::text(user), &db::text(&cycle)],
+        )
+        .await?;
+        if let Some(s) = s {
+            parts.push(format!(
+                "本週自評強度（0–3）：工作{}、金錢{}、感情{}、家庭{}、健康{}",
+                s.work, s.money, s.love, s.family, s.health
+            ));
+        }
+    }
+
+    let summary = if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("；"))
+    };
+    Ok(serde_json::json!({
+        "cards": cards_json,
+        "question": row.question,
+        "chartSummary": summary,
+    }))
 }
 
 /// 冪等比對：spread＋正規化後 question（設計定稿）。
@@ -180,7 +384,8 @@ pub fn register(router: R<'static>) -> R<'static> {
           &db::text(&interpretation),&db::text(TAROT_CORPUS_VERSION),&db::text(&now)]).await;
       match n {
         Ok(1) => Ok(json(&TarotReadingView {
-          id, question, spread: body.spread, cards, interpretation, corpus_version: TAROT_CORPUS_VERSION.into(), created_at: now
+          id, question, spread: body.spread, cards, interpretation, corpus_version: TAROT_CORPUS_VERSION.into(), created_at: now,
+          ai_interpretation: None, ai_status: None, ai_provider: None, ai_model: None,
         }, 201)),
         failed => {
           // UNIQUE 衝突或傳輸錯誤後的回查（同 practice 先例：先讀冪等鍵再分類）
@@ -193,6 +398,51 @@ pub fn register(router: R<'static>) -> R<'static> {
           if let Err(e) = &failed { if !unique_error(e) { return Ok(db_error()) } }
           Ok(db_error())
         }
+      }
+    })
+    .post_async("/api/tarot/readings/:id/interpret", |req, ctx| async move {
+      // v2 AI 整合解牌（spec §Tarot v2）：IP strict 限流最先 → auth → 讀取
+      // （done 冪等回原結果、不計次）→ uid strict 限流（進入 AI 呼叫即計）→
+      // AIMutex 專屬實例 → stub 偵測 → 更新 ai_* 欄位（規則式永不覆寫）。
+      if !rate_limit_strict(&ctx, &format!("tarot:ai:ip:{}", client_ip(&req)), AI_IP_LIMIT, AI_WINDOW_MS).await {
+        return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
+      }
+      let user = match auth_user(&req, &ctx).await { Ok(u) => u, Err(e) => return Ok(e) };
+      let id = ctx.param("id").cloned().unwrap_or_default();
+      if !valid_tarot_request_id(&id) { return Ok(error::error_code("Invalid reading", "INVALID_TAROT", 400)) }
+      let db = match db::Turso::from_env(&ctx.env) { Ok(d) => d, Err(_) => return Ok(db_error()) };
+      let row = match reading_by_id(&db, &user, &id).await {
+        Ok(Some(r)) => r,
+        Ok(None) => return Ok(error::error_code("Reading not found", "NOT_FOUND", 404)),
+        Err(_) => return Ok(db_error()),
+      };
+      if row.ai_status.as_deref() == Some("done") {
+        return Ok(match row_view(&row) { Ok(v) => json(&v, 200), Err(_) => db_error() });
+      }
+      if !rate_limit_strict(&ctx, &format!("tarot:ai:{}", user), AI_USER_LIMIT, AI_WINDOW_MS).await {
+        return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
+      }
+      let chart_data = match build_tarot_chart_data(&db, &user, &row).await {
+        Ok(v) => v,
+        Err(_) => return Ok(db_error()),
+      };
+      let outcome = call_tarot_ai(&ctx, &chart_data).await;
+      let now = clock::now_iso();
+      let (ai_text, status, provider, model) = match outcome {
+        Ok(o) => (Some(o.interpretation), "done", Some(o.provider), Some(o.model)),
+        Err(()) => (None, "failed", None, None),
+      };
+      let n = db::exec_changes(&db,
+        "UPDATE tarot_readings SET ai_interpretation=?1, ai_status=?2, ai_prompt_version=?3, ai_provider=?4, ai_model=?5, ai_generated_at=?6          WHERE id=?7 AND user_id=?8",
+        &[&db::opt_text(ai_text.as_deref()),&db::text(status),&db::text(TAROT_PROMPT_VERSION),
+          &db::opt_text(provider.as_deref()),&db::opt_text(model.as_deref()),&db::text(&now),
+          &db::text(&id),&db::text(&user)]).await;
+      match n {
+        Ok(1) => match reading_by_id(&db, &user, &id).await {
+          Ok(Some(updated)) => match row_view(&updated) { Ok(v) => Ok(json(&v, 200)), Err(_) => Ok(db_error()) },
+          _ => Ok(db_error()),
+        },
+        _ => Ok(db_error()),
       }
     })
     .get_async("/api/tarot/readings", |req, ctx| async move {
@@ -255,6 +505,10 @@ mod tests {
             interpretation: "i".into(),
             corpus_version: "1".into(),
             created_at: "2026-10-27T00:00:00.000Z".into(),
+            ai_interpretation: None,
+            ai_status: None,
+            ai_provider: None,
+            ai_model: None,
         }
     }
 
