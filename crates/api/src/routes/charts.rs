@@ -795,6 +795,7 @@ async fn call_ai_mutex(
         provider,
         model,
         tokens_used: None,
+        finish_reason: None,
     }))
 }
 

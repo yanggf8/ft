@@ -19,6 +19,7 @@ use ft_schema::storage::{exresource_key, rpm_key, ExResource, ExResourceError, M
 use futures_channel::oneshot;
 use worker::*;
 
+use crate::services::ai::providers::{call_workers_ai, ImagePayload};
 use crate::services::ai::{call_provider, ProviderResult};
 use crate::services::clock;
 
@@ -26,6 +27,16 @@ const MAX_QUEUE_DEPTH: usize = 8;
 const MAX_QUEUE_WAIT_MS: f64 = 60000.0;
 const RPM_LIMITS: [(&str, u32, f64); 2] = [("groq", 30, 14400.0), ("cerebras", 30, 14400.0)];
 const RPD_LIMITS: [(&str, f64); 2] = [("groq", 14400.0), ("cerebras", 14400.0)];
+
+/// palm 兩環（spec §6.2 選型終局，皆 Workers AI、免 API key、不設 rpd）：
+/// 主環 llama-4-scout max_tokens 2048（P10）；備環 llama-3.2-11b-vision 3072
+/// 緩解 adv 樣本 JSON 截斷（§6.2）。
+const PALM_PROVIDER: &str = "workers-ai";
+const PALM_RPM: u32 = 30;
+const PALM_CHAIN: [(&str, u32); 2] = [
+    ("@cf/meta/llama-4-scout-17b-16e-instruct", 2048),
+    ("@cf/meta/llama-3.2-11b-vision-instruct", 3072),
+];
 
 struct QueuedEntry {
     queued_at: f64,
@@ -119,12 +130,82 @@ mod tests {
         q.release();
         assert!(q.try_acquire(), "釋放後可再取得");
     }
+
+    // ── palm v1（B1/B2/B5/B9）──
+    #[test]
+    fn interpret_request_image_additive() {
+        // 既有 chartType 不帶 image：必須照常反序列化（additive）
+        let legacy = serde_json::json!({
+            "chartType": "tarot",
+            "chartData": { "cards": [] },
+        });
+        let req: InterpretRequest = serde_json::from_value(legacy).expect("legacy body must parse");
+        assert_eq!(req.chartType, "tarot");
+        assert!(req.image.is_none());
+
+        // palm 帶 image：mime/base64 wire 鍵全小寫直取
+        let palm = serde_json::json!({
+            "chartType": "palm",
+            "chartData": { "hand": "left" },
+            "image": { "mime": "image/webp", "base64": "QUJD" },
+        });
+        let req: InterpretRequest = serde_json::from_value(palm).expect("palm body must parse");
+        let img = req.image.as_ref().expect("palm must carry image");
+        assert_eq!(img.mime, "image/webp");
+        assert_eq!(img.base64, "QUJD");
+    }
+
+    #[test]
+    fn validate_entry_whitelist_and_pairing() {
+        // 白名單外
+        assert_eq!(validate_entry("bazi", false), Err("INVALID_CHART_TYPE"));
+        // palm 無 image
+        assert_eq!(validate_entry("palm", false), Err("INVALID_IMAGE"));
+        // 非 palm 帶 image
+        assert_eq!(validate_entry("ziwei", true), Err("INVALID_IMAGE"));
+        // palm 帶 image
+        assert_eq!(validate_entry("palm", true), Ok(()));
+        // 既有 chartType：不帶 image 全綠、帶 image 全擋（→ INVALID_IMAGE）
+        for ct in ["ziwei", "western", "story", "tarot"] {
+            assert_eq!(validate_entry(ct, false), Ok(()), "{ct} without image");
+            assert_eq!(
+                validate_entry(ct, true),
+                Err("INVALID_IMAGE"),
+                "{ct} with image"
+            );
+        }
+    }
+
+    #[test]
+    fn palm_chain_and_max_tokens_mapping() {
+        // palm 兩環（spec §6.2）：scout 主環 2048（P10）、11b-vision 備環 3072
+        assert_eq!(
+            PALM_CHAIN[0],
+            ("@cf/meta/llama-4-scout-17b-16e-instruct", 2048)
+        );
+        assert_eq!(
+            PALM_CHAIN[1],
+            ("@cf/meta/llama-3.2-11b-vision-instruct", 3072)
+        );
+        // 既有 chartType 映射不變：story 2048、其他 1024（palm 不經此路）
+        assert_eq!(max_tokens_for("story"), 2048);
+        for ct in ["ziwei", "western", "tarot"] {
+            assert_eq!(max_tokens_for(ct), 1024, "{ct}");
+        }
+    }
+
+    #[test]
+    fn truncated_only_on_length() {
+        assert!(is_truncated(Some("length")));
+        assert!(!is_truncated(None));
+        assert!(!is_truncated(Some("stop")));
+    }
 }
 
 #[durable_object(fetch)]
 pub struct AIMutexDO {
     state: State,
-    _env: Env,
+    env: Env,
     /// per-DO-instance 佇列（v2 前置：見 QueueState 文檔註解）
     queue: QueueState<QueuedEntry>,
 }
@@ -133,7 +214,7 @@ impl DurableObject for AIMutexDO {
     fn new(state: State, env: Env) -> Self {
         Self {
             state,
-            _env: env,
+            env,
             queue: QueueState::new(),
         }
     }
@@ -232,7 +313,21 @@ impl AIMutexDO {
             }
         };
         let interpret = body.interpretRequest;
+        // ── B2 入口驗證：chartType 白名單＋palm↔image 配對（fetch 先入佇列，
+        // 驗證只能在 handle_request 開頭做；400 早於任何 provider/rpm 消耗）──
+        if let Err(code) = validate_entry(&interpret.chartType, interpret.image.is_some()) {
+            return entry_error(code);
+        }
         let today = clock::today_utc();
+
+        // ── B3：palm 走純 Workers AI 兩環（免 key、fail-closed，絕不 stub）──
+        if interpret.chartType == "palm" {
+            let Some(image) = interpret.image.as_ref() else {
+                // validate_entry 已保證 palm 帶 image——防禦性回 400，不 panic
+                return entry_error("INVALID_IMAGE");
+            };
+            return self.handle_palm(&interpret, image, &today).await;
+        }
         // ── P2 telemetry: generation tags context for story (no behavior change) ──
         let ai_tags_len = interpret
             .chartData
@@ -263,11 +358,7 @@ impl AIMutexDO {
         let mut last_error: Option<(String, String, String)> = None;
         let mut failover_count = 0u32;
 
-        let max_tokens = if interpret.chartType == "story" {
-            2048
-        } else {
-            1024
-        };
+        let max_tokens = max_tokens_for(&interpret.chartType);
 
         for (name, rpm, _) in RPM_LIMITS.iter() {
             let api_key = match body.keys.get(*name) {
@@ -367,6 +458,111 @@ impl AIMutexDO {
         })
     }
 
+    /// B3/B6：palm 抽取——純 Workers AI 兩環（spec §6.2 選型終局）。不查 keys、
+    /// 不設 rpd；rpm 30/min 沿用 check_rpm（provider 名 `workers-ai`，逐環計）。
+    /// 全敗 fail-closed 503，絕不回 stub 200（P9 在 DO 層落實）。
+    async fn handle_palm(
+        &self,
+        interpret: &InterpretRequest,
+        image: &ImagePayload,
+        today: &str,
+    ) -> Result<Response> {
+        let ai = match self.env.ai("AI") {
+            Ok(ai) => ai,
+            Err(e) => {
+                // [ai] binding 缺失＝部署錯——fail-closed（訊息無 base64，P5）
+                console_error!("workers-ai binding error: {}", e);
+                return palm_all_failed(None, 0, 0);
+            }
+        };
+        let mut last_error: Option<(String, String, String)> = None;
+        let mut failover_count = 0u32;
+        let mut rpm_blocked = 0u32;
+        for (model, max_tokens) in PALM_CHAIN.iter() {
+            if !self.check_rpm(PALM_PROVIDER, PALM_RPM).await? {
+                rpm_blocked += 1;
+                continue;
+            }
+            let start = clock::now_ms();
+            match call_workers_ai(
+                &ai,
+                model,
+                &interpret.chartType,
+                &interpret.chartData,
+                image,
+                interpret.language.as_deref(),
+                *max_tokens,
+            )
+            .await
+            {
+                Ok(result) => {
+                    let latency = clock::now_ms() - start;
+                    let tokens = result.tokens_used.unwrap_or(0.0);
+                    // B5：finish_reason=length → 內容不可用，500 AI_TRUNCATED
+                    // （P8a 已花不退；不回內容——code 給批次 C route 消費）
+                    if is_truncated(result.finish_reason.as_deref()) {
+                        self.record(
+                            RecordCtx {
+                                provider: PALM_PROVIDER.to_string(),
+                                tokens,
+                                latency,
+                                failovers: failover_count,
+                            },
+                            today,
+                        )
+                        .await?;
+                        console_error!(
+                            "PALM_TRUNCATED model={} failovers={} -> 500 AI_TRUNCATED",
+                            model,
+                            failover_count
+                        );
+                        return Response::from_json(&serde_json::json!({
+                            "error": "AI response was truncated",
+                            "code": "AI_TRUNCATED",
+                        }))
+                        .map(|r| r.with_status(500));
+                    }
+                    worker::console_log!(
+                        "metric: ai_chart_type=palm provider=workers-ai model={} ai_is_stub=false ai_chars={} failovers={} latency_ms={}",
+                        model,
+                        result.interpretation.chars().count(),
+                        failover_count,
+                        latency as u64
+                    );
+                    self.record(
+                        RecordCtx {
+                            provider: PALM_PROVIDER.to_string(),
+                            tokens,
+                            latency,
+                            failovers: failover_count,
+                        },
+                        today,
+                    )
+                    .await?;
+                    return response_for(
+                        result,
+                        PALM_PROVIDER,
+                        model,
+                        latency,
+                        failover_count,
+                        today,
+                    );
+                }
+                Err(e) => {
+                    // P5：e 只含 model 名＋截斷摘要（call_workers_ai 源頭保證）
+                    console_error!("provider {} ({}) failed: {}", PALM_PROVIDER, model, e);
+                    let code = classify(&e);
+                    let code_owned = code.to_string();
+                    self.record_error(PALM_PROVIDER, today, &code_owned, &e)
+                        .await?;
+                    last_error = Some((PALM_PROVIDER.to_string(), code_owned, e.clone()));
+                    failover_count += 1;
+                }
+            }
+        }
+        palm_all_failed(last_error, failover_count, rpm_blocked)
+    }
+
     async fn check_rpm(&self, provider: &str, limit: u32) -> Result<bool> {
         let now = clock::now_ms();
         let key = rpm_key(provider);
@@ -454,6 +650,79 @@ impl AIMutexDO {
 
 // ── statics / helpers ─────────────────────────────────────────────────────────
 
+/// B2：DO 入口白名單＋palm↔image 配對驗證（純函式，TDD）。
+/// palm 必帶 image、其他白名單 chartType 必不帶；白名單外一律拒。
+/// 回 Err 的字串即回應的 `code` 欄位。
+fn validate_entry(chart_type: &str, has_image: bool) -> Result<(), &'static str> {
+    match chart_type {
+        "palm" => {
+            if has_image {
+                Ok(())
+            } else {
+                Err("INVALID_IMAGE")
+            }
+        }
+        "ziwei" | "western" | "story" | "tarot" => {
+            if has_image {
+                Err("INVALID_IMAGE")
+            } else {
+                Ok(())
+            }
+        }
+        _ => Err("INVALID_CHART_TYPE"),
+    }
+}
+
+/// B2：入口驗證失敗回應（形狀比照既有 {"error","code"} 慣例，400）。
+fn entry_error(code: &str) -> Result<Response> {
+    let msg = match code {
+        "INVALID_CHART_TYPE" => "Unsupported chart type",
+        _ => "palm requires an image; other chart types must not include one",
+    };
+    Response::from_json(&serde_json::json!({
+        "error": msg,
+        "code": code,
+    }))
+    .map(|r| r.with_status(400))
+}
+
+/// 既有 chartType 的 max_tokens 映射（story 2048、其餘 1024）。
+/// palm 不經此路——走 PALM_CHAIN 各環自帶值（2048/3072）。
+fn max_tokens_for(chart_type: &str) -> u32 {
+    if chart_type == "story" {
+        2048
+    } else {
+        1024
+    }
+}
+
+/// B5：finish_reason=length 判定（→ 500 AI_TRUNCATED）；None／其他值不觸發。
+fn is_truncated(finish_reason: Option<&str>) -> bool {
+    finish_reason == Some("length")
+}
+
+/// B6：palm 全敗——fail-closed 503，絕不 stub 200；回應帶 code 不帶上游
+/// 原文細節（B7），詳情只走 console_error。
+fn palm_all_failed(
+    last_error: Option<(String, String, String)>,
+    failovers: u32,
+    rpm_blocked: u32,
+) -> Result<Response> {
+    // Muse 審 Minor：rpm 觸頂與 provider 真全敗在 503 wire 上同形——log 註記
+    // rpm_blocked 計數供追因（不動計數語意；批次 C 需要時可從 log 區分）。
+    console_error!(
+        "PALM_ALL_FAILED failovers={} rpm_blocked={} lastError={:?} -> 503 fail-closed",
+        failovers,
+        rpm_blocked,
+        last_error
+    );
+    Response::from_json(&serde_json::json!({
+        "error": "AI service is temporarily unavailable",
+        "code": "AI_ALL_FAILED",
+    }))
+    .map(|r| r.with_status(503))
+}
+
 fn model_for(provider: &str) -> &'static str {
     match provider {
         "groq" => "openai/gpt-oss-20b",
@@ -531,4 +800,6 @@ struct InterpretRequest {
     language: Option<String>,
     #[serde(default)]
     focus: Option<String>,
+    #[serde(default)]
+    image: Option<ImagePayload>,
 }
