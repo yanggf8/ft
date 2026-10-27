@@ -8,7 +8,8 @@
 - `crates/schema` — shared DTOs. **`api`** (request/response contract both Worker and Web
   deserialize) and **`storage`** (DO storage key/format for bit-compat), plus pure feature
   logic / static truth tables: `items` (IPIP-15), `symbolic`, `predict`, `anchors`, `cycle`,
-  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18). This crate is the single source
+  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18), and `practice`
+  (本週小練習題庫、驗證與 API wire contract). This crate is the single source
   of truth that removes TS↔Rust drift.
 - `crates/domain/ziwei` — ZiWei engine (wraps `x-iztro`).
 - `crates/domain/western` — Western engine (hybrid: `solar-ephemeris` Moon + `vsop87` planets).
@@ -22,7 +23,7 @@
 - **Entry**: `lib.rs` — `#[event(fetch)]`, OPTIONS preflight, security headers, CORS
   (exact-hostname allowlist), x-request-id, JSON 404 normalization.
 - **Routes** (`routes/`): `auth.rs`, `users.rs`, `charts.rs`, `personality.rs` (F1 + F3
-  overlay + 資格矩陣), `predictions.rs`, `admin_invites.rs`, `oauth.rs`
+  overlay + 資格矩陣), `predictions.rs`, `practice.rs`, `admin_invites.rs`, `oauth.rs`
   (+ `common.rs` shared helpers: `auth_user`, rate limit, `body_too_large` 64 KiB cap,
   `embed_meta`, `extracted_version`).
 - **Durable Objects** (`durable_objects/`):
@@ -34,14 +35,17 @@
     providers fail.
   - `RateLimitDO` — cross-isolate persistent rate limiting, 8 shards (`rl:0..rl:7`).
 - **Services** (`services/`): `billing` (30-day trial), `birth_hash` (bit-for-bit JS-compatible),
-  `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers),
+  `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers；紫微／西洋／人生故事
+  system prompt 共用 `GUARDRAIL_ZH/EN`：命盤只談傾向、不把天賦寫成注定、不借遺傳／腦科學／IQ／研究數據背書、
+  禁醫療法律財務確定性斷言；塔羅另有專屬 prompt 不疊加),
   `predictions` (F5: 週期生成/遮罩/鎖定), `chart_resolver` (overlay 的型別化命盤解析 — 唯讀、
   結構驗證、engine 失敗降級), `clock`, `uuid`, `db` (Turso client over Hrana HTTP + `batch`
   原子批次 + the bind helpers), `oauth` (Google flow helpers + one-time exchange),
   `invite` (邀請碼 + `valid_expires_iso`), `login_token` (magic-link tokens).
 - **Database** — `users`, `interpretations`, `personality_profiles` + F5 四表
   (`predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations`) +
-  `invites` + `oauth_exchanges`. `subscriptions`/`usage_tracking`/`ai_quota` are provisioned
+  `invites` + `oauth_exchanges` + `practice_plans`/`practice_attempts`.
+  `subscriptions`/`usage_tracking`/`ai_quota` are provisioned
   but unused. `services/db.rs` speaks Hrana over `worker::Fetch`; the `libsql` crate's own
   `cloudflare` feature is unusable here because it pins `worker ^0.6` against our 0.8.
 
@@ -58,11 +62,67 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
   `exchange_oauth_code`, `fetch_overlay`).
 - **Pages**: `Home`, `Login`, `Profile`, `Personality` (quiz + F3 overlay), `Divination`
   (ziwei/western), `Story`, `Admin`, `Naming`＋`Glossary`（2026-09-18 起公開頁，免登入）。
-- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PredictionsCard`
-  （F5 本週預測 — F6 兩段式動線）；`glossary.rs` 靜態詞條（名詞解釋頁渲染）。
+- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PracticeCard`
+  （本週小練習）與 `PredictionsCard`（F5 本週預測 — F6 兩段式動線）；`glossary.rs`
+  靜態詞條（名詞解釋頁渲染）。
 - Uses `ft-schema::api` types directly — no wire-type drift.
 - `crates/web/_headers` — Pages 安全標頭(HSTS/CSP/X-Frame-Options/nosniff/Referrer/
   Permissions-Policy);`build-web.sh` 會複製進 dist。
+
+## 本週小練習（2026-10-20，已部署）
+
+登入者在「我的命格」自選固定題庫中的一個日常行動，記錄是否嘗試及主觀幫助程度，
+可以換動作、結束、查看分頁歷史或刪除全部練習資料。`ft_schema::practice` 是前後端
+共用契約與題庫；API 的七個 `/api/practice` 路由在 `routes/practice.rs`；
+`scripts/schema.sql` 是新資料庫權威，既有 Turso 使用
+`scripts/migrations/2026-10-20-practice.sql` 一次性遷移。單一進行中計畫由部分唯一索引
+保護；`requestId` 用於建立與回報重試，`users.practice_epoch` 阻止刪除後的過期分頁
+重新建立資料。每週摘要跨同週所有計畫合計，以台北週一起算。
+
+練習不讀人格分數、命盤、F5 預測或 F8 對照組資料，亦不把練習紀錄寫入 F5/F8。
+本功能是自助行動與回顧，不提供診斷或神經回饋。完整產品與資料契約見
+`docs/superpowers/specs/2026-10-20-weekly-practice-design.md`。2026-10-20 已遷移正式
+Turso 並部署 API 與前端，`verify-deployment.sh` 全過，未登入探測 `/api/practice` 回 401。
+
+## 塔羅牌（2026-10-27，v1＋v2 已上線）
+
+兩段式：v1a「今日抽牌」公開頁（`/tarot`，免登入零 API——決定性抽牌
+`ft_schema::tarot::daily_draw`，種子＝台北日期＋localStorage 32-hex 裝置種子，
+明文不防重擲）與 v1b 三張牌陣（`/tarot/spread`，登入）。`ft_schema::tarot` 是
+前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，`TAROT_CORPUS_VERSION="2"`
+經 Claude 校對 8 條修正）、注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋
+拒絕取樣，演算法由 `TAROT_DRAW_ALGO_VERSION` 鎖定，golden test 釘死）、
+`taipei_today`（重用 cycle.rs UTC+8 純算術）。API 五個 `/api/tarot` 路由在
+`routes/tarot.rs`：draw 處理順序＝IP 限流→auth→body cap→parse→驗證→冪等
+（`UNIQUE(user_id, request_id)` 重放回原結果／異 body 409）→uid 24h 限流→
+`secure_bytes` CSPRNG（fail-closed，明文禁 `Math::random`）→寫入；DELETE 404
+不洩存在性。**v2 AI 命盤感知解牌**（同日上線）：`POST .../:id/interpret`——
+auth→讀取（done 冪等不計次）→IP/user **strict** 限流（fail-closed，3＋10 次/
+24h，進入 AI 呼叫即計）→AIMutexDO **專屬實例** `id_from_name("tarot")`→
+`stub:true` 一律視為 failed→`ai_*` 欄位（規則式 interpretation 永不覆寫；
+UPDATE first-wins 防雙分頁競態）；`?chart=0`＝純塔羅（紫微＋F4 全不外送）；
+chartSummary 組裝在 route 層（isLifePalace 主星——wire 值 `main` 非 `major`）。
+AIMutexDO 佇列已從 `thread_local!` 遷 `QueueState` 實例欄位（per-DO-instance；
+thread_local 是 per-isolate 會跨實例共享）。`rate_limit_strict` 在 common.rs。
+DB：`tarot_readings`（migrations：2026-10-27-tarot / -tarot-ai / -tarot-ai-context）。
+**美術**：78 張卡面＋卡背在 `crates/web/assets/tarot/`（museimage 產製、
+cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製）；
+卡面 CSS 1:2 原生比例、逆位 180°、直向 ≤480px 斷點（RWD）。首頁 feature-grid
+塔羅卡排最前（chrome ring 主打位）＋NEW 徽章——2026-10-27 用戶指示，取代
+原「紫微第一」決策。塔羅資料永不寫入 predictions／prediction_feedback／
+f8_assignments。完整設計與三家（Muse/Codex/Opus）七輪審查軌跡：
+`docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
+
+## 興趣探索 v1（2026-10-27，設計中、未實作）
+
+「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
+Armstrong 等人（2008）公開領域 RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
+只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。預定
+`ft_schema::interest`（題庫＋計分＋`INTEREST_INSTRUMENT_VERSION`）、`interest_results`
+表＋`users.interest_epoch`、四個 `/api/interest` 路由；不接命盤／AI，不寫入 F5/F8，
+與小練習只有連結。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
+要求自行驗證而不採用。**實作前置**：取得論文全文確認公開領域聲明與題目原文。
+設計：`docs/superpowers/specs/2026-10-27-interest-explore-design.md`。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 
@@ -106,14 +166,13 @@ changing any colour.**
 
 - **端點**（`routes/predictions.rs` → `services/predictions.rs`）：
   `GET /api/predictions?cycleId=`（列當週，含 checks/feedback/`generated`/`strengths`）、
-  `POST /api/predictions/generate`（冪等週期生成；**F4 起必帶 body** `{"strengths":{五域 0–3}}`，
+  `POST /api/predictions/generate`（同週可新增多個 prediction run；**F4 起必帶 body** `{"strengths":{五域 0–3}}`，
   缺/越界 → 400 `INVALID_STRENGTHS`）、`PUT /api/predictions/checks`（F6 第 1 段 absent|occurred）、
   `POST /api/predictions/:id/feedback`（F6 第 2 段 hit|miss|other）。
 - **`cycle_id`**：Asia/Taipei 週一起算（`crates/schema/src/cycle.rs` 純函數，毫秒 ISO 解析、週一格式驗證）。
-- **週期生成冪等（F4 原子 batch）**：`prediction_generations` 一週一 profile 快照；generate 的寫入是
-  **單一 `db::batch` 原子交易**（steps[0]=`prediction_strengths` 快照、steps[1]=freeze、
-  steps[2..]=predictions `WHERE NOT EXISTS`）；併發敗者以 steps[1] affected==0 偵測回現況；
-  空週也凍結；週中重測不補 domain、strengths 凍結後不改（防混 profile）。
+- **週期多批次生成（F4 原子 batch）**：`prediction_runs` 每次保存一份 profile＋五域強度快照，
+  同週重新生成會新增 predictions，不覆蓋舊 prediction/feedback；`prediction_generations` 僅保留
+  「本週曾生成」的相容摘要，`prediction_strengths` 回傳最新一批輸入。
 - **F4 領域閘門 × F8 對照籤（2026-09-13 併）**：`predict::GATE_ORDER=[Work,Money,Love,Family,Health]`
   決定 `gated_domains()` 槽位（強度 ≥1 且該域有錨點；work+money+love 目錄每格 ≥2=`rules-2`，
   family/health 恆 0）；每槽獨立 25% 中籤（`draw_control_default`，crypto 不可用=不中籤 fail-closed），
@@ -184,9 +243,11 @@ changing any colour.**
   api engine_version 體系——無快取可比對）。
 - **版面**：首頁 feature-grid 6 卡 3+3（紫微維持 DOM 第一保 chrome ring）；姓名學與
   名詞解釋為整卡連結 `a.feature`（style.css 兩行擋全域連結樣式）；`/glossary` 為獨立
-  靜態頁（詞條在 `crates/web/src/glossary.rs`，`glossary-1` 已定案，後續意見以修訂版處理）。
-- 已知刻意簡化（spec §2/§3 列冊）：三才為生剋簡表非 125 組古表（金金金/木木土 等失真
-  點有 snapshot 測試鎖定）；81 數理分歧條目採四源投票共識。
+  靜態頁（詞條在 `crates/web/src/glossary.rs`；`glossary-1` 已定案，2026-09-22 修訂 `glossary-1.1`
+  —「日月並明」雙棟之才→棟梁之才，後續意見以修訂版處理並 bump）。
+- 已知刻意簡化（spec §2/§3 列冊）：三才為生剋簡表非 125 組古表——失真案例的情境註記
+  `sancai::distortion_note` 依 elements 計算、單一來源在 schema（金金金/木木土/洩氣局五
+  順生鏈），web 只渲染，snapshot 測試鎖定；81 數理分歧條目採四源投票共識。
 
 ## Engine Versions
 

@@ -277,6 +277,47 @@ pub async fn rate_limit(ctx: &RouteContext<()>, key: &str, limit: u32, window_ms
     }
 }
 
+/// AI 成本路徑專用限流（spec §Tarot v2-3）：與 [`rate_limit`] 同語意，但
+/// **fail-closed**——限流器／DO 任何環節不可用時回 `false`（拒絕），不放行。
+/// （`rate_limit` 是 fail-open：availability first；AI 端點燒的是真金額度。）
+#[allow(clippy::too_many_arguments)]
+pub async fn rate_limit_strict(
+    ctx: &RouteContext<()>,
+    key: &str,
+    limit: u32,
+    window_ms: f64,
+) -> bool {
+    let shard = fnv1a_64(key.as_bytes()) % u64::from(RATE_LIMIT_SHARDS);
+    let do_name = format!("rl:{}", shard);
+    let ns = match ctx.env.durable_object("RATE_LIMIT") {
+        Ok(n) => n,
+        Err(_) => return false,
+    };
+    let stub = match ns.id_from_name(&do_name).and_then(|id| id.get_stub()) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let body = serde_json::json!({ "key": key, "limit": limit, "windowMs": window_ms });
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_body(Some(body.to_string().into()));
+    let req = match Request::new_with_init("http://do/check", &init) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let mut res = match stub.fetch_with_request(req).await {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    if res.status_code() != 200 {
+        return false;
+    }
+    match res.json::<serde_json::Value>().await {
+        Ok(v) => v.get("allowed").and_then(|a| a.as_bool()).unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
 /// Deterministic tiny hash (FNV-1a 64) for DO sharding — stable across isolates
 /// and releases, unlike `DefaultHasher` whose algorithm is unspecified.
 fn fnv1a_64(bytes: &[u8]) -> u64 {

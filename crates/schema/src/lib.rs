@@ -7,9 +7,11 @@ pub mod api;
 pub mod cycle;
 pub mod items;
 pub mod naming;
+pub mod practice;
 pub mod predict;
 pub mod storage;
 pub mod symbolic;
+pub mod tarot;
 
 use serde::{Deserialize, Serialize};
 

@@ -75,6 +75,7 @@ cp style.css dist/style.css
 cp galaxy.js dist/galaxy.js
 cp boot.js dist/boot.js         # wasm 啟動器(外部檔;CSP script-src 'self' 擋 inline)
 cp _headers dist/_headers       # Pages 安全標頭(CSP/HSTS/框架防護;P3)
+mkdir -p dist/assets && cp -r assets/* dist/assets/  # 靜態資產(塔羅卡面)
 
 echo "✅ dist/ ready"
 ls -lh dist

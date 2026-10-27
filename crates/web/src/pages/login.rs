@@ -31,13 +31,25 @@ pub fn LoginPage() -> impl IntoView {
     // flow. It is exchanged (POST) for the session, so the session id itself
     // never rides any URL. Failure reads as "link expired": show the form with
     // a hint and let the user retry.
+    // ?next=（塔羅設計定稿）：登入回流目標。僅收本站相對路徑；存
+    // sessionStorage 供 /auth/verify 成功後取用——magic-link 信件會離開
+    // 本頁，URL 參數帶不過去。
+    if let Some(next) = crate::query_param("next") {
+        if crate::valid_login_next(&next) {
+            let _ = web_sys::window()
+                .and_then(|w| w.session_storage().ok())
+                .and_then(|s| s)
+                .map(|s| s.set_item("login_next", &next));
+        }
+    }
+
     if let Some(code) = crate::query_param("oauth_code") {
         if !code.is_empty() {
             spawn_local(async move {
                 match api::exchange_oauth_code(&code).await {
                     Ok(_) => {
                         if let Some(win) = web_sys::window() {
-                            let _ = win.location().set_href("/");
+                            let _ = win.location().set_href(&crate::take_login_next());
                         }
                     }
                     Err(_) => error.set("Google 登入連結已過期或已使用，請重新登入".to_string()),
@@ -86,6 +98,12 @@ pub fn LoginPage() -> impl IntoView {
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
+        // Guard at the event boundary as well as on the DOM property. A rapid
+        // double-click can queue both events before the reactive disabled
+        // attribute is reflected in the browser.
+        if loading.get_untracked() {
+            return;
+        }
         error.set(String::new());
         loading.set(true);
         spawn_local(async move {
@@ -188,15 +206,20 @@ pub fn LoginPage() -> impl IntoView {
                             </Show>
                             <button
                                 type="submit"
-                                disabled=move || loading.get()
-                                class="btn-primary"
+                                prop:disabled=move || loading.get()
+                                class="btn-primary auth-submit"
                                 style="width:100%"
                             >
-                                {move || {
-                                    if loading.get() { "處理中...".to_string() }
-                                    else if is_register.get() { "寄出註冊信".to_string() }
-                                    else { "寄出登入信".to_string() }
-                                }}
+                                <span class="auth-submit-label">
+                                    {move || {
+                                        if loading.get() { "處理中...".to_string() }
+                                        else if is_register.get() { "寄出註冊信".to_string() }
+                                        else { "寄出登入信".to_string() }
+                                    }}
+                                </span>
+                                <Show when=move || loading.get()>
+                                    <span class="button-spinner" aria-hidden="true"></span>
+                                </Show>
                             </button>
                         </form>
                         <div style="margin:1.25rem 0;display:flex;align-items:center;gap:0.75rem">
@@ -205,10 +228,12 @@ pub fn LoginPage() -> impl IntoView {
                             <hr style="flex:1;border:none;border-top:1px solid #e5e7eb"/>
                         </div>
                         <button
+                            type="button"
                             class="btn-primary"
-                            disabled=move || g_loading.get()
+                            prop:disabled=move || g_loading.get()
                             style="width:100%;background:#fff;color:#111827;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;gap:0.5rem"
-                            on:click=move |_| {
+                            on:click=move |ev| {
+                                ev.prevent_default();
                                 // debounce: 同步檢查＋鎖定，重複點擊直接 no-op
                                 if g_loading.get_untracked() {
                                     return;
@@ -223,18 +248,23 @@ pub fn LoginPage() -> impl IntoView {
                                     url.push_str(&inv);
                                 }
                                 if let Some(win) = web_sys::window() {
-                                    let _ = win.location().set_href(&url);
+                                    let _ = win.location().assign(&url);
                                 }
                             }
                         >
                             <span>"G"</span>
-                            {move || {
-                                if g_loading.get() {
-                                    "正在前往 Google…".to_string()
-                                } else {
-                                    "使用 Google 登入".to_string()
-                                }
-                            }}
+                            <span>
+                                {move || {
+                                    if g_loading.get() {
+                                        "正在前往 Google…".to_string()
+                                    } else {
+                                        "使用 Google 登入".to_string()
+                                    }
+                                }}
+                            </span>
+                            <Show when=move || g_loading.get()>
+                                <span class="button-spinner" aria-hidden="true"></span>
+                            </Show>
                         </button>
                         <p style="margin-top:0.5rem;font-size:0.75rem;color:#9aa3b2;text-align:center">
                             "有邀請碼的話，可先在「註冊」分頁填入（選填）。"

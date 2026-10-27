@@ -6,6 +6,11 @@
 //! the email; a session is minted solely by `verify_email`.
 
 use ft_schema::api::*;
+use ft_schema::practice::{
+    CreatePracticeAttemptRequest, CreatePracticePlanRequest, PracticeAttempt, PracticeAttemptPage,
+    PracticeHistoryPage, PracticeOverview, PracticePlan,
+};
+use ft_schema::tarot::{TarotDrawRequest, TarotHistoryPage, TarotReadingView};
 use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -365,6 +370,122 @@ pub async fn delete_personality() -> Result<PersonalityDeleteResponse, ApiErr> {
         .await
         .map_err(|e| ApiErr::Network(e.to_string()))?;
     decode(resp).await
+}
+
+// ── 本週小練習 ──
+
+pub async fn get_practice() -> Result<PracticeOverview, ApiErr> {
+    get_json("/api/practice", true).await
+}
+
+pub async fn create_practice_plan(
+    body: &CreatePracticePlanRequest,
+) -> Result<PracticePlan, ApiErr> {
+    send_json(Request::post(&url("/api/practice/plans")), body).await
+}
+
+pub async fn create_practice_attempt(
+    plan_id: &str,
+    body: &CreatePracticeAttemptRequest,
+) -> Result<PracticeAttempt, ApiErr> {
+    send_json(
+        Request::post(&url(&format!("/api/practice/plans/{plan_id}/attempts"))),
+        body,
+    )
+    .await
+}
+
+pub async fn end_practice_plan(plan_id: &str) -> Result<PracticePlan, ApiErr> {
+    post_empty(&format!("/api/practice/plans/{plan_id}/end")).await
+}
+
+pub async fn get_practice_history(cursor: Option<&str>) -> Result<PracticeHistoryPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/practice/history?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => "/api/practice/history".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+pub async fn get_practice_attempts(
+    plan_id: &str,
+    cursor: Option<&str>,
+) -> Result<PracticeAttemptPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/practice/plans/{plan_id}/attempts?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => format!("/api/practice/plans/{plan_id}/attempts"),
+    };
+    get_json(&path, true).await
+}
+
+// ── 塔羅 v1b（docs/ARCHITECTURE.md §Tarot）──
+
+/// `POST /api/tarot/draw` — 三張牌陣（request_id 冪等；同鍵同 body 重放回原結果，
+/// 201／200 皆成功）。
+pub async fn tarot_draw(body: &TarotDrawRequest) -> Result<TarotReadingView, ApiErr> {
+    send_json(Request::post(&url("/api/tarot/draw")), body).await
+}
+
+/// `GET /api/tarot/readings` — 歷史分頁（items + nextCursor）。
+pub async fn tarot_history(cursor: Option<&str>) -> Result<TarotHistoryPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/tarot/readings?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => "/api/tarot/readings".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+/// `DELETE /api/tarot/readings/:id` — 單筆刪除（不存在／他人／重刪 → 404）。
+pub async fn tarot_delete(id: &str) -> Result<(), ApiErr> {
+    let resp = with_auth(Request::delete(&url(&format!("/api/tarot/readings/{id}"))))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let _: serde_json::Value = decode(resp).await?;
+    Ok(())
+}
+
+/// `POST /api/tarot/readings/:id/interpret` — AI 整合解牌（同步；已完成者
+/// 冪等回原結果）。`include_chart=false`＝純塔羅（契約 #7，`?chart=0`）。
+pub async fn tarot_interpret(id: &str, include_chart: bool) -> Result<TarotReadingView, ApiErr> {
+    let path = if include_chart {
+        format!("/api/tarot/readings/{id}/interpret")
+    } else {
+        format!("/api/tarot/readings/{id}/interpret?chart=0")
+    };
+    post_empty(&path).await
+}
+
+/// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。
+pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
+    #[derive(Deserialize)]
+    struct DeletedCount {
+        deleted: i64,
+    }
+    let resp = with_auth(Request::delete(&url("/api/tarot/readings")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let n: DeletedCount = decode(resp).await?;
+    Ok(n.deleted)
+}
+
+pub async fn delete_practice() -> Result<(), ApiErr> {
+    let resp = with_auth(Request::delete(&url("/api/practice")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let _: serde_json::Value = decode(resp).await?;
+    Ok(())
 }
 
 // ── F5 predictions（docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md §2）──

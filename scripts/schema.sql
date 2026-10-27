@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     generation_tags TEXT,            -- JSON array e.g. '["1980s","1990s"]'
     birth_data_hash TEXT,            -- for cache invalidation
     invited_by TEXT,                 -- invite code that created this account
+    practice_epoch INTEGER NOT NULL DEFAULT 0,
     
     -- Subscription
     subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'premium', 'professional')),
@@ -38,6 +39,52 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Voluntary small-practice plans; independent from personality and predictions.
+CREATE TABLE IF NOT EXISTS practice_plans (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    goal_code TEXT NOT NULL,
+    action_code TEXT NOT NULL,
+    catalog_version TEXT NOT NULL,
+    replace_active INTEGER NOT NULL CHECK (replace_active IN (0, 1)),
+    replaces_plan_id TEXT,
+    request_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ended_at TEXT,
+    ended_by_request_id TEXT,
+    CHECK ((replace_active = 0 AND replaces_plan_id IS NULL)
+        OR (replace_active = 1 AND replaces_plan_id IS NOT NULL)),
+    UNIQUE(user_id, request_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_practice_one_active
+    ON practice_plans(user_id) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_practice_plans_user_created
+    ON practice_plans(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS practice_attempts (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL REFERENCES practice_plans(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    tried INTEGER NOT NULL CHECK (tried IN (0, 1)),
+    helpfulness TEXT,
+    obstacle TEXT,
+    request_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    CHECK (
+        (tried = 1 AND helpfulness IS NOT NULL
+            AND helpfulness IN ('helped', 'unsure', 'not_helped') AND obstacle IS NULL)
+        OR
+        (tried = 0 AND obstacle IS NOT NULL
+            AND obstacle IN ('no_chance', 'forgot', 'too_big', 'other') AND helpfulness IS NULL)
+    ),
+    UNIQUE(user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_practice_attempts_user_cycle
+    ON practice_attempts(user_id, cycle_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_practice_attempts_plan_created
+    ON practice_attempts(plan_id, created_at);
 
 -- Cached interpretations (one per user per divination type)
 CREATE TABLE IF NOT EXISTS interpretations (
@@ -180,6 +227,7 @@ CREATE TABLE IF NOT EXISTS invites (
 -- cycle_id = Asia/Taipei 週一 00:00 起算的週起始日 YYYY-MM-DD，對齊 7 天視野與 F6 回訪
 CREATE TABLE IF NOT EXISTS predictions (
   id                TEXT PRIMARY KEY,
+  run_id            TEXT,
   user_id           TEXT NOT NULL,
   profile_id        TEXT NOT NULL,
   cycle_id          TEXT NOT NULL,
@@ -197,9 +245,24 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle ON predictions(user_id, cycle_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_profile ON predictions(profile_id);
--- 防呆：一週一領域一列（Grok P0-4；冪等）
-CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_user_cycle_domain
-  ON predictions(user_id, cycle_id, domain);
+CREATE INDEX IF NOT EXISTS idx_predictions_user_cycle_run
+  ON predictions(user_id, cycle_id, run_id);
+
+-- 同一週可有多個預測批次；每批保留當時的感知強度與命格側寫。
+CREATE TABLE IF NOT EXISTS prediction_runs (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  cycle_id   TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  work       INTEGER NOT NULL,
+  love       INTEGER NOT NULL,
+  family     INTEGER NOT NULL,
+  money      INTEGER NOT NULL,
+  health     INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prediction_runs_user_cycle
+  ON prediction_runs(user_id, cycle_id, created_at);
 
 -- F8 對照指派帳本（2026-09-13；spec 2026-09-13-f8-control §0.1）
 -- 每個生成槽位一列 — drawn arm、降級原因、存活/壓制、落庫的 prediction id。
@@ -235,8 +298,8 @@ CREATE TABLE IF NOT EXISTS prediction_feedback (
   FOREIGN KEY (prediction_id) REFERENCES predictions(id) ON DELETE CASCADE
 );
 
--- ── F5 API 層：cycle 級生成快照（2026-09-04 設計 §2）──
--- Grok P0-4：一週一 profile 一快照；空週也寫（凍結），防週中重測混 profile
+-- ── F5 API 層：cycle 生成摘要（2026-09-04 設計 §2，後續改為多 run）──
+-- 保留一週是否曾生成的相容摘要；每次生成的完整快照在 prediction_runs。
 CREATE TABLE IF NOT EXISTS prediction_generations (
   user_id      TEXT NOT NULL,
   cycle_id     TEXT NOT NULL,   -- Asia/Taipei 週一 YYYY-MM-DD
@@ -245,8 +308,8 @@ CREATE TABLE IF NOT EXISTS prediction_generations (
   PRIMARY KEY (user_id, cycle_id)
 );
 
--- ── F4 情境輸入：週期凍結時的五領域強度標記（2026-09-11 設計 §2）──
--- 與 prediction_generations 同一批次原子寫入（db::batch）；凍結後週中不改。
+-- ── F4 情境輸入：最新一批五領域強度標記（2026-09-11 設計 §2）──
+-- 每次生成會更新這份 latest snapshot；歷次完整輸入在 prediction_runs。
 -- 0–3 由 app 層驗證（route 層 INVALID_STRENGTHS），無 CHECK，沿 repo 慣例。
 CREATE TABLE IF NOT EXISTS prediction_strengths (
   user_id    TEXT NOT NULL,
@@ -259,3 +322,30 @@ CREATE TABLE IF NOT EXISTS prediction_strengths (
   created_at TEXT NOT NULL,
   PRIMARY KEY (user_id, cycle_id)
 );
+
+-- ── 塔羅 v1b：三張牌陣抽牌紀錄（2026-10-27 設計定稿）──
+-- 冪等：UNIQUE(user_id, request_id)，重放回原結果（route 層處理）。
+-- cards = JSON 字串（wire 形狀 [{id,name,reversed,position}]，TEXT 存 JSON 慣例）。
+-- interpretation = 規則式成品快照；corpus_version 對應 ft_schema TAROT_CORPUS_VERSION。
+-- 紅線：塔羅資料永不寫入 predictions/prediction_feedback/f8_assignments。
+CREATE TABLE IF NOT EXISTS tarot_readings (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_id     TEXT NOT NULL,
+  question       TEXT,              -- 選填，≤200 字元，trim 後空存 NULL（私密自述，可刪）
+  spread         TEXT NOT NULL CHECK (spread IN ('three')),
+  cards          TEXT NOT NULL,
+  interpretation TEXT NOT NULL,
+  corpus_version TEXT NOT NULL,
+  created_at     TEXT NOT NULL,
+  -- v2 AI 解牌（2026-10-27-tarot-ai.sql 遷移同步）：規則式快照永不覆寫
+  ai_interpretation TEXT,
+  ai_status         TEXT CHECK (ai_status IN ('done', 'failed')),
+  ai_prompt_version TEXT,
+  ai_provider       TEXT,
+  ai_model          TEXT,
+  ai_generated_at   TEXT,
+  ai_chart_context  INTEGER,          -- 1=AI 解牌含命盤摘要；0=純塔羅
+  UNIQUE(user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);

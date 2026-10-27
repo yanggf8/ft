@@ -153,6 +153,32 @@ else
   FAILED=1
 fi
 
+# Test 8b: tarot endpoints are routed and auth-guarded (401 without a session).
+# (auth fires before any rate limit on these paths — 401 probes consume no quota)
+echo -n "8b. Tarot endpoints (401 without auth)... "
+TAROT_OK=1
+for probe in \
+  "POST|/api/tarot/draw" \
+  "GET|/api/tarot/readings" \
+  "POST|/api/tarot/readings/00000000-0000-0000-0000-000000000000/interpret" \
+  "DELETE|/api/tarot/readings"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    TAROT_OK=0
+  fi
+done
+if [ "$TAROT_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"

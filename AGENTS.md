@@ -61,7 +61,7 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 **Generation Tags** (2026-09): `1940s–2010s` selectable as birth attribute (default from `birth_year`), stored as JSON array `users.generation_tags`, embedded into story prompt `【世代語境】`, 1930s/2020s added, prompt thickened to ~1072 chars (fourPillars, majorLimits, isLeap, brightness/sihua, ascendant/houses).
 
-**F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` / `prediction_strengths` 五表 + 4 端點已上線。cycle 級凍結（`prediction_generations` 一週一 profile 快照，空週也凍結；寫入為單一 `db::batch` 原子交易）、forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）；F4 情境輸入（2026-09-11）：generate 必帶五領域強度 0–3、閘門強度 ≥1、love 領域上線（`rules-2`）、D2-A 已推廣為 floor 語意；web `我的命格` PredictionsCard（§5.4.1 措辭回饋；未生成週顯示 F4 輸入，無自動生成）。
+**F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` / `prediction_strengths` / `prediction_runs` 六表 + 4 端點已上線。同週可建立多個 prediction run，舊預測與回饋保留；寫入為單一 `db::batch` 原子交易。forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）；F4 情境輸入（2026-09-11）：generate 必帶五領域強度 0–3、閘門強度 ≥1、love 領域上線（`rules-2`）、D2-A 已推廣為 floor 語意；web `我的命格` PredictionsCard（§5.4.1 措辭回饋；可於同週再次預測）。
 
 ### AI Integration ✅
 
@@ -87,13 +87,25 @@ GET  /api/users/me              # Includes generation_tags (JSON array), billing
 ### F5 Predictions Endpoints (2026-09, spec: docs/superpowers/specs/2026-09-04-f5-api-predictions-design.md)
 ```bash
 GET  /api/predictions?cycleId=   # 當週列表（checks/feedback/predictions；forecast 未收齊時遮罩為 null）
-POST /api/predictions/generate   # 冪等週期生成（cycle_id=Asia/Taipei 週一起算；prediction_generations 凍結）
+POST /api/predictions/generate   # 建立新的週內 prediction run（cycle_id=Asia/Taipei 週一起算）
 PUT  /api/predictions/checks     # F6 第 1 段 situation=absent|occurred（每週每 trigger 一次，去重）
 POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 occurred 後、一次性）
 ```
 前置：最新 complete 人格側寫（`personality_profiles`）。`cycle_id` 為台北週一起算；寫入僅限當週（409 `STALE_CYCLE`）。
 
 半自動 E2E：`./scripts/predictions-e2e.sh -t <session>`（自己 mint session：造 `login_tokens` 列 + 走 `/api/auth/verify`；已實測整鏈 2026-09-04，並據實測修正 F7 `db::batch` 的 Hrana v2 請求形狀 `{"type":"batch","batch":{"steps":[...]}}`）。
+
+### Practice Endpoints (2026-10-20, spec: docs/superpowers/specs/2026-10-20-weekly-practice-design.md)
+```bash
+GET    /api/practice                  # 總覽（cycleId/practiceEpoch/當週+前週摘要/進行中計畫/最近 10 筆回報）
+GET    /api/practice/history          # 已結束計畫分頁（cursor, limit 1..20）
+GET    /api/practice/plans/:id/attempts # 指定計畫回報分頁
+POST   /api/practice/plans            # 建立/更換計畫（requestId 冪等、expectedEpoch 防過期分頁）
+POST   /api/practice/plans/:id/attempts # 記一次嘗試（tried+helpfulness 或 obstacle，requestId 冪等）
+POST   /api/practice/plans/:id/end    # 結束計畫（冪等）
+DELETE /api/practice                  # 刪全部練習資料並 practice_epoch+1
+```
+前置：只需登入。不讀人格、命盤、F5 預測或 F8 對照資料。2026-10-20 已遷移正式 Turso（`scripts/migrations/2026-10-20-practice.sql`）並部署；登入態 E2E 待補驗。
 
 ### Deployed Infrastructure
 
@@ -114,7 +126,7 @@ POST /api/predictions/:id/feedback # F6 第 2 段 response=hit|miss|other（僅 
 |--------|---------|
 | `GROQ_API_KEY` | Primary AI |
 | `CEREBRAS_API_KEY` | Secondary AI |
-| `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret) |
+| `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret)；`/health/db` 回 401 `token expired` 時輪換：`turso db tokens create fortunet --group \| wrangler secret put TURSO_AUTH_TOKEN`（2026-10-20 已輪換為 never-expire group token） |
 
 ---
 
@@ -146,7 +158,7 @@ ft/
 │   ├── api/                    # ft-api (fortunet-api, routes/ + durable_objects/ + services/)
 │   │   └── src/
 │   │       ├── lib.rs          # #[event(fetch)] + CORS/headers
-│   │       ├── routes/         # auth, users, charts, oauth, admin_invites, personality, predictions
+│   │       ├── routes/         # auth, users, charts, oauth, admin_invites, personality, predictions, practice
 │   │       ├── durable_objects/# SessionDO, AIMutexDO
 │   │       └── services/       # billing, birth_hash (incl. generation_tags), engine, ai/prompts, generation, predictions (F5)
 │   └── web/                    # ft-web (Leptos CSR, generation.rs synced with api)
@@ -260,6 +272,6 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 
 ---
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-10-20
 **API URL**: https://fortunet-api.yanggf.workers.dev
 **Workspace**: Cargo (`ft-api` / `ft-worker` / `ft-web` / `ft-schema` / `ft-ziwei` / `ft-western` / `ft-big5`)

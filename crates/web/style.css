@@ -17,6 +17,7 @@
      tighter one is what to sample next time. */
   --void: #0a1733;        /* deep 星空藍 — body gradient near stop */
   --deep-space: #14224a;  /* lighter horizon blue — far stop  */
+  --galaxy-y-offset: clamp(40px, 9vh, 96px); /* keep the Milky-Way band below the hero/nav overlap */
   --heading: #e5e4e2;
   --text: #dde2ec;
   --silver-dim: #a9b0bc;
@@ -118,6 +119,7 @@ body {
   height: 100%;
   pointer-events: none;
   z-index: -2;
+  transform: translateY(var(--galaxy-y-offset));
 }
 
 /* band haze — same -18deg axis as the canvas particles (spec §4) */
@@ -126,7 +128,7 @@ body {
   position: absolute;
   left: -40%;
   right: -40%;
-  top: 50%;
+  top: calc(50% + var(--galaxy-y-offset));
   height: 130vmax;
   transform: translateY(-50%) rotate(-18deg);
   background:
@@ -243,6 +245,7 @@ h3, h4, h5, h6 {
   h1, h2, h3, h4, h5, h6, .nav-brand {
     animation: none;  /* glint off — static mirror */
   }
+  .tarot-inner { transition: none; }  /* 直開不翻（塔羅 v1a） */
 }
 
 * {
@@ -372,6 +375,43 @@ main { flex: 1; }
 .center-note { padding: 2rem; text-align: center; }
 .error { color: var(--rose); margin-bottom: 1rem; font-size: 0.875rem; }
 .muted { color: var(--silver-faint); }
+
+/* Voluntary practice card: compact until the user opens a form or history. */
+.practice-card h2 { margin-bottom: 0.5rem; }
+.practice-card h3 { font-size: 1rem; margin: 0.25rem 0 0.5rem; }
+.practice-intro { font-size: 0.875rem; line-height: 1.65; margin-bottom: 1rem; }
+.practice-active, .practice-form, .practice-summary, .practice-history {
+  margin-top: 1rem; padding: 1rem; border: 1px solid var(--glass-border);
+  border-radius: 10px; background: rgba(255,255,255,0.035);
+}
+.practice-kicker { color: var(--silver-faint); font-size: 0.8rem; margin: 0; }
+.practice-active p { line-height: 1.6; }
+.practice-actions, .practice-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin-top: 1rem; }
+.practice-footer { justify-content: space-between; }
+.practice-delete { text-decoration: underline; text-underline-offset: 0.2rem; }
+.practice-form fieldset { border: 0; padding: 0; margin: 0 0 1rem; min-width: 0; }
+.practice-form legend { font-weight: 700; margin-bottom: 0.5rem; }
+.practice-option {
+  display: flex; align-items: start; gap: 0.7rem; min-height: 44px;
+  padding: 0.65rem 0.75rem; margin: 0.375rem 0; border: 1px solid var(--glass-border);
+  border-radius: 8px; cursor: pointer; line-height: 1.5;
+}
+.practice-option:has(input:checked) { border-color: var(--metal-hi); background: rgba(255,255,255,0.1); }
+.practice-option:has(input:focus-visible) { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.practice-option input { flex: none; margin-top: 0.3rem; accent-color: var(--metal-hi); }
+.practice-option small { display: block; color: var(--silver-faint); font-size: 0.8rem; margin-top: 0.2rem; }
+.practice-message { padding: 0.6rem 0.75rem; border-radius: 8px; background: rgba(255,255,255,0.07); }
+.practice-error { border: 1px solid var(--metal-mid); }
+.practice-summary p { margin: 0.25rem 0; }
+.practice-recent { margin-top: 0.9rem; }
+.practice-recent summary { color: var(--silver-faint); cursor: pointer; }
+.practice-history-row { display: grid; gap: 0.25rem; padding: 0.75rem 0; border-bottom: 1px solid var(--glass-border); }
+.practice-history-row .btn-link { justify-self: start; }
+.practice-attempt-list { padding-left: 1.25rem; line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .practice-actions > .btn-primary { width: 100%; }
+  .practice-footer { align-items: start; flex-direction: column; }
+}
 /* primary CTA = chrome plate: on a dark site a bright plate with dark ink
    IS the strongest call-to-action signal (no hue needed). Bullet-nose
    silhouette + top reflection line = Jet Age streamline. */
@@ -411,6 +451,18 @@ main { flex: 1; }
 .cta:active { filter: brightness(0.95); transform: translateY(1px); }
 /* disabled = 處理中/已鎖定（Google 登入 debounce、magic-link 送信中） */
 .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; filter: none; }
+.auth-submit { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.button-spinner {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: button-spin 0.7s linear infinite;
+}
+@keyframes button-spin { to { transform: rotate(360deg); } }
 .btn-block { width: 100%; padding: 1rem 1.5rem; border-radius: 8px; border: none; font-size: 1rem; }
 .btn-link, .back-link { background: none; border: none; color: #cfd6e0; cursor: pointer; }
 .back-link { margin-bottom: 1rem; }
@@ -504,6 +556,56 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 }
 .hour-row { display: flex; gap: 0.5rem; align-items: center; }
 .hour-unknown { display: flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; color: var(--silver-dim); }
+.prediction-tuner {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem 0.85rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px 4px 12px 4px;
+  background: rgba(10, 23, 51, 0.42);
+}
+.prediction-tuner-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+.prediction-tuner-head strong { color: var(--heading); font-size: 0.95rem; }
+.prediction-tuner-caption,
+.prediction-tuner-scale,
+.prediction-tuner-hint,
+.prediction-tuner-locked {
+  color: var(--silver-dim);
+  font-size: 0.75rem;
+}
+.prediction-tuner-caption { display: block; margin-top: 0.15rem; }
+.prediction-tuner-scale { white-space: nowrap; }
+.prediction-tuner-actions { margin: -0.2rem 0 0.6rem; text-align: right; }
+.prediction-tuner-reroll { padding: 0; font-size: 0.75rem; }
+.prediction-tuner-reroll:disabled { opacity: 0.55; cursor: not-allowed; }
+.prediction-tuner-rows { display: grid; gap: 0.5rem; }
+.strength-slider-row {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) 3.5rem;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+}
+.strength-slider-label { color: var(--text); }
+.strength-slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--starlight);
+  cursor: pointer;
+}
+.strength-slider-row input[type="range"]:disabled { cursor: not-allowed; }
+.strength-slider-value {
+  color: var(--starlight);
+  font-size: 0.78rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.prediction-tuner-hint { margin: 0.75rem 0; }
+.prediction-tuner-locked { margin: 0.75rem 0 0; }
 
 /* ── ziwei palace grid ── */
 .chart-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--silver-dim); }
@@ -774,4 +876,182 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .text-frame--light {
   -webkit-text-stroke: 0.45px rgba(16, 20, 31, 0.55);
   paint-order: stroke fill;
+}
+
+/* ═══ 塔羅 今日抽牌（v1a）— cosmic-silver 卡面 ═══ */
+.tarot-card {
+  display: block;
+  width: min(220px, 60vw);
+  aspect-ratio: 1 / 2; /* 生成圖原生 1:2——零裁切，塔羅實牌比例 */
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  perspective: 900px;
+  font: inherit;
+  color: inherit;
+}
+.tarot-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tarot-card:focus-visible .tarot-inner {
+  outline: 2px solid var(--silver-faint);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+.tarot-card.flipped .tarot-inner {
+  transform: rotateY(180deg);
+}
+.tarot-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.tarot-face {
+  overflow: hidden;
+}
+.tarot-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tarot-art.reversed {
+  transform: rotate(180deg);
+}
+.tarot-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.75rem 0.5rem 0.75rem;
+  background: linear-gradient(transparent, rgba(10, 23, 51, 0.88));
+}
+.tarot-back {
+  background:
+    radial-gradient(1.2px 1.2px at 25% 20%, var(--silver-faint) 45%, transparent 55%),
+    radial-gradient(1px 1px at 70% 30%, var(--silver-dim) 45%, transparent 55%),
+    radial-gradient(1.4px 1.4px at 40% 75%, var(--silver-faint) 45%, transparent 55%),
+    radial-gradient(1px 1px at 80% 82%, var(--silver-dim) 45%, transparent 55%),
+    linear-gradient(135deg, var(--void), var(--deep-space));
+}
+.tarot-back-mark {
+  font-size: 2rem;
+  color: var(--starlight);
+}
+.tarot-back-brand {
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  color: var(--silver-faint);
+}
+.tarot-front {
+  transform: rotateY(180deg);
+  background: var(--glass-bg-strong);
+}
+.tarot-symbol {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  color: var(--starlight);
+  letter-spacing: 0.1em;
+}
+.tarot-symbol.reversed {
+  transform: rotate(180deg);
+}
+.tarot-name {
+  font-size: 1.2rem;
+  color: var(--heading);
+}
+.tarot-badge {
+  font-size: 0.8rem;
+  color: var(--silver-dim);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.8rem;
+}
+
+/* ═══ 塔羅 三張牌陣（v1b）═══ */
+.tarot-trio {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tarot-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.tarot-slot-label {
+  font-size: 0.9rem;
+  color: var(--silver-dim);
+}
+.tarot-card--sm {
+  width: min(150px, 28vw);
+}
+
+/* ═══ 塔羅首頁主打卡 NEW 徽章（2026-10-27，最新功能標記）═══ */
+.feature-new {
+  display: inline-block;
+  vertical-align: 0.35em;
+  margin-left: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--starlight);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  background: var(--glass-bg);
+}
+
+/* ═══ 塔羅直向/手機（2026-10-27 RWD）═══ */
+@media (max-width: 480px) {
+  .tarot-card {
+    width: min(240px, 62vw);
+  }
+  .tarot-card--sm {
+    width: min(104px, 30vw);
+  }
+  .tarot-trio {
+    gap: 0.5rem;
+  }
+  .tarot-caption {
+    padding: 1.1rem 0.4rem 0.5rem;
+  }
+  .tarot-card--sm .tarot-caption {
+    padding: 0.9rem 0.3rem 0.4rem;
+  }
+  .tarot-name {
+    font-size: 1rem;
+  }
+  .tarot-card--sm .tarot-name {
+    font-size: 0.9rem;
+  }
+  .tarot-card--sm .tarot-badge {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.55rem;
+  }
+  .tarot-slot-label {
+    font-size: 0.8rem;
+  }
 }

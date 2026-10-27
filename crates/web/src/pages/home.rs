@@ -33,13 +33,20 @@ pub fn HomePage() -> impl IntoView {
                 </Show>
             </div>
             <div class="feature-grid">
+                <A href="/tarot" attr:class="feature">
+                    <h3>
+                        <span class="feature-icon">"🃏"</span>" 塔羅"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>"今日抽牌免登入；三張牌陣解牌需登入，當下問題的反思工具"</p>
+                </A>
                 <div class="feature">
                     <h3><span class="feature-icon">"🔮"</span>" 紫微斗數"</h3>
                     <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
                 </div>
                 <div class="feature">
                     <h3><span class="feature-icon">"⭐"</span>" 西洋占星"</h3>
-                    <p>"星座與行星位置分析，探索性格與天賦"</p>
+                    <p>"星座與行星位置分析，探索性格傾向與成長方向"</p>
                 </div>
                 <A href="/naming" attr:class="feature">
                     <h3><span class="feature-icon">"✒️"</span>" 姓名學"</h3>

@@ -1,5 +1,8 @@
 # Beta Testing Tracker
 
+> **目前狀態（2026-09-22）**：產品功能與部署材料已就緒，但真實 beta 執行尚未完成。
+> 本表的使用者、日期、監控數據與 Go/No-Go 結論必須填入實際結果；在此之前不得宣稱已通過 beta 或做出 GO 決策。
+
 **Start Date**: [TBD]
 **End Date**: [TBD]
 **Target**: 10-20 beta users

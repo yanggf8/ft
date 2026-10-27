@@ -33,25 +33,114 @@ struct QueuedEntry {
     tx: oneshot::Sender<Result<Response>>,
 }
 
-std::thread_local! {
-    static QUEUE: RefCell<VecDeque<QueuedEntry>> = RefCell::new(VecDeque::new());
-    static PROCESSING: Cell<bool> = Cell::new(false);
+/// 每實例的佇列狀態（v2 前置，spec §Tarot 第 4 點：從 `thread_local!` 遷至
+/// DO struct 欄位——`thread_local` 是 per-isolate，不同 `id_from_name` 的實例
+/// 共置同一 isolate 時會共享佇列；實例欄位才是 per-DO-instance）。
+struct QueueState<T> {
+    queue: RefCell<VecDeque<T>>,
+    processing: Cell<bool>,
+}
+
+impl<T> QueueState<T> {
+    fn new() -> Self {
+        Self {
+            queue: RefCell::new(VecDeque::new()),
+            processing: Cell::new(false),
+        }
+    }
+
+    fn depth(&self) -> usize {
+        self.queue.borrow().len()
+    }
+
+    fn push(&self, entry: T) {
+        self.queue.borrow_mut().push_back(entry);
+    }
+
+    fn pop(&self) -> Option<T> {
+        self.queue.borrow_mut().pop_front()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.borrow().is_empty()
+    }
+
+    /// 取得處理權；已被持有則回 false（原 `PROCESSING.replace(true)` 語意：
+    /// replace 回傳舊值，舊值 true＝已有人持有）。
+    fn try_acquire(&self) -> bool {
+        !self.processing.replace(true)
+    }
+
+    fn release(&self) {
+        self.processing.set(false);
+    }
+}
+
+impl<T> Default for QueueState<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn two_instances_do_not_share_state() {
+        // thread_local 版的本質缺陷：兩個 DO 實例（如 global 與 tarot）共置
+        // 同一 isolate 時共享 QUEUE／PROCESSING。實例欄位版必須完全隔離。
+        let a = QueueState::<u32>::new();
+        let b = QueueState::<u32>::new();
+        a.push(1);
+        assert_eq!(a.depth(), 1);
+        assert_eq!(b.depth(), 0, "b 不得看見 a 的佇列");
+        assert!(b.pop().is_none());
+    }
+
+    #[test]
+    fn fifo_and_emptiness() {
+        let q = QueueState::<u32>::new();
+        assert!(q.is_empty());
+        q.push(1);
+        q.push(2);
+        assert_eq!(q.depth(), 2);
+        assert_eq!(q.pop(), Some(1));
+        assert_eq!(q.pop(), Some(2));
+        assert_eq!(q.pop(), None);
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn acquire_release_semantics() {
+        let q = QueueState::<u32>::new();
+        assert!(q.try_acquire(), "首個取得者應成功");
+        assert!(!q.try_acquire(), "第二個取得者應失敗（已持有）");
+        q.release();
+        assert!(q.try_acquire(), "釋放後可再取得");
+    }
 }
 
 #[durable_object(fetch)]
 pub struct AIMutexDO {
     state: State,
     _env: Env,
+    /// per-DO-instance 佇列（v2 前置：見 QueueState 文檔註解）
+    queue: QueueState<QueuedEntry>,
 }
 
 impl DurableObject for AIMutexDO {
     fn new(state: State, env: Env) -> Self {
-        Self { state, _env: env }
+        Self {
+            state,
+            _env: env,
+            queue: QueueState::new(),
+        }
     }
 
     async fn fetch(&self, req: Request) -> Result<Response> {
         // Backpressure: check queue depth before enqueuing (mirrors TS MAX_QUEUE_DEPTH).
-        let depth = QUEUE.with(|q| q.borrow().len());
+        let depth = self.queue.depth();
         if depth >= MAX_QUEUE_DEPTH {
             let mut r = Response::from_json(&serde_json::json!({
                 "error": "AI queue is full, please try again shortly",
@@ -65,7 +154,7 @@ impl DurableObject for AIMutexDO {
 
         let (tx, rx) = oneshot::channel();
         let queued_at = clock::now_ms();
-        QUEUE.with(|q| q.borrow_mut().push_back(QueuedEntry { queued_at, req, tx }));
+        self.queue.push(QueuedEntry { queued_at, req, tx });
 
         // Drive the queue. If another fetch is already processing, this returns immediately
         // and the current request will be picked up by the in-flight loop.
@@ -92,19 +181,19 @@ impl AIMutexDO {
     /// respects MAX_QUEUE_WAIT_MS, and drains the queue sequentially.
     async fn process_queue(&self) {
         // If already processing, let the active loop drain the queue.
-        if PROCESSING.with(|p| p.replace(true)) {
+        if !self.queue.try_acquire() {
             return;
         }
 
         loop {
-            let entry = QUEUE.with(|q| q.borrow_mut().pop_front());
+            let entry = self.queue.pop();
             let Some(entry) = entry else {
                 // Queue drained — release lock and double-check for races where a new
                 // entry arrived between pop_front returning None and clearing the flag.
-                PROCESSING.with(|p| p.set(false));
-                if QUEUE.with(|q| !q.borrow().is_empty()) {
+                self.queue.release();
+                if !self.queue.is_empty() {
                     // Another entry slipped in; reclaim the lock and continue.
-                    if !PROCESSING.with(|p| p.replace(true)) {
+                    if self.queue.try_acquire() {
                         continue;
                     }
                 }
@@ -138,7 +227,7 @@ impl AIMutexDO {
     async fn handle_request(&self, mut req: Request) -> Result<Response> {
         let body: InterpretMsg = match req.json().await {
             Ok(b) => b,
-            Err(e) => {
+            Err(_) => {
                 return Err(Error::from("invalid body"));
             }
         };

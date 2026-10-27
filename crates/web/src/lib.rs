@@ -18,7 +18,7 @@ use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
 use crate::pages::{
     AdminPage, DivinationPage, GlossaryPage, HomePage, LoginPage, NamingPage, PersonalityPage,
-    ProfilePage, StoryPage,
+    ProfilePage, StoryPage, TarotPage, TarotSpreadPage,
 };
 
 #[component]
@@ -39,6 +39,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/auth/verify") view=VerifyPage/>
                     // 姓名學與名詞解釋為公開頁（免登入；issue #2 決議）
                     <Route path=path!("/naming") view=NamingPage/>
+                    <Route path=path!("/tarot") view=TarotPage/>
+                    <Route path=path!("/tarot/spread") view=|| view! { <Protected><TarotSpreadPage/></Protected> }/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>
@@ -67,6 +69,31 @@ fn Protected(children: ChildrenFn) -> impl IntoView {
     }
 }
 
+/// `?next=` 安全規則（塔羅設計定稿）：僅本站相對路徑——開頭 `/` 且非 `//`
+/// 與 `/\`，防 open redirect。編碼變體行為（檢視確認）：`%2F%2F…` 不以
+/// `/` 開頭（query_param 不解碼）→ 驗證不過 fallback；`/%5C` 會通過驗證，
+/// 但僅導向同源 404 路徑，無法離站；未編碼 `/\`（瀏覽器正規化為 `//` 的
+/// 離站向量）被明文 `starts_with("/\")` 擋下。
+pub(crate) fn valid_login_next(p: &str) -> bool {
+    p.starts_with('/') && !p.starts_with("//") && !p.starts_with("/\\")
+}
+
+/// 取出登入回流目標（用完即清）：login 頁存入的 `?next=`，驗證不過或無值
+/// 則回 `/profile`（未帶參數的既有行為不變）。
+pub(crate) fn take_login_next() -> String {
+    let store = web_sys::window()
+        .and_then(|w| w.session_storage().ok())
+        .and_then(|s| s);
+    let next = store
+        .as_ref()
+        .and_then(|s| s.get_item("login_next").ok().flatten());
+    if let Some(s) = &store {
+        let _ = s.remove_item("login_next");
+    }
+    next.filter(|p| valid_login_next(p))
+        .unwrap_or_else(|| "/profile".to_string())
+}
+
 /// `/auth/verify` — the landing page of the magic-link email. Exchanges the
 /// `?token=` query param for a session via `api::verify_email`, then continues
 /// to /profile. Public on purpose: this is how an anonymous visitor becomes
@@ -92,7 +119,7 @@ fn VerifyPage() -> impl IntoView {
                     // user signal so `Protected` sees an authenticated visitor.
                     Ok(_) => {
                         auth.refresh(false).await;
-                        navigate("/profile", Default::default());
+                        navigate(&take_login_next(), Default::default());
                     }
                     Err(e) => {
                         reason.set(e.to_string());

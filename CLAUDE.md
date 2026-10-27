@@ -80,8 +80,8 @@ Detailed walkthrough — routes, DOs, services, engines, frontend, F5 design not
 notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map:
 
 - `crates/schema` — shared DTOs (`api` wire contract, `storage` DO format) + pure feature
-  logic (`symbolic`, `predict`, `anchors`, `cycle`, `naming` 姓名學 v1); single source of
-  truth, no TS drift.
+  logic (`symbolic`, `predict`, `anchors`, `cycle`, `naming` 姓名學 v1, `practice`
+  本週小練習題庫與契約); single source of truth, no TS drift.
 - `crates/domain/{ziwei,western,big5}` — engines (ziwei wraps x-iztro; western = real
   ephemeris; big5 = F1 scoring).
 - `crates/worker` — `fortunet-engine` Worker (service binding `FT_ENGINE`).
@@ -102,11 +102,20 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
 - Route-level request bodies are capped at 64 KiB (`body_too_large` in `routes/common.rs`)
   — new body-parsing routes must call it before `req.json()`.
 - Route code must not echo DB/engine error detail to clients (generic `"db error"` only).
+- 命理 AI 解讀（紫微／西洋／人生故事）system prompt 一律帶 `GUARDRAIL_ZH/EN`
+  （`services/ai/prompts.rs`）：傾向非注定、不借遺傳／腦科學／IQ／研究數據背書；
+  新增 chart type 時必須沿用，測試 `guardrail_matches_prompt_language` 守門。
 - **CSP 紅線（2026-09-11 事故）**：`_headers` 的 `script-src 'self' 'wasm-unsafe-eval'`
   **擋 inline script** — wasm 啟動器必須留在外部檔 `boot.js`（`index.html` 以
   `<script type="module" src="/boot.js">` 引用，`build-web.sh` 負責複製）。
   把啟動器改回 inline 會重演「app 不 mount」的全站停擺。改 `index.html`/`_headers`
   後必須在瀏覽器載入 `dist/`（套用同款 header）驗證再部署。
+- **塔羅（2026-10-27 全案）**：三版本常數（`TAROT_CORPUS_VERSION`／
+  `DRAW_ALGO_VERSION`／`PROMPT_VERSION`）在 `crates/schema/src/tarot`，改語料／
+  演算法／prompt 必 bump；塔羅資料永不寫入 predictions/prediction_feedback/
+  f8_assignments；星曜 type 的 wire 值是 `main`（非 iztro 的 `major`）；AI 路徑
+  限流一律 `rate_limit_strict`（fail-closed）、AIMutexDO 走專屬實例
+  `id_from_name("tarot")`；卡面在 `crates/web/assets/tarot/`（build-web.sh 複製）。
 - `galaxy.js` 的拒絕迴圈用 `for(;;)`，**不要**用 `do-while` + `continue`（`g` 未定義
   時會退出迴圈回傳 undefined → NaN → 動畫迴圈死亡；見 gauss() 註解與 commit 324bb73）。
 - `predict::GATE_ORDER`（work→money→love→family→health）同時決定 F4 `gated_domains()`

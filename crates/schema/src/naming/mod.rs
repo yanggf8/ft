@@ -49,8 +49,26 @@ pub struct CharStrokes {
 pub struct Grid {
     pub kind: GridKind,
     pub strokes: u16,
+    /// 1-based（1..=81）；Deserialize 邊界即驗證，`luck::luck_entry` 的 assert 是最後防線。
+    #[serde(deserialize_with = "de_luck_index")]
     pub luck_index: u8,
     pub element: sancai::Element,
+}
+
+/// `Grid.luckIndex` 的 Deserialize 邊界驗證：只接受 1..=81。
+/// 反序列化路徑（未來快取/wire 誤用）餵入越界值回 Err，而非 panic（wasm 上＝整頁死）。
+fn de_luck_index<'de, D>(d: D) -> Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let n = u8::deserialize(d)?;
+    if (1..=81).contains(&n) {
+        Ok(n)
+    } else {
+        Err(serde::de::Error::custom(format!(
+            "luckIndex out of range (1..=81): {n}"
+        )))
+    }
 }
 
 /// 三才配置 [天, 人, 地]。
@@ -104,15 +122,7 @@ fn validate(surname: &str, given: &str) -> Result<(), NamingError> {
     if g.len() > 2 {
         return Err(NamingError::GivenTooLong(g.len()));
     }
-    let mut non_cjk: Vec<char> = s
-        .iter()
-        .chain(&g)
-        .copied()
-        .filter(|c| !is_cjk(*c))
-        .collect();
-    // 同字重複（如「㐀㐀」）只報一次；排序讓訊息順序確定
-    non_cjk.sort_unstable();
-    non_cjk.dedup();
+    let non_cjk = normalized_chars(s.iter().chain(&g).copied().filter(|c| !is_cjk(*c)));
     if !non_cjk.is_empty() {
         return Err(NamingError::NonCjk(non_cjk));
     }
@@ -121,6 +131,15 @@ fn validate(surname: &str, given: &str) -> Result<(), NamingError> {
 
 fn is_cjk(c: char) -> bool {
     ('\u{3400}'..='\u{4DBF}').contains(&c) || ('\u{4E00}'..='\u{9FFF}').contains(&c)
+}
+
+/// 錯誤字元清單的正規化：同字重複（如「㐀㐀」）只報一次；排序讓訊息順序確定。
+/// validate 與 analyze 的字元清單錯誤共用 — 新錯誤變體也要走這裡，勿手寫 sort+dedup。
+fn normalized_chars(chars: impl Iterator<Item = char>) -> Vec<char> {
+    let mut v: Vec<char> = chars.collect();
+    v.sort_unstable();
+    v.dedup();
+    v
 }
 
 /// 由「已解析的筆畫陣列」算五格（[天, 人, 地, 外, 總]）。
@@ -200,15 +219,12 @@ pub fn analyze(surname: &str, given: &str) -> Result<NamingReport, NamingError> 
     };
     let s = resolve(surname);
     let g = resolve(given);
-    let mut unknown: Vec<char> = s
-        .iter()
-        .chain(&g)
-        .filter(|(_, v)| v.is_none())
-        .map(|(ch, _)| *ch)
-        .collect();
-    // 同字重複只報一次；排序讓訊息順序確定
-    unknown.sort_unstable();
-    unknown.dedup();
+    let unknown = normalized_chars(
+        s.iter()
+            .chain(&g)
+            .filter(|(_, v)| v.is_none())
+            .map(|(ch, _)| *ch),
+    );
     if !unknown.is_empty() {
         return Err(NamingError::UnknownChars(unknown));
     }
@@ -257,6 +273,27 @@ mod tests {
         let r = build_report(&[('甲', 25), ('乙', 25)], &[('丙', 25), ('丁', 25)]);
         assert_eq!(r.grids[4].strokes, 100);
         assert_eq!(r.grids[4].luck_index, 20); // 100-80
+    }
+
+    #[test]
+    fn grid_deserialize_rejects_out_of_range_luck_index() {
+        // 越界 luckIndex 擋在 Deserialize 邊界：反序列化路徑（未來快取/wire 誤用）
+        // 餵入 0/82 會得到 Err，而非進到 luck_entry 的 assert（wasm 上 panic＝整頁死）
+        let mk = |n: u8| serde_json::json!({"kind": "Heaven", "strokes": 5, "luckIndex": n, "element": "Wood"});
+        // 邊界內（1、5、81）接受
+        for ok in [1u8, 5, 81] {
+            assert!(
+                serde_json::from_value::<Grid>(mk(ok)).is_ok(),
+                "{ok} 應接受"
+            );
+        }
+        // 邊界外（0、82）拒絕
+        for bad in [0u8, 82] {
+            assert!(
+                serde_json::from_value::<Grid>(mk(bad)).is_err(),
+                "{bad} 應拒絕"
+            );
+        }
     }
 
     #[test]

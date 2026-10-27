@@ -36,8 +36,9 @@ pub struct LuckEntry {
 
 /// 81 條數理，dense 1-based（index = 數理 − 1）。
 /// 全文鎖定於 spec §3（Agy 四源交叉投票，2026-09-18）；分歧條目見 spec 分歧冊。
+/// `pub(crate)`：表端一律走 `luck_entry`（契約編譯期強制，見 `luck_entry` doc）。
 #[rustfmt::skip]
-pub const LUCK: [LuckEntry; 81] = [
+pub(crate) const LUCK: [LuckEntry; 81] = [
     LuckEntry { class: LuckClass::DaJi,  name: "天地開泰", text: "萬物起始之數，開創力強，宜靜中得機" },  // 1
     LuckEntry { class: LuckClass::Xiong, name: "混沌未定", text: "進退失據，親緣易離，謀事難聚" },        // 2
     LuckEntry { class: LuckClass::DaJi,  name: "進取如意", text: "天地人和，早發名利，才藝兼具" },        // 3
@@ -132,7 +133,8 @@ pub fn luck_index(n: u16) -> u8 {
 }
 
 /// 1-based 查表：回傳數理 `n` 的條目。`n` 須為 `luck_index()` 的回傳值（1..=81）；
-/// 表端一律走本函式，勿手寫 `LUCK[n - 1]`（n 的 1-based 約定容易漏 −1 或寫成 `LUCK[n]`）。
+/// 表端一律走本函式（`LUCK` 為 `pub(crate)`，直接索引編譯不過）。反序列化路徑
+/// 的越界值已由 `Grid.luckIndex` 的 Deserialize 邊界擋下，本 assert 是最後防線。
 pub fn luck_entry(n: u8) -> &'static LuckEntry {
     assert!((1..=81).contains(&n), "luck_index out of range: {n}");
     &LUCK[usize::from(n) - 1]

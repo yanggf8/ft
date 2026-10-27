@@ -20,8 +20,8 @@ fn global_crypto() -> Option<web_sys::Crypto> {
 
 /// Cryptographically strong random bytes via `crypto.getRandomValues`.
 /// `None` = crypto unavailable (caller must abort the operation).
-// TODO(P0-01 routes slice): drop this allow once routes/ calls secure_*.
-#[allow(dead_code)]
+// Used by invite, OAuth, login-token, and prediction services. The Option
+// return keeps security-sensitive callers fail-closed when crypto is absent.
 pub fn secure_bytes(bytes: usize) -> Option<Vec<u8>> {
     let crypto = global_crypto()?;
     // getRandomValues caps the buffer at 65536 bytes; callers here stay far
@@ -39,7 +39,6 @@ pub fn secure_bytes(bytes: usize) -> Option<Vec<u8>> {
 /// chars. Use for anything security-relevant (magic-link tokens). `None` =
 /// crypto unavailable; callers must fail closed (reject the login) rather than
 /// fall back.
-#[allow(dead_code)]
 pub fn secure_token_hex(bytes: usize) -> Option<String> {
     let b = secure_bytes(bytes)?;
     Some(b.iter().map(|x| format!("{:02x}", x)).collect())
