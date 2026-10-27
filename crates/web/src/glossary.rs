@@ -11,6 +11,7 @@ pub enum Category {
     ZiweiPattern,
     Western,
     Tarot,
+    Palm,
     Naming,
 }
 
@@ -21,6 +22,7 @@ impl Category {
             Category::ZiweiPattern => "紫微格局",
             Category::Western => "西洋占星",
             Category::Tarot => "塔羅",
+            Category::Palm => "手相",
             Category::Naming => "姓名學",
         }
     }
@@ -35,8 +37,9 @@ pub struct Term {
 
 /// 詞條版本（2026-09-18 由初稿定案；後續 stakeholder 意見以修訂版處理並 bump。
 /// 2026-09-22 glossary-1.1：「日月並明」雙棟之才 → 棟梁之才，無出處自造詞修正。
-/// 2026-10-27 glossary-1.2：加塔羅 7 條——塔羅上線後名詞解釋未涵蓋（使用者指出））。
-pub const GLOSSARY_VERSION: &str = "glossary-1.2";
+/// 2026-10-27 glossary-1.2：加塔羅 7 條——塔羅上線後名詞解釋未涵蓋（使用者指出）。
+/// 2026-10-28 glossary-1.3：加手相 9 條（手相 v1 同日上線））。
+pub const GLOSSARY_VERSION: &str = "glossary-1.3";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -168,6 +171,52 @@ pub static TERMS: &[Term] = &[
         term: "三張牌陣",
         category: Category::Tarot,
         def: "現況、阻礙、建議三張的入門牌陣，本站三張牌解牌採用的形式。",
+    },
+    // 手相（glossary-1.3——站上特徵區實際呈現的線名/掌丘/手型；措辭「對照」貼合非宣判式語料）
+    Term {
+        term: "手相",
+        category: Category::Palm,
+        def: "從掌紋與手型描繪傾向的傳統相術，本站以拍照抽取特徵、規則式組裝解讀。",
+    },
+    Term {
+        term: "生命線",
+        category: Category::Palm,
+        def: "環繞拇指的弧線，傳統上對照生命力節奏與身心韌性。",
+    },
+    Term {
+        term: "智慧線",
+        category: Category::Palm,
+        def: "橫越掌心的線，對照思考風格與做決定的方式。",
+    },
+    Term {
+        term: "感情線",
+        category: Category::Palm,
+        def: "掌心上緣橫向的線，對照情感的表達與讓人靠近的方式。",
+    },
+    Term {
+        term: "命運線",
+        category: Category::Palm,
+        def: "縱走掌心的線，對照方向感與階段耕耘；不少人天生不明顯，與命好不好無關。",
+    },
+    Term {
+        term: "婚姻線",
+        category: Category::Palm,
+        def: "感情線上方的短橫線，對照對親密關係的態度，而非婚姻事件本身。",
+    },
+    Term {
+        term: "太陽線",
+        category: Category::Palm,
+        def: "無名指下方縱走的線，對照自我實現與被什麼點亮。",
+    },
+    Term {
+        term: "掌丘",
+        category: Category::Palm,
+        def: "掌心各處的隆起（金星丘、木星丘等），對照不同層面能量的飽滿程度。",
+    },
+    Term {
+        term: "手型",
+        category: Category::Palm,
+        def: "火、土、風、水四型手掌分類，對照氣質傾向（如火型掌掌長指短、行動力強）。",
     },
     // 姓名學
     Term {

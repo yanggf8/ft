@@ -68,7 +68,7 @@ pub fn HomePage() -> impl IntoView {
                 </div>
                 <A href="/glossary" attr:class="feature">
                     <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
-                    <p>"紫微、占星、塔羅、姓名學常見名詞一次看懂"</p>
+                    <p>"紫微、占星、塔羅、手相、姓名學常見名詞一次看懂"</p>
                 </A>
             </div>
         </div>
