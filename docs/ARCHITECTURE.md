@@ -81,6 +81,24 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 `docs/superpowers/specs/2026-10-20-weekly-practice-design.md`。2026-10-20 已遷移正式
 Turso 並部署 API 與前端，`verify-deployment.sh` 全過，未登入探測 `/api/practice` 回 401。
 
+## 塔羅牌（2026-10-27，v1 已實作）
+
+兩段式：v1a「今日抽牌」公開頁（`/tarot`，免登入零 API——決定性抽牌
+`ft_schema::tarot::daily_draw`，種子＝台北日期＋localStorage 32-hex 裝置種子，
+明文不防重擲）與 v1b 三張牌陣（`/tarot/spread`，登入）。`ft_schema::tarot` 是
+前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，`TAROT_CORPUS_VERSION`）、
+注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋拒絕取樣，演算法由
+`TAROT_DRAW_ALGO_VERSION` 鎖定，golden test 釘死）、`taipei_today`
+（重用 cycle.rs UTC+8 純算術）。API 四個 `/api/tarot` 路由在 `routes/tarot.rs`：
+處理順序＝IP 限流→auth→body cap→parse→驗證→冪等（`UNIQUE(user_id, request_id)`
+重放回原結果／異 body 409）→uid 24h 限流→`secure_bytes` CSPRNG（fail-closed，
+明文禁 `Math::random`）→寫入；DELETE 404 不洩存在性。DB：`tarot_readings`
+（schema.sql＋`scripts/migrations/2026-10-27-tarot.sql`）。語料人工終校見
+issue #3。塔羅資料永不寫入 predictions／prediction_feedback／f8_assignments。
+v2（AI 命盤感知解牌）契約在同 spec 第二部分——含 AIMutexDO 佇列須先從
+`thread_local!` 遷 per-instance、`stub:true` 視為 failed 等 v2 前置。
+完整設計與三家審查軌跡：`docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
+
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 
 All styling is plain CSS in `crates/web/style.css`; no Rust owns a token.

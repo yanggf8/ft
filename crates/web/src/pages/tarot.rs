@@ -216,7 +216,7 @@ fn draw_error_message(e: &crate::api::ApiErr) -> String {
 #[component]
 pub fn TarotSpreadPage() -> impl IntoView {
     use crate::api;
-    use ft_schema::tarot::{TarotCardView, TarotDrawRequest, TarotReadingView};
+    use ft_schema::tarot::{TarotDrawRequest, TarotReadingView};
 
     let question = RwSignal::new(String::new());
     let reading = RwSignal::new(None::<TarotReadingView>);
