@@ -11,6 +11,7 @@ pub mod practice;
 pub mod predict;
 pub mod storage;
 pub mod symbolic;
+pub mod tarot;
 
 use serde::{Deserialize, Serialize};
 

@@ -32,7 +32,7 @@ pub fn is_monday_cycle_id(cycle_id: &str) -> bool {
 
 /// 解析 `YYYY-MM-DDTHH:MM:SS(.fff)?Z` → (days_since_epoch, secs_in_day)。
 /// 嚴格：要求尾端 `Z`（`toISOString` 恆為 UTC）、時分秒齊全；毫秒可缺。
-fn parse_iso_parts(iso: &str) -> Option<(i64, i64)> {
+pub(crate) fn parse_iso_parts(iso: &str) -> Option<(i64, i64)> {
     let iso = iso.strip_suffix(['Z', 'z'])?;
     let (date_part, time_part) = iso.split_once('T')?;
     let (y, m, d) = parse_date_parts(date_part)?;
@@ -108,7 +108,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 }
 
 /// Hinnant `civil_from_days` — days_since_epoch → (y, m, d)。
-fn civil_from_days(z: i64) -> (i64, i64, i64) {
+pub(crate) fn civil_from_days(z: i64) -> (i64, i64, i64) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097; // [0, 146096]
