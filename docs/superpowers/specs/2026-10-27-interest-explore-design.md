@@ -212,6 +212,17 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 終審結論原文：「F1/F2 是會直接導致錯誤實作的規格缺陷……全部都是文字級修正，無需重設計——修堅實的骨架已就位。」
 
+## 9. 執行順序（v4 後的 todo，2026-10-30 排定；續做機器：NUC）
+
+1. **作者授權信**（§5.1 閘門）：起草英文信稿——對象 Armstrong/Rounds，涵蓋「網站對一般使用者提供中譯版、非商業、標明出處、可隨時撤下」；站長過目後寄出。回覆（許可/拒絕/無回應）或「站方明示接受推論風險」擇一完成並記錄進附錄 B。**不 block 2/3 的進行，block 上線。**
+2. **附錄 B 中譯**（§2.3 流程）：Claude 初譯 48 題 → codex 或 kimi 獨立複譯 → 分歧題逐題定案（情境替換題記錄原文與理由）→ 另一模型回譯英文比對語意 → 對照表（題號/型/原文/中譯）寫入附錄 B；同時訂 `INTEREST_INSTRUMENT_VERSION` 初版值。
+3. **實作**（建議照 palm 批次切分，每批 cargo test 過再下一批）：
+   - 批次 1 `crates/schema/src/interest/`：`items.rs` 中英對照（48 題，標附錄 A.4 題號＋form 'A'）＋計分/門檻/方向選取純函式＋§5.3 全部測項（TDD）
+   - 批次 2 DDL＋API：`scripts/schema.sql` 加 `interest_results`（§4.1 定案 DDL）＋`users.interest_epoch`；`crates/api/src/routes/interest.rs` 四端點（§4.2 五步判定順序）＋§5.4 全部測項；`verify-deployment.sh` 補 interest 端點 probes（照 palm Test 8c 前例）
+   - 批次 3 web：`profile.rs` 卡片＋作答流程（每頁 8 題、進度條、可回上頁）＋結果六長條（R-I-A-S-E-C 定序、方向選取、<3.0 文案）＋歷史分頁＋刪除；glossary 補 2 詞 bump glossary-1.4
+   - 部署：Turso 遷移 → API → web（§5.7）；`dist/` 套 `_headers` 同款 CSP 瀏覽器驗證（boot.js 紅線）→ `verify-deployment.sh`
+4. **驗收**：§5 全項＋§5.5 文案掃描；上線後 ARCHITECTURE.md 章節改「已上線」。
+
 ## 附錄 A：出處與題目查證紀錄（2026-10-30）
 
 ### A.1 出處
