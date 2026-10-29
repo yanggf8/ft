@@ -1,7 +1,7 @@
 # 設計：興趣探索 v1（RIASEC 興趣剖面）
 
-- 日期：2026-10-27（v2：2026-10-30 查證＋自審）
-- 狀態：設計中、未實作。審查鏈：v1→（2026-10-30 查證＋自審 S1–S8）→**v2**→Codex 審→…（後續輪次見 §8b）
+- 日期：2026-10-27（v3：2026-10-30 查證＋自審＋Codex 輪 1）
+- 狀態：設計中、未實作。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4 全吸收)→**v3**→Opus 終審（見 §8b）
 - 入口：`我的命格`（`crates/web/src/pages/profile.rs`）
 - 相關功能：F1 IPIP-15 人格測驗、本週小練習、命理 AI 護欄（`GUARDRAIL_ZH/EN`）
 - 長期方向：「優勢探索」三面向——能力剖面、學習反應、發展環境。本文件只涵蓋 v1 的興趣剖面
@@ -24,7 +24,7 @@
 3. **作答**：每題五點量表——非常不喜歡／不喜歡／不確定／喜歡／非常喜歡（1–5）。必須 48 題全答才能送出；作答只暫存在前端記憶體，關掉分頁就消失，不存草稿。
 4. **計分**：每型取 8 題平均（1.0–5.0）。計分在 `ft-schema` 純函式完成，API 端重算後才寫入，不信任前端分數。
 5. **不給常模分數**：中文版沒有台灣常模，所以**不顯示百分位、不跟他人比較、不寫「高於平均」**，只呈現使用者自己六型之間的相對高低。
-6. **結果呈現**：**六條長條**（已決，2026-10-30：長條易讀、符合色彩對比紅線；六角形留給後續版本評估），固定 R-I-A-S-E-C 順序。「較明顯的方向」= 與最高分差距 ≤ 0.5 的類型（最多 3 個；**平手時依 R-I-A-S-E-C 順序取前 3**）。若最高分 < 3.0，改顯示「目前沒有特別突出的偏好，這很常見」，不硬湊結果。0.5 和 3.0 是產品門檻，不是心理計量標準，文件與程式註解都要寫明。
+6. **結果呈現**：**六條長條**（已決，2026-10-30：長條易讀、符合色彩對比紅線；六角形留給後續版本評估），固定 R-I-A-S-E-C 順序。「較明顯的方向」：候選＝與最高分差距 ≤ 0.5 的類型；候選**先依分數降冪、同分再依 R-I-A-S-E-C 排序，取前 3**（Codex S1）。若最高分 < 3.0，改顯示「目前沒有特別突出的偏好，這很常見」，不硬湊結果（此時不選方向）。0.5 和 3.0 是產品門檻，不是心理計量標準，文件與程式註解都要寫明。
 7. **不對應職業清單**：v1 不提供職業推薦。職業對應需要 O\*NET 資料庫與另一份授權，留到後續版本另案設計。
 8. **重測**：可隨時重做，每次保留為一筆紀錄；畫面只顯示最新一次，歷史可分頁查看。
 9. **不接命盤、不接 AI**：v1 不把興趣結果送進 AI，也不跟紫微／西洋命盤疊加。日後若要做「命盤 × 興趣」的反思文字，必須帶 `GUARDRAIL_ZH/EN`，並另寫 spec。
@@ -47,7 +47,7 @@
 
 | 來源 | 授權 | 能否中譯使用 |
 |---|---|---|
-| Armstrong 等人（2008）RIASEC Markers（Activities） | 論文宣告 public domain 但**限研究用途**（p. 292）；作者實驗室現行頁面（2023）為**非商業使用＋註明出處**之免費授權（見附錄 A） | 可以——站上現為非商業；中譯版需在頁面註明原始出處，並說明為本站翻譯、未經常模驗證。**日後商業化前必須重新取得授權或換量表** |
+| Armstrong 等人（2008）RIASEC Markers（Activities） | 論文宣告 public domain 但**限研究用途**（p. 292）；作者實驗室現行頁面（2023）為**非商業使用＋註明出處**之免費授權（見附錄 A；授權對象與翻譯權兩點屬推論，上線前需作者回覆或明示接受風險） | 可以——站上現為非商業；中譯版需在頁面註明原始出處，並說明為本站翻譯、未經常模驗證。**日後商業化前必須重新取得授權或換量表** |
 | O\*NET Interest Profiler（含 Mini-IP 30 題） | CC BY-ND 4.0 或 O\*NET Tools Developer License | CC BY-ND 不允許衍生作品（翻譯算衍生）；Developer License 允許修改，但要求「validate all products incorporating content」（§3b），本站沒有驗證能力，所以不採用 |
 
 參考：[O\*NET Career Exploration Tools 授權](https://www.onetcenter.org/license_tools.html)、[Mini-IP 開發報告](https://www.onetcenter.org/dl_files/Mini-IP.pdf)。量表題目是從美國勞工部 Interest Profiler 題池**逐字選題**（非改寫；論文 p. 289 主張 IP items 為 public domain）；論文全文已取得並完成查證（2026-10-30，見附錄 A）。
@@ -72,7 +72,7 @@
   → 顯示最近一次結果與作答日期
 ```
 
-卡片說明：「看看你比較喜歡哪些類型的活動。這是興趣，不是能力或天賦測驗；結果只供你自己參考，可以隨時刪除。」
+卡片說明：「看看你比較喜歡哪些類型的活動。這是興趣，不是能力測驗；結果只供你自己參考，可以隨時刪除。」（Codex S2：原文案含「天賦」會被 §5.5 機械掃描誤擋，改寫避開禁用詞。）
 
 結果頁固定註腳：「題目來自公開的研究量表（Armstrong 等人，2008），中文為本站翻譯，沒有台灣常模，所以只顯示你自己六型之間的相對高低。興趣會隨經驗改變，歡迎之後再做一次。」
 
@@ -115,8 +115,8 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 | 方法與路徑 | 輸入 | 成功輸出／規則 |
 |---|---|---|
 | `GET /api/interest` | 無 | `interestEpoch`、`totalResults`、最新一筆結果（含 `scores`、`instrumentVersion`、`createdAt`，不含 `answers`）。`Cache-Control: private, no-store`。 |
-| `GET /api/interest/history` | `cursor` 可選，`limit=1..20`（預設 20，照 practice 前例） | 按 `(created_at, id)` 倒序分頁，只回本人資料；游標由伺服器產生。 |
-| `POST /api/interest/results` | `{instrumentVersion, form, answers: [48 × 1..5], expectedEpoch, requestId}` | 先呼叫 `body_too_large`。`instrumentVersion` 必須是目前版本，否則 409 `STALE_INSTRUMENT`；`form` 必須 `'A'`（v1 僅支援 Set A），否則 400；answers 長度或值域錯誤回 400。`expectedEpoch` 不符回 409 `STALE_INTEREST_STATE`。同 `requestId` 同內容直接回傳原結果，內容不同回 409 `IDEMPOTENCY_CONFLICT`；唯一索引敗者要重讀比對，不可回 500。用 `INSERT ... SELECT ... WHERE EXISTS(users.interest_epoch = :expectedEpoch)` 條件寫入。 |
+| `GET /api/interest/history` | `cursor` 可選，`limit=1..20`（預設 20，照 practice 前例） | 照 practice history 契約：`(?cursor IS NULL OR (created_at,id) < cursor)` 倒序、查 `limit+1` 判斷有無下一頁、`nextCursor` 由最後一筆**已回傳**資料產生（Codex S3）；游標或 limit 無效回 400。只回本人資料、**不含 `answers`**；`Cache-Control: private, no-store`。 |
+| `POST /api/interest/results` | `{instrumentVersion, form, answers: [48 × 1..5], expectedEpoch, requestId}` | 先呼叫 `body_too_large`（既有 helper 採 Content-Length 判斷；缺標頭之 chunked 為**全站既有接受面**，非本功能新增缺口——Codex S4）。**判定順序（Codex B2，照 practice.rs 前例）**：(1) 先按本人 `requestId` 查舊列——比對 `instrumentVersion`＋`form`＋`answers`（**不含 epoch**），相同回原結果（200），不同回 409 `IDEMPOTENCY_CONFLICT`；(2) 僅新鍵才檢查：`instrumentVersion` 非目前版本 → 409 `STALE_INSTRUMENT`；`form ≠ 'A'` → 400；answers 長度/值域錯 → 400；`expectedEpoch` 不符 → 409 `STALE_INTEREST_STATE`；(3) 條件寫入 `INSERT ... SELECT ... WHERE EXISTS(users.interest_epoch = :expectedEpoch)`；(4) 寫入失敗或唯一索引敗者：**先重讀冪等鍵**比對（同 (1)），仍無列再重查 epoch → 不符回 409，不可回 500。刪除後舊鍵已不存在，走 (2) 的 epoch 檢查回 409。 |
 | `DELETE /api/interest` | 無 | 單一 `db::batch`：刪除本人全部 `interest_results`，再把 `interest_epoch` 加一。 |
 
 共用 session 驗證與每 IP 速率限制；錯誤只回通用 `"db error"`。API 不接收自由文字，不把興趣資料送給 AI。
@@ -132,9 +132,9 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 上線前必須全部完成：
 
-1. §2.2 的授權與題目原文已用論文全文確認，出處寫進結果頁註腳。
+1. §2.2 的授權與題目原文已用論文全文確認，出處寫進結果頁註腳；**並完成附錄 A.2 處置**——作者書面確認，或站方明示記錄接受推論風險（Codex B1）。
 2. 48 題中譯完成 §2.3 的回譯比對，紀錄放在本文件附錄。
-3. `ft-schema` 單元測試：計分（全 1、全 5、單型高分）、門檻邊界（差距剛好 0.5、最高分剛好 3.0、「最多 3 個」平手排序）、answers 長度與值域驗證、題庫完整性（48 題、每型恰 8 題、題號連續）。
+3. `ft-schema` 單元測試：計分（全 1、全 5、單型高分）、門檻邊界（差距剛好 0.5、最高分剛好 3.0、**最高分 3.0 且第四候選差距恰 0.5 → 仍只取前 3**）、answers 長度與值域驗證、題庫完整性（48 題、每型恰 8 題、題號連續）。
 4. `ft-api` 測試：冪等重送、epoch 過期、刪除後重送 409、版本不符（409 `STALE_INSTRUMENT`）、`form ≠ 'A'` 400。
 5. 前端文案掃描：結果頁與卡片不出現「天賦」「擅長」「適合」「百分位」「平均」。
 6. 在 `dist/` 用 `_headers` 同款 CSP 在瀏覽器驗證，並跑 `verify-deployment.sh`。
@@ -182,7 +182,20 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 ## 8b. 外部審查紀錄
 
-（待補：Codex 輪 → Opus 終審）
+### Codex 輪 1（2026-10-30，gpt-6-sol，round1：B2×1、B1×1、S4、NO-GO → 全數核實吸收）
+
+| # | 發現 | 校核 | 處置 |
+|---|---|---|---|
+| B1 | 授權對象（professionals）與翻譯權未經權利人確認，「譯文屬使用範圍」是推論非事實 | 屬實——A.2 原結論把推論寫成查證事實 | A.2 改寫：兩點標明推論＋處置（寄信作者、上線閘門 §5.1 增「作者回覆或明示接受風險」） |
+| B2 | 冪等判定順序未定：升版後重送同時命中「回原結果」與「STALE_INSTRUMENT」；epoch 是否算同內容未定 | 屬實——`practice.rs` 前例為冪等鍵優先、比對不含 epoch | §4.2 改寫為四步判定順序（冪等鍵→新鍵驗證→條件寫入→敗者重讀冪等鍵再判 epoch） |
+| S1 | 四型以上落在 ±0.5 但分數不全相同時取哪三個未明說 | 屬實 | §2.6：候選依分數降冪、同分依 RIASEC 序取前 3；§5.3 補邊界測項 |
+| S2 | §3 卡片文案含「天賦」，被 §5.5 機械掃描自相矛盾 | 屬實——掃描規則是全字串比對 | 卡片說明改寫為「這是興趣，不是能力測驗」，掃描維持嚴格 |
+| S3 | history 未定 nextCursor／無效游標／快取規則 | 屬實——practice 前例已有完整契約 | §4.2 照 practice history 契約補齊（limit+1、nextCursor 由已回傳資料產生、400、no-store、不含 answers） |
+| S4 | `body_too_large` 只看 Content-Length，chunked 缺標頭不在保障範圍 | 屬實——但 helper 註解明文「chunked 為全站既有接受面」（palm P3 同款） | §4.2 標明既有面性質，不新增機制（維持全站一致） |
+
+校核方法：B2/S3/S4 逐行對照 `crates/api/src/routes/practice.rs`（冪等順序 381–430、分頁 305–335）與 `crates/api/src/routes/common.rs:34`（helper 實作）確認；B1 對照附錄 A.2 引文。產物：`/tmp/ft-interest-review/codex-round1.md`。
+
+（Opus 終審：待補）
 
 ## 附錄 A：出處與題目查證紀錄（2026-10-30）
 
@@ -215,9 +228,14 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 > professionals (researchers and practitioners) if it is used for noncommercial
 > purposes. Appropriate credit should be given to the authors of RIASEC Markers."
 
-**結論**（2026-10-30 決策：照走非商業授權）：站上現為非商業＋結果頁註明出處，符合授權；
-譯文屬「使用」範圍（授權未禁衍生）。日後商業化前必須重新取得授權或換量表。題目淵源為
-美國勞工部 Interest Profiler 題池之逐字選題（論文 p. 289 主張 IP items 為 public domain）。
+**結論**（2026-10-30 決策：照走非商業授權；Codex B1 校正措辭）：站上現為非商業＋結果頁
+註明出處。**兩點屬推論、未經權利人確認**：(a) 授權對象寫「professionals (researchers
+and practitioners)」，未明示涵蓋對一般使用者提供測驗的網站；(b) 授權未明示翻譯權——
+「譯文屬使用範圍（授權未禁衍生）」是本站推論，非查證事實。**處置**：實作期間寄信作者
+取得書面確認（涵蓋：網站對一般使用者提供中譯版、非商業、標明出處；信稿與回覆紀錄存
+附錄 B）；上線前完成「作者回覆許可」或「站方明示記錄接受推論風險」二者之一（§5.1）。
+日後商業化前必須重新取得授權或換量表。題目淵源為美國勞工部 Interest Profiler 題池之
+逐字選題（論文 p. 289 主張 IP items 為 public domain）。
 
 ### A.3 Form 決策數據（Activities，Cronbach's α）
 
