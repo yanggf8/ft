@@ -1,7 +1,7 @@
 # 設計：興趣探索 v1（RIASEC 興趣剖面）
 
-- 日期：2026-10-27（v3：2026-10-30 查證＋自審＋Codex 輪 1）
-- 狀態：設計中、未實作。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4 全吸收)→**v3**→Opus 終審（見 §8b）
+- 日期：2026-10-27（v4：2026-10-30 查證＋自審＋Codex 輪 1＋Opus 終審）
+- 狀態：**v4 final candidate**（未實作）。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4)→v3→Opus 終審(F1–F9 全吸收)→**v4**。待辦：附錄 B 中譯回譯比對、作者授權信（§5.1）
 - 入口：`我的命格`（`crates/web/src/pages/profile.rs`）
 - 相關功能：F1 IPIP-15 人格測驗、本週小練習、命理 AI 護欄（`GUARDRAIL_ZH/EN`）
 - 長期方向：「優勢探索」三面向——能力剖面、學習反應、發展環境。本文件只涵蓋 v1 的興趣剖面
@@ -82,7 +82,7 @@
 
 - 未登入：卡片顯示說明與登入入口，不能作答。
 - 作答中離開：不存草稿，回來重新開始。
-- 不顯示：百分位、排名、「天賦」「擅長」「適合當 X」、IQ、能力等級。
+- 不顯示：百分位、排名、平均、「天賦」「擅長」「適合」（含「適合當 X」）、IQ、能力等級（與 §5.5 掃描清單對齊——Opus F5）。
 - 不要求生日、命盤、人格測驗或訂閱。
 
 ## 4. 資料與 API 契約
@@ -94,29 +94,28 @@
 ```sql
 CREATE TABLE IF NOT EXISTS interest_results (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   instrument_version TEXT NOT NULL,
-  form TEXT NOT NULL,              -- 'A'；保留給平行版本
+  form TEXT NOT NULL CHECK (form IN ('A')),   -- v1 僅 Set A；平行版本上線時擴充
   answers TEXT NOT NULL,           -- JSON 陣列，48 個 1..5；保留原始作答以便改版重算
   scores TEXT NOT NULL,            -- JSON {"R":3.25,...}，伺服器計分
   request_id TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, request_id)      -- 冪等：並發重送唯一可靠防線（practice 前例）
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_interest_request
-  ON interest_results(user_id, request_id);
 CREATE INDEX IF NOT EXISTS idx_interest_user_created
   ON interest_results(user_id, created_at);
 ```
 
-依專案資料庫原則不加 FK 與 CHECK，值域由 API 驗證；只保留 `(user_id, request_id)` 唯一索引做冪等，這是並發重送時唯一可靠的防線。時間由伺服器寫入 UTC ISO。
+照 `practice_plans`／`tarot_readings`／`palm_readings` 慣例（Opus F3/F7——原「專案不加 FK/CHECK」是對 codebase 的失實描述，schema.sql 實為混合制）：FK CASCADE 落實 §4.3 帳號刪除含 `interest_results`；`CHECK(form IN ('A'))` 為 API 驗證的後盾；冪等用表內 inline `UNIQUE(user_id, request_id)`。值域仍由 API 先驗。時間由伺服器寫入 UTC ISO。
 
 ### 4.2 新端點
 
 | 方法與路徑 | 輸入 | 成功輸出／規則 |
 |---|---|---|
 | `GET /api/interest` | 無 | `interestEpoch`、`totalResults`、最新一筆結果（含 `scores`、`instrumentVersion`、`createdAt`，不含 `answers`）。`Cache-Control: private, no-store`。 |
-| `GET /api/interest/history` | `cursor` 可選，`limit=1..20`（預設 20，照 practice 前例） | 照 practice history 契約：`(?cursor IS NULL OR (created_at,id) < cursor)` 倒序、查 `limit+1` 判斷有無下一頁、`nextCursor` 由最後一筆**已回傳**資料產生（Codex S3）；游標或 limit 無效回 400。只回本人資料、**不含 `answers`**；`Cache-Control: private, no-store`。 |
-| `POST /api/interest/results` | `{instrumentVersion, form, answers: [48 × 1..5], expectedEpoch, requestId}` | 先呼叫 `body_too_large`（既有 helper 採 Content-Length 判斷；缺標頭之 chunked 為**全站既有接受面**，非本功能新增缺口——Codex S4）。**判定順序（Codex B2，照 practice.rs 前例）**：(1) 先按本人 `requestId` 查舊列——比對 `instrumentVersion`＋`form`＋`answers`（**不含 epoch**），相同回原結果（200），不同回 409 `IDEMPOTENCY_CONFLICT`；(2) 僅新鍵才檢查：`instrumentVersion` 非目前版本 → 409 `STALE_INSTRUMENT`；`form ≠ 'A'` → 400；answers 長度/值域錯 → 400；`expectedEpoch` 不符 → 409 `STALE_INTEREST_STATE`；(3) 條件寫入 `INSERT ... SELECT ... WHERE EXISTS(users.interest_epoch = :expectedEpoch)`；(4) 寫入失敗或唯一索引敗者：**先重讀冪等鍵**比對（同 (1)），仍無列再重查 epoch → 不符回 409，不可回 500。刪除後舊鍵已不存在，走 (2) 的 epoch 檢查回 409。 |
+| `GET /api/interest/history` | `cursor` 可選，`limit=1..=20`（預設 20，照 practice 前例） | 照 practice history 契約：`(?cursor IS NULL OR (created_at,id) < cursor)` 倒序、查 `limit+1` 判斷有無下一頁、`nextCursor` 由最後一筆**已回傳**資料產生（Codex S3）；游標或 limit 無效回 400。只回本人資料、**不含 `answers`**；`Cache-Control: private, no-store`。 |
+| `POST /api/interest/results` | `{instrumentVersion, form, answers: [48 × 1..5], expectedEpoch, requestId}` | 先呼叫 `body_too_large`（既有 helper 採 Content-Length 判斷；缺標頭之 chunked 為**全站既有接受面**，非本功能新增缺口——Codex S4）。**判定順序（Opus F1/F2/F4 定案，照 practice/tarot/palm 前例）**：(0) **形狀驗證 → 400**：`requestId` 非 UUID 形狀（`valid_request_id` 前例）、`expectedEpoch` ∉ 0..=2³¹−1（`valid_epoch` 前例，防 i64→i32 截斷繞過 epoch 防線）、`form ≠ 'A'`、answers 非 48×1..5；(1) 按本人 `requestId` 查舊列——比對 `instrumentVersion`＋`form`＋`answers`（**不含 epoch**），相同回原結果（200），不同回 409 `IDEMPOTENCY_CONFLICT`；(2) 僅新鍵才檢查語意：`instrumentVersion` 非目前版本 → 409 `STALE_INSTRUMENT`；`expectedEpoch` 不符 → 409 `STALE_INTEREST_STATE`；(3) 條件寫入（前例句型）：`INSERT ... SELECT ... FROM users WHERE id=:user AND interest_epoch=:expectedEpoch`（**不用** `WHERE EXISTS(...)` 偽 SQL 句型）；(4) 寫入失敗或唯一索引敗者：**先重讀冪等鍵**比對（同 (1)）→ 有列回 200/409；無列且 epoch 不符 → 409 `STALE_INTEREST_STATE`；**其餘無法判定者（含重讀失敗）→ 500 generic db error**（tarot 前例；「不可回 500」僅指有明確判定路徑時）。刪除後舊鍵已不存在，走 (2) 的 epoch 檢查回 409。 |
 | `DELETE /api/interest` | 無 | 單一 `db::batch`：刪除本人全部 `interest_results`，再把 `interest_epoch` 加一。 |
 
 共用 session 驗證與每 IP 速率限制；錯誤只回通用 `"db error"`。API 不接收自由文字，不把興趣資料送給 AI。
@@ -126,7 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 - 卡片內提供「刪除全部興趣探索紀錄」，先顯示筆數再確認。
 - `DELETE /api/personality/me` 與小練習刪除的確認文字都補一句「興趣探索紀錄需在該卡片另行刪除」。
 - 若未來提供整個帳號刪除，`interest_results` 必須列入同一筆交易。
-- 名詞解釋頁（`glossary`）新增「RIASEC」與「興趣 vs 能力」兩條。
+- 名詞解釋頁（`glossary`）新增「RIASEC」與「興趣 vs 能力」兩條，`GLOSSARY_VERSION` bump 至 **glossary-1.4**（Opus F8，照手相前例）。
 
 ## 5. 衡量與上線條件
 
@@ -135,8 +134,8 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 1. §2.2 的授權與題目原文已用論文全文確認，出處寫進結果頁註腳；**並完成附錄 A.2 處置**——作者書面確認，或站方明示記錄接受推論風險（Codex B1）。
 2. 48 題中譯完成 §2.3 的回譯比對，紀錄放在本文件附錄。
 3. `ft-schema` 單元測試：計分（全 1、全 5、單型高分）、門檻邊界（差距剛好 0.5、最高分剛好 3.0、**最高分 3.0 且第四候選差距恰 0.5 → 仍只取前 3**）、answers 長度與值域驗證、題庫完整性（48 題、每型恰 8 題、題號連續）。
-4. `ft-api` 測試：冪等重送、epoch 過期、刪除後重送 409、版本不符（409 `STALE_INSTRUMENT`）、`form ≠ 'A'` 400。
-5. 前端文案掃描：結果頁與卡片不出現「天賦」「擅長」「適合」「百分位」「平均」。
+4. `ft-api` 測試：冪等重送、epoch 過期、刪除後重送 409、版本不符（409 `STALE_INSTRUMENT`）、`form ≠ 'A'` 400、`requestId` 形狀不正 400、`expectedEpoch` 越界 400（Opus F1）。
+5. 前端文案掃描：結果頁與卡片不出現「天賦」「擅長」「適合」「百分位」「平均」「排名」「IQ」「能力等級」（與 §3.1 清單聯集對齊——Opus F5）。
 6. 在 `dist/` 用 `_headers` 同款 CSP 在瀏覽器驗證，並跑 `verify-deployment.sh`。
 7. 部署順序：Turso 遷移 → API → web。
 
@@ -146,10 +145,10 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 | 項目 | 狀態 | 處理方式 |
 |---|---|---|
-| 公開領域聲明與 48 題原文 | **已確認（2026-10-30，附錄 A）** | 論文全文（作者上傳版）已取得並逐字核對；授權為非商業＋註明出處，日後商業化前重評 |
+| 公開領域聲明與 48 題原文 | **已確認（2026-10-30，附錄 A）**；**授權對象與翻譯權屬推論、待作者回覆（閘門 §5.1，Opus F9）** | 論文全文（作者上傳版）已取得並逐字核對；授權為非商業＋註明出處，日後商業化前重評 |
 | 用 Form A 還是 Form B | **已決：Set A** | 兩樣本男女四組信度 Set A 全面略高、無低於 .80 之尺度（Set B 的 Enterprising 兩次 .79）；CUS 結構適配亦較高。數字見附錄 A |
 | 結果圖用六角形還是長條 | **已決：長條**（2026-10-30） | 長條較易讀、也符合色彩對比紅線；六角形留後續版本評估 |
-| 唯一索引是否違反「不加 constraints」原則 | 依小練習前例保留 | 冪等需要它；若要移除，必須改用其他並發防線 |
+| 唯一索引是否違反「不加 constraints」原則 | **已解（Opus F3：原前提不成立）** | schema.sql 實為混合制；照 practice/tarot/palm 慣例採 FK CASCADE＋`CHECK(form IN ('A'))`＋表內 inline `UNIQUE(user_id, request_id)` |
 
 ## 7. 後續版本（不在 v1 範圍）
 
@@ -195,7 +194,23 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 校核方法：B2/S3/S4 逐行對照 `crates/api/src/routes/practice.rs`（冪等順序 381–430、分頁 305–335）與 `crates/api/src/routes/common.rs:34`（helper 實作）確認；B1 對照附錄 A.2 引文。產物：`/tmp/ft-interest-review/codex-round1.md`。
 
-（Opus 終審：待補）
+### Opus 終審（2026-10-30，round 4：F1–F9，NO-GO → 全數核實吸收 → v4 final candidate）
+
+| # | 發現 | 校核 | 處置 |
+|---|---|---|---|
+| F1 | POST 缺形狀驗證層：`requestId` 形狀、`expectedEpoch` 值域（0..=2³¹−1，防 i64→i32 截斷繞過 epoch 防線）未驗證，§5.4 也無測項 | 屬實——practice.rs:130/141 有 `valid_request_id`/`valid_epoch`＋專屬測試，形狀驗證在冪等查詢之前 | §4.2 加步驟 (0) 形狀驗證 400；§5.4 補兩個 400 測項 |
+| F2 | 判定順序自稱「照 practice.rs 前例」但驗證擺放位置與 practice/tarot/palm 三前例全部相反（畸形 body＋重複 requestId 會回 409 而非 400） | 屬實——三前例都是形狀 400 在冪等查詢之前 | F1 的 (0) 步驟同時解決；B2 定案的「內容比對 vs 版本/epoch」語意不變 |
+| F3 | 「依專案資料庫原則不加 FK 與 CHECK」是對 codebase 的失實描述（practice/tarot/palm 表兩者都有；最近的量測鄰近表恰恰都有） | 屬實——schema.sql:46/50/56/58 逐行核對 | DDL 改採 practice/tarot/palm 形式：FK CASCADE（落實 §4.3）＋CHECK＋inline UNIQUE |
+| F4 | 步驟 (4)「不可回 500」過度絕對：殘餘個案（寫入 Err 非 UNIQUE＋重讀無列＋epoch 相符）無解，tarot 前例回 db_error | 屬實——tarot.rs 殘餘路徑確為 `Ok(db_error())` | 改為分岔明定；SQL 句型改前例實際寫法 `SELECT ... FROM users WHERE id=? AND interest_epoch=?` |
+| F5 | §3.1 禁用詞與 §5.5 掃描清單不一致（掃描漏排名/IQ/能力等級；§3.1 漏平均） | 屬實 | 兩處對齊為聯集 |
+| F6 | history `limit=1..20` 記法錯（Rust 不含 20，與「預設 20」矛盾；前例是 `1..=20`） | 屬實 | 改 `1..=20` |
+| F7 | 冪等唯一性用獨立 CREATE UNIQUE INDEX，偏離四表 inline UNIQUE 慣例 | 屬實 | 隨 F3 改表內 inline `UNIQUE(user_id, request_id)` |
+| F8 | glossary 新增兩條未提 `GLOSSARY_VERSION` bump | 屬實（1→1.1→1.2→1.3 慣例） | §4.3 載明 bump 至 glossary-1.4 |
+| F9 | §6 第一行「已確認」摘要未反映 B1 授權推論未決 | 屬實 | 補「授權對象與翻譯權屬推論、待作者回覆（閘門 §5.1）」 |
+
+交叉驗證通過項（Opus 報告）：隔離紅線（全 codebase 零 `interest` 引用、AI context 不讀興趣資料）、附錄 A 外部抽查（A.2 引文與實驗室頁面逐字相符、A.4 全部 48 題與頁面一致）、DDL 其餘面、wire key camelCase、部署順序、刪除後重送推導、前三輪互矛盾（未發現）。Codex 輪吸收品質評語：B1/S1/S2/S3/S4 認可；B2 有疑慮（F1/F2/F4 即其殘留）。
+
+終審結論原文：「F1/F2 是會直接導致錯誤實作的規格缺陷……全部都是文字級修正，無需重設計——修堅實的骨架已就位。」
 
 ## 附錄 A：出處與題目查證紀錄（2026-10-30）
 
