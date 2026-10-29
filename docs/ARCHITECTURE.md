@@ -158,8 +158,9 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 Armstrong 等人（2008）RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
 只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。預定
 `ft_schema::interest`（題庫＋計分＋`INTEREST_INSTRUMENT_VERSION`）、`interest_results`
-表＋`users.interest_epoch`、四個 `/api/interest` 路由；不接命盤／AI，不寫入 F5/F8，
-與小練習只有連結。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
+表＋`users.interest_epoch`、四個 `/api/interest` 路由；v1 暫不接命盤／AI（日後由故事層
+另案接入、需同意），不寫入 F5/F8，與小練習只有連結。入口（v4.1）：我的命格卡（人格卡後、
+小練習卡前）＋首頁卡＋人格結果頁導覽句；命盤頁 v1 不放入口；glossary 新增「自我探索」分類。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
 要求自行驗證而不採用。**查證已完成（2026-10-30）**：DOI 10.1016/j.jvb.2008.06.003、
 採 Activities **Set A**（信度全面略高）、授權為**非商業＋註明出處**（日後商業化前重評）、
 48 題原文已逐字入 spec 附錄 A。
