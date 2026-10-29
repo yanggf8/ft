@@ -152,15 +152,17 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 審查＋spike 11 模型實測）：
 `docs/superpowers/specs/2026-10-27-palm-v1-design.md`。
 
-## 興趣探索 v1（2026-10-27，設計中、未實作）
+## 興趣探索 v1（2026-10-27 設計；2026-10-30 查證完成、未實作）
 
 「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
-Armstrong 等人（2008）公開領域 RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
+Armstrong 等人（2008）RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
 只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。預定
 `ft_schema::interest`（題庫＋計分＋`INTEREST_INSTRUMENT_VERSION`）、`interest_results`
 表＋`users.interest_epoch`、四個 `/api/interest` 路由；不接命盤／AI，不寫入 F5/F8，
 與小練習只有連結。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
-要求自行驗證而不採用。**實作前置**：取得論文全文確認公開領域聲明與題目原文。
+要求自行驗證而不採用。**查證已完成（2026-10-30）**：DOI 10.1016/j.jvb.2008.06.003、
+採 Activities **Set A**（信度全面略高）、授權為**非商業＋註明出處**（日後商業化前重評）、
+48 題原文已逐字入 spec 附錄 A。
 設計：`docs/superpowers/specs/2026-10-27-interest-explore-design.md`。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
