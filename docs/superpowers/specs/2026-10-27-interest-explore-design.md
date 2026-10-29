@@ -1,7 +1,7 @@
 # 設計：興趣探索 v1（RIASEC 興趣剖面）
 
 - 日期：2026-10-27（v4：2026-10-30 查證＋自審＋Codex 輪 1＋Opus 終審）
-- 狀態：**v4.1**（未實作；v4.1＝Kimi brainstorm 接合面修訂，§8c）。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4)→v3→Opus 終審(F1–F9 全吸收)→**v4**。待辦：附錄 B 中譯回譯比對、作者授權信（§5.1）
+- 狀態：**v4.1**（未實作；v4.1＝Kimi brainstorm 接合面修訂，§8c）。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4)→v3→Opus 終審(F1–F9 全吸收)→**v4**。附錄 B 中譯回譯已完成（2026-10-30）；待辦：作者授權信（§5.1）
 - 入口：`我的命格`（`crates/web/src/pages/profile.rs`）為主入口；另有首頁與人格測驗結果頁兩個導覽入口（§3.2，v4.1 補）
 - 相關功能：F1 IPIP-15 人格測驗、本週小練習、命理 AI 護欄（`GUARDRAIL_ZH/EN`）
 - 長期方向：「優勢探索」三面向——能力剖面、學習反應、發展環境。本文件只涵蓋 v1 的興趣剖面
@@ -350,3 +350,81 @@ Set A 無任何尺度低於 .80（Set B 的 Enterprising 兩次 .79）；CUS 結
 | 48 | C | Keep shipping and receiving records |
 
 Set B（另 48 題）不使用，原文見論文 Appendix A 與實驗室頁面。
+
+## 附錄 B：中譯與回譯紀錄（2026-10-30，`INTEREST_INSTRUMENT_VERSION = "1"`）
+
+### B.1 流程（§2.3）
+
+1. **Claude 初譯**（Opus 5.5）48 題。
+2. **Codex 獨立複譯**（`codex:codex-rescue`，未見 Claude 初譯；指示：活動動詞片語、不加能力字眼、台灣少見情境可最小替換但須標記）。Codex 標記歧義題：16、23、36、41。
+3. **對照合併**：逐題取捨（下表「來源」：C＝Claude、X＝Codex、=＝兩譯相同、M＝合併改寫）。兩譯完全一致 17 題。
+4. **回譯**（agy／Gemini，只給合併中文、不給英文原文）：48 題回譯與原文語意逐題相符；第 41、42 題回譯忠實反映刻意替換（payroll／handheld scanner）。回譯標記歧義 2 題：
+   - 28「一套運動」可讀作球類 → 定稿補「動作」。
+   - 46「計算機」字面可指電腦 → **保留**：台灣口語「計算機」即計算器、電腦稱「電腦」，且位於事務型題組語境。
+5. 定稿寫入 `crates/schema/src/interest/items.rs`；英文以腳本與 A.4 逐字比對 48/48 一致。
+
+### B.2 情境／用語替換（§2.3 第 2 點）
+
+| 題號 | 原文 | 直譯 | 定稿 | 理由 |
+|---|---|---|---|---|
+| 41 | Generate the monthly payroll checks for an office | 開立辦公室每月的薪資支票 | 為辦公室製作每月薪資單 | 台灣薪資多為轉帳，支票少見；活動性質（例行計算與文書）不變 |
+| 42 | Inventory supplies using a hand-held computer | 使用手持式電腦盤點物資 | 用手持式盤點機盤點物資 | 「手持式盤點機」為台灣倉儲常見說法 |
+
+保留原情境、未替換：3（海上鑽井平台——台灣少見但可想像，換成海上風電會改變工作內容）、16（直譯「繪製海底地圖」，不加「測繪／地形」以免偏 R）、23（特技原文即有 R/A 兩可）。
+
+### B.3 逐題對照
+
+| 題號 | 型 | 原文 | 中譯（定稿） | 來源 | 理由 |
+|---|---|---|---|---|---|
+| 1 | R | Test the quality of parts before shipment | 在出貨前檢驗零件品質 | C | |
+| 2 | R | Lay brick or tile | 砌磚或鋪磁磚 | = | |
+| 3 | R | Work on an offshore oil-drilling rig | 在海上石油鑽井平台工作 | X | 標準用語；台灣少見但可想像，保留原情境 |
+| 4 | R | Assemble electronic parts | 組裝電子零件 | = | |
+| 5 | R | Operate a grinding machine in a factory | 在工廠操作研磨機 | = | |
+| 6 | R | Fix a broken faucet | 修理壞掉的水龍頭 | = | |
+| 7 | R | Assemble products in a factory | 在工廠組裝產品 | = | |
+| 8 | R | Install flooring in houses | 在住宅鋪設地板 | X | |
+| 9 | I | Study the structure of the human body | 研究人體構造 | = | |
+| 10 | I | Study animal behavior | 研究動物行為 | = | |
+| 11 | I | Do research on plants or animals | 研究植物或動物 | X | 簡潔 |
+| 12 | I | Develop a new medical treatment or procedure | 開發新的治療方法或醫療程序 | C | 「醫療療法」疊字 |
+| 13 | I | Conduct biological research | 從事生物學研究 | C | |
+| 14 | I | Study whales and other types of marine life | 研究鯨魚和其他海洋生物 | = | |
+| 15 | I | Work in a biology lab | 在生物實驗室工作 | = | |
+| 16 | I | Make a map of the bottom of an ocean | 繪製海底地圖 | X | 直譯；Codex 指出「地形／測繪」偏實地技術（R），故不加字 |
+| 17 | A | Conduct a musical choir | 指揮合唱團 | = | |
+| 18 | A | Direct a play | 執導一齣舞台劇 | C | play＝舞台劇；「戲」易想成電視劇 |
+| 19 | A | Design artwork for magazines | 為雜誌設計美術作品 | X | |
+| 20 | A | Write a song | 創作一首歌 | X | write 含作曲 |
+| 21 | A | Write books or plays | 寫書或劇本 | = | |
+| 22 | A | Play a musical instrument | 演奏樂器 | = | |
+| 23 | A | Perform stunts for a movie or television show | 為電影或電視節目表演特技 | = | 原文同樣有 R/A 兩可，直譯保留 |
+| 24 | A | Design sets for plays | 為舞台劇設計布景 | M | 與第 18 題用語一致 |
+| 25 | S | Give career guidance to people | 為他人提供職涯輔導 | M | 「職涯輔導」為台灣常用語 |
+| 26 | S | Do volunteer work at a non-profit organization | 在非營利組織當志工 | C | 口語 |
+| 27 | S | Help people who have problems with drugs or alcohol | 幫助有藥物或酒精問題的人 | = | |
+| 28 | S | Teach an individual an exercise routine | 一對一教人做一套運動動作 | M | 保留 individual 的一對一；回譯指出「運動」可讀作球類，補「動作」 |
+| 29 | S | Help people with family-related problems | 幫助有家庭問題的人 | X | 與第 27 題一致 |
+| 30 | S | Supervise the activities of children at a camp | 在營隊中照看孩子們的活動 | M | 「帶領」偏領導（E）、「督導」偏公文；supervise 取照看 |
+| 31 | S | Teach children how to read | 教小孩閱讀 | M | 「認字」為加字 |
+| 32 | S | Help elderly people with their daily activities | 協助長者處理日常生活 | M | |
+| 33 | E | Sell restaurant franchises to individuals | 向個人銷售餐廳加盟權 | X | 精確 |
+| 34 | E | Sell merchandise at a department store | 在百貨公司銷售商品 | = | |
+| 35 | E | Manage the operations of a hotel | 管理飯店的營運 | X | |
+| 36 | E | Operate a beauty salon or barber shop | 經營美容院或理髮店 | X | 兩譯皆取「經營」（E），非親自服務（R） |
+| 37 | E | Manage a department within a large company | 管理大公司裡的一個部門 | C | |
+| 38 | E | Manage a clothing store | 管理服飾店 | X | |
+| 39 | E | Sell houses | 銷售房屋 | = | |
+| 40 | E | Run a toy store | 經營玩具店 | X | |
+| 41 | C | Generate the monthly payroll checks for an office | 為辦公室製作每月薪資單 | C | **情境替換**：台灣薪資多為轉帳，支票少見；活動性質（例行計算與文書）不變。直譯：開立辦公室每月的薪資支票 |
+| 42 | C | Inventory supplies using a hand-held computer | 用手持式盤點機盤點物資 | M | **用語替換**：hand-held computer→手持式盤點機（台灣倉儲常見）。直譯：使用手持式電腦盤點物資 |
+| 43 | C | Use a computer program to generate customer bills | 用電腦程式製作客戶帳單 | M | |
+| 44 | C | Maintain employee records | 維護員工人事資料 | M | |
+| 45 | C | Compute and record statistical and other numerical data | 計算並記錄統計及其他數值資料 | = | |
+| 46 | C | Operate a calculator | 操作計算機 | = | |
+| 47 | C | Handle customers' bank transactions | 為客戶辦理銀行交易 | M | |
+| 48 | C | Keep shipping and receiving records | 記錄出貨與收貨資料 | X | |
+
+### B.4 作者授權信
+
+（待補：信稿、寄出日期、回覆或「站方明示接受推論風險」紀錄——§5.1 上線閘門。）
