@@ -152,18 +152,28 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 審查＋spike 11 模型實測）：
 `docs/superpowers/specs/2026-10-27-palm-v1-design.md`。
 
-## 興趣探索 v1（2026-10-27 設計；2026-10-30 查證完成、未實作）
+## 興趣探索 v1（2026-10-27 設計；2026-10-31 實作完成、未部署）
 
 「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
-Armstrong 等人（2008）RIASEC 量表（48 題、不刪題）呈現使用者六型活動偏好。
-只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。預定
-`ft_schema::interest`（題庫＋計分＋`INTEREST_INSTRUMENT_VERSION`）、`interest_results`
-表＋`users.interest_epoch`、四個 `/api/interest` 路由；v1 暫不接命盤／AI（日後由故事層
-另案接入、需同意），不寫入 F5/F8，與小練習只有連結。入口（v4.1）：我的命格卡（人格卡後、
-小練習卡前）＋首頁卡＋人格結果頁導覽句；命盤頁 v1 不放入口；glossary 新增「自我探索」分類。O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License
-要求自行驗證而不採用。**查證已完成（2026-10-30）**：DOI 10.1016/j.jvb.2008.06.003、
-採 Activities **Set A**（信度全面略高）、授權為**非商業＋註明出處**（日後商業化前重評）、
-48 題原文已逐字入 spec 附錄 A。
+Armstrong 等人（2008）RIASEC 量表（Activities **Set A**，48 題、不刪題）呈現使用者六型
+活動偏好。只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。
+
+- **schema**：`ft_schema::interest`——`items.rs` 題庫（英文逐字＋本站中譯，改任一題 bump
+  `INTEREST_INSTRUMENT_VERSION`）、`score`／`directions`（差距 ≤ 0.5、最高分 < 3.0 不選、
+  取前 3）、`display_order`（作答時六型輪流交錯，answers 仍依題庫索引）、`copy.rs`
+  卡片／結果頁文案（禁用詞測試在此把關，因 ft-web 無測試執行環境）。
+- **API**（`routes/interest.rs`）：`GET /api/interest`、`GET /api/interest/history`、
+  `POST /api/interest/results`（requestId 冪等＋`interest_epoch` 條件寫入，伺服器重算分數）、
+  `DELETE /api/interest`（batch 刪除＋epoch 加一）；`interest_results` 表（FK CASCADE、
+  `CHECK(form IN ('A'))`、`UNIQUE(user_id,request_id)`）；遷移
+  `scripts/migrations/2026-10-30-interest.sql`；`verify-deployment.sh` Test 8d。
+- **web**：`components/interest_card.rs`（我的命格，人格卡後、小練習卡前；每頁 8 題、
+  六條長條、較明顯的方向、反思提問、歷史分頁、刪除前顯示筆數）；首頁興趣卡＋人格卡改可點；
+  人格結果頁導覽句；glossary-1.4 新增「自我探索」分類。命盤頁 v1 不放入口。
+- v1 暫不接命盤／AI（日後由故事層另案接入、需同意），不寫入 F5/F8，與小練習只有連結。
+- O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License 要求自行驗證而不採用。
+  授權為**非商業＋註明出處**（日後商業化前重評）；**上線閘門：作者授權信（spec §5.1）**。
+
 設計：`docs/superpowers/specs/2026-10-27-interest-explore-design.md`。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)

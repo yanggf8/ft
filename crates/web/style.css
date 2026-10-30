@@ -408,6 +408,29 @@ main { flex: 1; }
 .practice-history-row { display: grid; gap: 0.25rem; padding: 0.75rem 0; border-bottom: 1px solid var(--glass-border); }
 .practice-history-row .btn-link { justify-self: start; }
 .practice-attempt-list { padding-left: 1.25rem; line-height: 1.8; overflow-wrap: anywhere; }
+
+/* Interest explore card (RIASEC v1): six bars in fixed R-I-A-S-E-C order.
+   Bar length is the only encoding (no hue), same chrome ramp as .ocean-band;
+   text sits on the same card glass as the practice card, so no new contrast pair. */
+.interest-card h2 { margin-bottom: 0.5rem; }
+.interest-card h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
+.interest-quiz, .interest-result { margin-top: 1rem; }
+.interest-quiz-hint { font-size: 0.8125rem; margin: 0 0 0.75rem; }
+.interest-bars { display: grid; gap: 0.6rem; margin: 0.75rem 0; }
+.interest-bar-row { display: grid; grid-template-columns: 4.5rem 1fr 2.75rem; align-items: center; gap: 0.75rem; }
+.interest-bar-label { font-size: 0.875rem; color: var(--text); }
+.interest-bar-track { position: relative; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; }
+.interest-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, #8e97a6, #e2e8f0); border-radius: inherit; }
+.interest-bar-score { font-size: 0.8125rem; color: var(--silver-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.interest-directions ul, .interest-reflect ul { padding-left: 1.25rem; line-height: 1.75; }
+.interest-directions p, .interest-directions li { color: var(--text); }
+.interest-reflect { margin-top: 0.9rem; }
+.interest-reflect summary { color: var(--silver-faint); cursor: pointer; }
+.interest-reflect li { margin-bottom: 0.4rem; }
+.interest-foot { font-size: 0.8125rem; line-height: 1.65; margin-top: 1rem; }
+.interest-source { font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.practice-history-row summary { cursor: pointer; }
+.personality-bridge { margin-top: 1.25rem; display: grid; gap: 0.4rem; justify-items: start; }
 @media (max-width: 480px) {
   .practice-actions > .btn-primary { width: 100%; }
   .practice-footer { align-items: start; flex-direction: column; }

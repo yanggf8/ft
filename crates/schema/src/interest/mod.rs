@@ -6,6 +6,7 @@
 //! 紅線：只呈現使用者自己六型之間的相對高低——不給常模、百分位或他人比較；
 //! 興趣資料永不寫入 predictions／prediction_feedback／f8_assignments。
 
+pub mod copy;
 pub mod items;
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,18 @@ pub const DIRECTION_MIN_TOP: f64 = 3.0;
 
 /// 方向最多取幾型。
 pub const MAX_DIRECTIONS: usize = 3;
+
+/// 結果頁與卡片文案的禁用詞（spec §3.1／§5.5 聯集）；`copy`／`items` 測試共用。
+pub const BANNED_WORDS: [&str; 8] = [
+    "天賦",
+    "擅長",
+    "適合",
+    "百分位",
+    "平均",
+    "排名",
+    "IQ",
+    "能力等級",
+];
 
 /// 六型，宣告順序即結果頁固定的 R-I-A-S-E-C 順序（也是同分時的取序）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +72,17 @@ impl RiasecType {
             RiasecType::C => "C",
         }
     }
+}
+
+/// 作答每頁題數（spec §3：每頁 8 題，共 6 頁）。
+pub const PAGE_SIZE: usize = 8;
+
+/// 出題順序：第 k 個顯示的題目在 `ITEMS` 的索引。題庫依型別分區（計分需要），
+/// 作答時改為六型輪流交錯（R1 I1 A1 S1 E1 C1 R2 …，O*NET Interest Profiler 亦採混排），
+/// 避免同型 8 題連續出現。answers 仍依 `ITEMS` 索引存放，與顯示順序無關。
+pub fn display_order() -> [usize; ITEM_COUNT] {
+    let types = RiasecType::ALL.len();
+    std::array::from_fn(|k| (k % types) * ITEMS_PER_TYPE + k / types)
 }
 
 /// answers 形狀驗證：恰 48 個、每個 1..=5（spec §2.3：必須全答）。
@@ -173,6 +197,28 @@ pub struct CreateInterestResultRequest {
 mod tests {
     use super::RiasecType::*;
     use super::*;
+
+    #[test]
+    fn display_order_is_a_permutation_of_all_items() {
+        let mut seen = display_order().to_vec();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..ITEM_COUNT).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn display_order_never_repeats_a_type_back_to_back() {
+        let kinds: Vec<RiasecType> = display_order().iter().map(|&i| ITEMS[i].kind).collect();
+        assert_eq!(&kinds[..6], &RiasecType::ALL);
+        for w in kinds.windows(2) {
+            assert_ne!(w[0], w[1]);
+        }
+    }
+
+    #[test]
+    fn pages_cover_all_items() {
+        assert_eq!(ITEM_COUNT % PAGE_SIZE, 0);
+        assert_eq!(ITEM_COUNT / PAGE_SIZE, 6);
+    }
 
     /// 每型 8 題同分的作答（依 R-I-A-S-E-C 順序給六個值）。
     fn answers_by_type(per_type: [u8; 6]) -> Vec<u8> {

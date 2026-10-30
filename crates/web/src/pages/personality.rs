@@ -428,7 +428,7 @@ pub fn PersonalityPage() -> impl IntoView {
                                             .and_then(|window| {
                                                 window
                                                     .confirm_with_message(
-                                                        "研究揭露：人格資料將用於匿名研究對照。確定刪除全部人格資料？小練習紀錄須在「我的命格」另行刪除。",
+                                                        "研究揭露：人格資料將用於匿名研究對照。確定刪除全部人格資料？小練習與興趣探索紀錄須在「我的命格」各卡片另行刪除。",
                                                     )
                                                     .ok()
                                             })
@@ -452,6 +452,10 @@ pub fn PersonalityPage() -> impl IntoView {
                                 >
                                     {move || if deleting.get() { "刪除中..." } else { "刪除人格資料" }}
                                 </button>
+                                </div>
+                                <div class="personality-bridge">
+                                    <p class="muted">{ft_schema::interest::copy::PERSONALITY_BRIDGE}</p>
+                                    <A href="/profile#interest-title" attr:class="btn-link">"前往興趣探索 →"</A>
                                 </div>
                             </div>
 

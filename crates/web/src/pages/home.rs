@@ -62,13 +62,21 @@ pub fn HomePage() -> impl IntoView {
                     <h3><span class="feature-icon">"🤖"</span>" AI 解讀"</h3>
                     <p>"智能 AI 提供專業且易懂的命理解讀"</p>
                 </div>
-                <div class="feature">
+                <A href="/personality" attr:class="feature">
                     <h3><span class="feature-icon">"🧠"</span>" 人格測驗"</h3>
                     <p>"IPIP-15 十五題，約 90 秒，了解你的行為傾向"</p>
-                </div>
+                </A>
+                // 未登入：Protected 轉 /login 不帶 next，這裡自己帶回流目標（tarot/palm 前例）
+                <A href=move || if auth.is_authed() { "/profile#interest-title".to_string() } else { "/login?next=/profile".to_string() } attr:class="feature">
+                    <h3>
+                        <span class="feature-icon">"🧭"</span>" 興趣探索"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>"48 題，約 5 分鐘，看看你比較喜歡哪些類型的活動（在「我的命格」作答）"</p>
+                </A>
                 <A href="/glossary" attr:class="feature">
                     <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
-                    <p>"紫微、占星、塔羅、手相、姓名學常見名詞一次看懂"</p>
+                    <p>"紫微、占星、塔羅、手相、姓名學與自我探索常見名詞一次看懂"</p>
                 </A>
             </div>
         </div>

@@ -6,6 +6,9 @@
 //! the email; a session is minted solely by `verify_email`.
 
 use ft_schema::api::*;
+use ft_schema::interest::{
+    CreateInterestResultRequest, InterestHistoryPage, InterestOverview, InterestResult,
+};
 use ft_schema::palm::wire::{PalmAnalyzeRequest, PalmHistoryPage, PalmReadingView};
 use ft_schema::practice::{
     CreatePracticeAttemptRequest, CreatePracticePlanRequest, PracticeAttempt, PracticeAttemptPage,
@@ -531,6 +534,48 @@ pub async fn delete_practice() -> Result<(), ApiErr> {
         .map_err(|e| ApiErr::Network(e.to_string()))?;
     let _: serde_json::Value = decode(resp).await?;
     Ok(())
+}
+
+// ── 興趣探索 v1（docs/superpowers/specs/2026-10-27-interest-explore-design.md §4.2）──
+
+/// `GET /api/interest` — epoch、筆數與最新一筆結果（不含原始作答）。
+pub async fn get_interest() -> Result<InterestOverview, ApiErr> {
+    get_json("/api/interest", true).await
+}
+
+/// `POST /api/interest/results` — requestId 冪等（同鍵同作答重放回原結果，201／200
+/// 皆成功）；409 `STALE_INTEREST_STATE`／`STALE_INSTRUMENT`／`IDEMPOTENCY_CONFLICT`。
+pub async fn create_interest_result(
+    body: &CreateInterestResultRequest,
+) -> Result<InterestResult, ApiErr> {
+    send_json(Request::post(&url("/api/interest/results")), body).await
+}
+
+/// `GET /api/interest/history` — 歷史分頁（results + nextCursor）。
+pub async fn get_interest_history(cursor: Option<&str>) -> Result<InterestHistoryPage, ApiErr> {
+    let path = match cursor {
+        Some(cursor) => format!(
+            "/api/interest/history?cursor={}",
+            js_sys::encode_uri_component(cursor)
+        ),
+        None => "/api/interest/history".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+/// `DELETE /api/interest` — 刪除本人全部結果並把 interestEpoch 加一，回新的 epoch。
+pub async fn delete_interest() -> Result<i64, ApiErr> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Deleted {
+        interest_epoch: i64,
+    }
+    let resp = with_auth(Request::delete(&url("/api/interest")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let d: Deleted = decode(resp).await?;
+    Ok(d.interest_epoch)
 }
 
 // ── F5 predictions（docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md §2）──

@@ -13,6 +13,7 @@ pub enum Category {
     Tarot,
     Palm,
     Naming,
+    SelfExplore,
 }
 
 impl Category {
@@ -24,6 +25,7 @@ impl Category {
             Category::Tarot => "塔羅",
             Category::Palm => "手相",
             Category::Naming => "姓名學",
+            Category::SelfExplore => "自我探索",
         }
     }
 }
@@ -39,7 +41,8 @@ pub struct Term {
 /// 2026-09-22 glossary-1.1：「日月並明」雙棟之才 → 棟梁之才，無出處自造詞修正。
 /// 2026-10-27 glossary-1.2：加塔羅 7 條——塔羅上線後名詞解釋未涵蓋（使用者指出）。
 /// 2026-10-28 glossary-1.3：加手相 9 條（手相 v1 同日上線））。
-pub const GLOSSARY_VERSION: &str = "glossary-1.3";
+/// 2026-10-31 glossary-1.4：新增「自我探索」分類＋興趣探索 2 條（興趣探索 spec §4.3）。
+pub const GLOSSARY_VERSION: &str = "glossary-1.4";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -238,5 +241,16 @@ pub static TERMS: &[Term] = &[
         term: "81 數理",
         category: Category::Naming,
         def: "1 至 81 每個數字各有吉凶定評，超過 81 減 80 循環查表。",
+    },
+    // 自我探索（興趣探索 v1）
+    Term {
+        term: "RIASEC",
+        category: Category::SelfExplore,
+        def: "Holland 的六型興趣分類：實作、研究、藝術、社會、企業、事務，描述人比較喜歡哪類活動。",
+    },
+    Term {
+        term: "興趣 vs 能力",
+        category: Category::SelfExplore,
+        def: "興趣是比較喜歡做什麼，能力是做得多好，兩者是不同的東西；興趣探索只看前者。",
     },
 ];

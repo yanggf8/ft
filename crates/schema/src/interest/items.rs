@@ -351,19 +351,8 @@ mod tests {
 
     #[test]
     fn zh_texts_avoid_banned_words() {
-        // spec §3.1／§5.5 禁用詞
-        const BANNED: [&str; 8] = [
-            "天賦",
-            "擅長",
-            "適合",
-            "百分位",
-            "平均",
-            "排名",
-            "IQ",
-            "能力等級",
-        ];
         for item in ITEMS.iter() {
-            for w in BANNED {
+            for w in super::super::BANNED_WORDS {
                 assert!(!item.zh.contains(w), "item {} contains {w}", item.no);
             }
         }

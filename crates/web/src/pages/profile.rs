@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local_scoped_with_cancellation as spawn_local;
 
 use crate::auth::use_auth;
-use crate::components::{BirthDataForm, PracticeCard};
+use crate::components::{BirthDataForm, InterestCard, PracticeCard};
 use ft_schema::api::{
     CheckSituationRequest, DomainStrengths, DomainWire, FeedbackRequest,
     GeneratePredictionsRequest, ListPredictionsResponse, ResponseWire, SituationWire, TriggerWire,
@@ -45,6 +45,7 @@ pub fn ProfilePage() -> impl IntoView {
                 on_saved=saved
             />
             <PersonalityCard />
+            <InterestCard />
             <PracticeCard />
             <PredictionsCard />
         </div>

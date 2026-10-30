@@ -500,7 +500,7 @@ pub fn PracticeCard() -> impl IntoView {
                     }>"查看過去練習"</button>
                     <button type="button" class="btn-link practice-delete" disabled=move || deleting.get() || busy.get() on:click=move |_| {
                         let message = overview.get_untracked().map(|state| format!(
-                            "確定刪除全部 {} 項小練習計畫和 {} 筆回報紀錄？這無法復原；人格和預測資料不會一併刪除。",
+                            "確定刪除全部 {} 項小練習計畫和 {} 筆回報紀錄？這無法復原；人格和預測資料不會一併刪除，興趣探索紀錄需在該卡片另行刪除。",
                             state.total_plans, state.total_attempts
                         )).unwrap_or_default();
                         let confirmed = web_sys::window().and_then(|w| w.confirm_with_message(&message).ok()).unwrap_or(false);
