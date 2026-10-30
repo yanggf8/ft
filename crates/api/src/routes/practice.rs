@@ -127,7 +127,7 @@ fn summary(cycle_id: String, row: SummaryRow) -> PracticeSummary {
     }
 }
 
-fn valid_request_id(id: &str) -> bool {
+pub(crate) fn valid_request_id(id: &str) -> bool {
     id.len() == 36
         && id.bytes().enumerate().all(|(i, b)| {
             if [8, 13, 18, 23].contains(&i) {
@@ -138,7 +138,7 @@ fn valid_request_id(id: &str) -> bool {
         })
 }
 
-fn valid_epoch(value: i64) -> bool {
+pub(crate) fn valid_epoch(value: i64) -> bool {
     (0..=i32::MAX as i64).contains(&value)
 }
 

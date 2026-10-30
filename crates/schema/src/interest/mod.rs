@@ -8,6 +8,8 @@
 
 pub mod items;
 
+use serde::{Deserialize, Serialize};
+
 pub use items::{InterestItem, ANSWER_ANCHORS, FORM, INTEREST_INSTRUMENT_VERSION, ITEMS};
 
 /// 題數（spec §2.2：48 題全保留，不自行刪題）。
@@ -96,6 +98,75 @@ pub fn directions(scores: &[f64; 6]) -> Vec<RiasecType> {
         .take(MAX_DIRECTIONS)
         .map(|t| RiasecType::ALL[t])
         .collect()
+}
+
+/// 六型分數 wire 形狀：`{"R":3.25,"I":…}`（spec §4.1 `scores` 欄、§4.2 回應）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct InterestScores {
+    #[serde(rename = "R")]
+    pub r: f64,
+    #[serde(rename = "I")]
+    pub i: f64,
+    #[serde(rename = "A")]
+    pub a: f64,
+    #[serde(rename = "S")]
+    pub s: f64,
+    #[serde(rename = "E")]
+    pub e: f64,
+    #[serde(rename = "C")]
+    pub c: f64,
+}
+
+impl InterestScores {
+    /// 由 `score()` 的 R-I-A-S-E-C 陣列建立。
+    pub fn from_array(scores: [f64; 6]) -> Self {
+        let [r, i, a, s, e, c] = scores;
+        InterestScores { r, i, a, s, e, c }
+    }
+
+    /// 轉回 R-I-A-S-E-C 陣列（供 `directions()`）。
+    pub fn to_array(&self) -> [f64; 6] {
+        [self.r, self.i, self.a, self.s, self.e, self.c]
+    }
+}
+
+/// 一筆興趣結果（**不含 answers**——原始作答只存 DB 供改版重算，永不上 wire）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterestResult {
+    pub id: String,
+    pub instrument_version: String,
+    pub form: String,
+    pub scores: InterestScores,
+    pub created_at: String,
+}
+
+/// `GET /api/interest`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterestOverview {
+    pub interest_epoch: i64,
+    pub total_results: u32,
+    pub latest: Option<InterestResult>,
+}
+
+/// `GET /api/interest/history`（照 practice history 契約）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterestHistoryPage {
+    pub results: Vec<InterestResult>,
+    pub next_cursor: Option<String>,
+}
+
+/// `POST /api/interest/results`。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInterestResultRequest {
+    pub instrument_version: String,
+    pub form: String,
+    pub answers: Vec<u8>,
+    pub expected_epoch: i64,
+    pub request_id: String,
 }
 
 #[cfg(test)]
@@ -196,5 +267,54 @@ mod tests {
     fn top_3_with_fourth_candidate_at_exact_gap_takes_only_three() {
         // §5.3：最高分 3.0 且第四候選差距恰 0.5 → 仍只取前 3
         assert_eq!(directions(&[2.5, 3.0, 2.75, 2.5, 2.5, 1.0]), vec![I, A, R]);
+    }
+
+    #[test]
+    fn scores_wire_keys_are_riasec_codes() {
+        let s = InterestScores::from_array([1.0, 2.0, 3.0, 4.0, 5.0, 3.25]);
+        let v = serde_json::to_value(s).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({"R":1.0,"I":2.0,"A":3.0,"S":4.0,"E":5.0,"C":3.25})
+        );
+        assert_eq!(s.to_array(), [1.0, 2.0, 3.0, 4.0, 5.0, 3.25]);
+    }
+
+    #[test]
+    fn result_wire_never_carries_answers() {
+        let r = InterestResult {
+            id: "x".into(),
+            instrument_version: INTEREST_INSTRUMENT_VERSION.into(),
+            form: FORM.into(),
+            scores: InterestScores::from_array([1.0; 6]),
+            created_at: "2026-10-30T00:00:00.000Z".into(),
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            ["createdAt", "form", "id", "instrumentVersion", "scores"]
+        );
+    }
+
+    #[test]
+    fn overview_and_request_use_camel_case() {
+        let o = InterestOverview {
+            interest_epoch: 2,
+            total_results: 0,
+            latest: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&o).unwrap(),
+            serde_json::json!({"interestEpoch":2,"totalResults":0,"latest":null})
+        );
+        let req: CreateInterestResultRequest = serde_json::from_value(serde_json::json!({
+            "instrumentVersion":"1","form":"A","answers":[3,3],"expectedEpoch":0,
+            "requestId":"123e4567-e89b-42d3-a456-426614174000"
+        }))
+        .unwrap();
+        assert_eq!(req.answers, vec![3, 3]);
+        assert_eq!(req.expected_epoch, 0);
     }
 }

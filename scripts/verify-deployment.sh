@@ -205,6 +205,32 @@ else
   FAILED=1
 fi
 
+# Test 8d: interest explore endpoints are routed and auth-guarded (401 without a session).
+# (POST rate-limits per IP before auth, practice precedent — one probe uses 1 of 20/min)
+echo -n "8d. Interest endpoints (401 without auth)... "
+INTEREST_OK=1
+for probe in \
+  "GET|/api/interest" \
+  "GET|/api/interest/history" \
+  "POST|/api/interest/results" \
+  "DELETE|/api/interest"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    INTEREST_OK=0
+  fi
+done
+if [ "$INTEREST_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"
