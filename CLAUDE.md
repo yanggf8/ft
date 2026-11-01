@@ -61,6 +61,9 @@ gwebcdb-mint turso --tier write --db fortunet --export
 ./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
 ./scripts/f8-acceptance.sh [--cleanup]      # F8 對照組驗收全自動（DB 自造 login token 登入、
                                             #   測驗自舉、事前盲/遮罩/解盲、turso 帳本交叉比對）
+./scripts/interest-e2e.sh [--api-only]      # 興趣探索正式站 E2E（同款自造登入；API 段＋瀏覽器段
+                                            #   不攔截 API；結束必硬清測試帳號。瀏覽器段吃
+                                            #   PLAYWRIGHT_MODULE / CHROME_PATH）
 ```
 
 ## Cloudflare Permissions (rules)
