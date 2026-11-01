@@ -243,7 +243,7 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
    - 批次 2 DDL＋API：`scripts/schema.sql` 加 `interest_results`（§4.1 定案 DDL）＋`users.interest_epoch`；`crates/api/src/routes/interest.rs` 四端點（§4.2 五步判定順序）＋§5.4 全部測項；`verify-deployment.sh` 補 interest 端點 probes（照 palm Test 8c 前例）
    - 批次 3 web：`profile.rs` 卡片（擺在人格卡後、小練習卡前）＋作答流程（每頁 8 題、進度條、可回上頁）＋結果六長條（R-I-A-S-E-C 定序、方向選取、<3.0 文案）＋歷史分頁＋刪除；§3.2 首頁興趣卡＋人格卡改可點＋人格結果頁導覽句；glossary 新增「自我探索」分類＋2 詞 bump glossary-1.4
    - 部署：Turso 遷移 → API → web（§5.7）；`dist/` 套 `_headers` 同款 CSP 瀏覽器驗證（boot.js 紅線）→ `verify-deployment.sh`
-4. **驗收**：§5 全項＋§5.5 文案掃描；上線後 ARCHITECTURE.md 章節改「已上線」。（2026-10-31：自動化測項與正式站瀏覽器檢查已過，但瀏覽器檢查的 interest API 為模擬；真帳號完整流程待站長實測，授權信完成前不算上線。）
+4. **驗收**：§5 全項＋§5.5 文案掃描；上線後 ARCHITECTURE.md 章節改「已上線」。（2026-10-31：自動化測項與正式站瀏覽器檢查（interest API 模擬）已過。2026-11-02：正式站真帳號端到端已過——API 19/19（冪等、409/400 拒絕、epoch、隔離表零列）＋瀏覽器不攔截 API 14/14（作答 → 結果 → 重新整理讀回 → 歷史 → 刪除 → 再作答）；登入同 `f8-acceptance.sh` 自造 login token，測試帳號事後硬清。授權信完成前不算上線。）
 
 ## 附錄 A：出處與題目查證紀錄（2026-10-30）
 
