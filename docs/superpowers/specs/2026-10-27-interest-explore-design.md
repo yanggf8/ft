@@ -1,7 +1,7 @@
 # 設計：興趣探索 v1（RIASEC 興趣剖面）
 
 - 日期：2026-10-27（v4：2026-10-30 查證＋自審＋Codex 輪 1＋Opus 終審）
-- 狀態：**v4.1**（未實作；v4.1＝Kimi brainstorm 接合面修訂，§8c）。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4)→v3→Opus 終審(F1–F9 全吸收)→**v4**。附錄 B 中譯回譯已完成（2026-10-30）；待辦：作者授權信（§5.1）
+- 狀態：**v4.1**（2026-10-31 實作三批並部署，上線閘門待作者授權信；v4.1＝Kimi brainstorm 接合面修訂，§8c）。審查鏈：v1→（查證＋自審 S1–S8）→v2→Codex(B1/B2+S1–S4)→v3→Opus 終審(F1–F9 全吸收)→**v4**。附錄 B 中譯回譯已完成（2026-10-30）；待辦：作者授權信（§5.1）
 - 入口：`我的命格`（`crates/web/src/pages/profile.rs`）為主入口；另有首頁與人格測驗結果頁兩個導覽入口（§3.2，v4.1 補）
 - 相關功能：F1 IPIP-15 人格測驗、本週小練習、命理 AI 護欄（`GUARDRAIL_ZH/EN`）
 - 長期方向：「優勢探索」三面向——能力剖面、學習反應、發展環境。本文件只涵蓋 v1 的興趣剖面
@@ -238,12 +238,12 @@ CREATE INDEX IF NOT EXISTS idx_interest_user_created
 
 1. **作者授權信**（§5.1 閘門）：起草英文信稿——對象 Armstrong/Rounds，涵蓋「網站對一般使用者提供中譯版、非商業、標明出處、可隨時撤下」；站長過目後寄出。回覆（許可/拒絕/無回應）或「站方明示接受推論風險」擇一完成並記錄進附錄 B。**不 block 2/3 的進行，block 上線。**
 2. **附錄 B 中譯**（§2.3 流程）：Claude 初譯 48 題 → codex 或 kimi 獨立複譯 → 分歧題逐題定案（情境替換題記錄原文與理由）→ 另一模型回譯英文比對語意 → 對照表（題號/型/原文/中譯）寫入附錄 B；同時訂 `INTEREST_INSTRUMENT_VERSION` 初版值。
-3. **實作**（建議照 palm 批次切分，每批 cargo test 過再下一批）：
+3. **實作**（建議照 palm 批次切分，每批 cargo test 過再下一批）——**2026-10-31 完成並部署**（8b7231f／280db92／e45fc18；Turso 遷移 → API → web，`verify-deployment.sh` 含 8d 全過，正式站瀏覽器檢查 25/25、無 CSP 違規）：
    - 批次 1 `crates/schema/src/interest/`：`items.rs` 中英對照（48 題，標附錄 A.4 題號＋form 'A'）＋計分/門檻/方向選取純函式＋§5.3 全部測項（TDD）
    - 批次 2 DDL＋API：`scripts/schema.sql` 加 `interest_results`（§4.1 定案 DDL）＋`users.interest_epoch`；`crates/api/src/routes/interest.rs` 四端點（§4.2 五步判定順序）＋§5.4 全部測項；`verify-deployment.sh` 補 interest 端點 probes（照 palm Test 8c 前例）
    - 批次 3 web：`profile.rs` 卡片（擺在人格卡後、小練習卡前）＋作答流程（每頁 8 題、進度條、可回上頁）＋結果六長條（R-I-A-S-E-C 定序、方向選取、<3.0 文案）＋歷史分頁＋刪除；§3.2 首頁興趣卡＋人格卡改可點＋人格結果頁導覽句；glossary 新增「自我探索」分類＋2 詞 bump glossary-1.4
    - 部署：Turso 遷移 → API → web（§5.7）；`dist/` 套 `_headers` 同款 CSP 瀏覽器驗證（boot.js 紅線）→ `verify-deployment.sh`
-4. **驗收**：§5 全項＋§5.5 文案掃描；上線後 ARCHITECTURE.md 章節改「已上線」。
+4. **驗收**：§5 全項＋§5.5 文案掃描；上線後 ARCHITECTURE.md 章節改「已上線」。（2026-10-31：自動化測項與正式站瀏覽器檢查已過，但瀏覽器檢查的 interest API 為模擬；真帳號完整流程待站長實測，授權信完成前不算上線。）
 
 ## 附錄 A：出處與題目查證紀錄（2026-10-30）
 
