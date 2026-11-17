@@ -5,6 +5,7 @@
 pub mod anchors;
 pub mod api;
 pub mod cycle;
+pub mod fengshui;
 pub mod items;
 pub mod naming;
 pub mod palm;
