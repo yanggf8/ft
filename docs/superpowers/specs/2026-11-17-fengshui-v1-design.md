@@ -36,7 +36,10 @@ v2:吸收 Kimi 審(docs/superpowers/reports/2026-11-17-fengshui-kimi-review.md,
    瀏覽器 localStorage、分析平台、錯誤監控。風水資料永不寫入 predictions /
    prediction_feedback / f8_assignments(route 檔頭註明)。
    驗收:T6(row-count 差值)+route 拿不到 DB client(型別隔離)+靜態審查
-   (無 analytics/log 呼叫帶輸入)。
+   (無 analytics/log 呼叫帶輸入)+**部署 canary**(N04,正式放行前):確認 Workers
+   observability/Logpush 未擷取 request body、錯誤處理不把 body 附入 log;送一筆固定
+   合成 canary 請求(特殊日期值),到 Cloudflare 日誌與任何監控系統搜尋該值,
+   必須查無。
 2. **換年派別並陳(揭露式)**:主判定用立春時刻;出生日落在 **1/21–2/20(含首尾,
    UTC+8 國曆日期)** 時,回應帶 `disclosures: ["school_boundary"]`,web 顯示:
    「傳統另有派別以農曆年(正月初一)為界;冬季換年期間出生者,兩派年命認定可能
@@ -76,18 +79,29 @@ v2:吸收 Kimi 審(docs/superpowers/reports/2026-11-17-fengshui-kimi-review.md,
      逐年一致。
   2. **時刻級**:已發布的過去年份(至少 1950–2026 中 10 個分散年份,含 2024)對照
      紫金山天文台/中央氣象署天文年曆時刻,容差 ≤60 秒。
-  3. **未來年份誠實**:ΔT 外推使未來年份誤差可能達分鐘級——由 §3 的「不確定窗」
-     吸收,並在 spec/ARCHITECTURE 記載,不宣稱秒級精確。
+  3. **未來年份誠實**:ΔT 外推使未來年份誤差可能達分鐘級——由下方**逐年不確定半徑
+     `r_y`** 吸收(N01),並在 spec/ARCHITECTURE 記載,不宣稱秒級精確。
 - **時區語意**(F05):日期與時刻一律以 **UTC+8 國曆 civil date/time** 解讀;wire
   是純字串(`"YYYY-MM-DD"`、`"HH:MM"`),前端**不得**經瀏覽器本地時區解析
   (禁 `new Date("YYYY-MM-DD")` 類轉換)。非 UTC+8 出生者:v1 不支援自動換算,表單
   常駐說明「請以台灣時間(UTC+8)輸入;在其他時區出生者請先自行換算」。移除
   內部 `timezone: Option` 預留(不做假的未來相容)。
-- **不確定窗**(F03,站長裁示):判定出生 instant 與該年立春 instant 的先後時,
-  - 無時刻且出生日 = 立春日 → 不確定(reason `missing_time`)。
-  - 有時刻:出生分鐘涵蓋 `[m, m+60s)`;若與 `[立春−60s, 立春+60s]` 重疊 → 不確定
-    (reason `boundary_minute`;同時吸收分鐘精度與產生器 ≤60s 容差)。
-  - 其餘情形一律確定(無時刻但非立春日 → **確定**,不得標不確定)。
+- **逐年不確定半徑 `r_y`**(N01):保守取值,寬窗只會讓更多人被標不確定(fail-closed,
+  安全方向),不會分錯年。
+  - y ≤ 2026(ΔT 已觀測):`r_y` = 60 秒(對應 §3 驗證 2 的 ≤60s 容差)。
+  - 2027–2050:`r_y` = 120 秒。
+  - 2051–2099:`r_y` = 300 秒。
+  分段值為保守工程取值(ΔT 外推不確定度隨年份增長),記入 `FENGSHUI_RULESET_VERSION`
+  語義;日後 ΔT 觀測更新可收窄,收窄須 bump。
+- **不確定判定式(凍結,N02)**:全部以整數 Unix 秒比較。`L` = 表中該年立春 Unix 秒;
+  有時刻時 `m` = 出生分鐘**起點**的 Unix 秒(UTC+8 civil → UTC)。
+  - 有時刻:`uncertain ⇔ m ≤ L + r_y 且 m + 60 > L − r_y`(reason `boundary_minute`)。
+    否則 `m + 60 ≤ L − r_y` → 立春前(effectiveYear = Y−1);`m > L + r_y` → 立春後(Y)。
+  - 無時刻:出生日(UTC+8)= 立春日(UTC+8)→ uncertain(reason `missing_time`);
+    其餘日期一律 certain(**非立春日無時刻不得標不確定**)。
+  - candidates 固定為 `[Y−1, Y]`(Y = 立春所屬國曆年)。
+  - 範例(2024,L = 2024-02-04 16:26:53 UTC+8,r = 60):16:24、16:28 → certain;
+    16:25、16:26、16:27 → uncertain。
 
 ## 4. 純邏輯(crates/schema/src/fengshui/)
 
@@ -183,15 +197,20 @@ v2:吸收 Kimi 審(docs/superpowers/reports/2026-11-17-fengshui-kimi-review.md,
 
 - **T1 命卦**:effectiveYear 1899–2099 全年份×兩公式,對附錄 A 公式獨立 fixture
   逐年斷言,並與 mingli-luoshu oracle 交叉比對(分歧即停工查原因);寄卦專測。
-  1899 若 oracle 與附錄 A 分歧且無法裁定 → 改公開下限為 1900 年立春 instant(F01 退路)。
+  1899 若 oracle 與附錄 A 分歧且無法裁定 → **完整退路**(N03):公開下限改為
+  「1900 年立春 instant + r_1900 之後的第一個整分鐘」(保證任何合法輸入都不會產生
+  1899 結果或 1899 候選);下限之前的所有輸入(含 1900 立春日無時刻)回 400
+  `INVALID_DATE`;同步改 §2.4 範圍、T4 邊界測項與表單提示。
 - **T2 大遊年**:附錄 A 8×8 全 64 格逐格斷言;oracle 交叉比對。
 - **T3 立春表**:長度 200、嚴格遞增;日期級全量 vs 香港天文台(§3);時刻級 10 年
   vs 天文年曆 ≤60s;2024 = 2024-02-04 16:26:53 UTC+8;1900 與 2099 兩端存在。
 - **T4 判定與揭露**:
   - 1900-01-01(→1899)、1900 立春前一日/後一日、2099-12-31 23:59(→2099);
     1899-12-31、2100-01-01 → `INVALID_DATE`。
-  - 立春 instant 前 61 秒、前 1 秒、當秒、後 1 秒、後 61 秒(內部 instant 層);
-    API 層:立春所在分鐘、前一分鐘、後一分鐘、前兩分鐘、後兩分鐘的 uncertain 開關。
+  - 判定式單點接觸(N02):`m = L + r_y`(uncertain)、`m = L + r_y + 1` 對齊下一整分
+    (certain)、`m + 60 = L − r_y`(certain,立春前)、`m + 60 = L − r_y + 1`(uncertain)。
+  - 2024 範例逐分斷言:16:24 certain(2023)、16:25/16:26/16:27 uncertain、
+    16:28 certain(2024);另各取一年 2027–2050(r=120)、2051–2099(r=300)驗分段半徑。
   - 立春日無時刻 → uncertain(`missing_time`);**非立春日無時刻 → certain**。
   - uncertain 回應**不含** `mingua`/`directions`,含兩個 candidates。
   - 揭露開關:1/20 無、1/21 有、2/20 有、2/21 無;正月初一先於立春之年
