@@ -90,6 +90,9 @@ Claude 核→站長核→多 AI 開工。
 - 錯誤:`400 INVALID_DATE`(格式/範圍)、`400 INVALID_FORMULA`。
 - 無 POST、無 DB、無限流特例(照 chart 類 GET 慣例)。
 - 錯誤訊息 generic,不洩內部。
+- **為何計算走 API 而非純前端**:schema 純邏輯雖可編譯進 web 直接算,但 API 為
+  單一真相源(避免前後端實作漂移的任何可能)、可被 `verify-deployment.sh` probe
+  (部署後自動驗證計算正確性)、與 chart 類功能的架構慣例一致。
 
 ## 7. Web(crates/web)
 
