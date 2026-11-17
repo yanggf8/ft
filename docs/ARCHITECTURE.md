@@ -8,8 +8,7 @@
 - `crates/schema` — shared DTOs. **`api`** (request/response contract both Worker and Web
   deserialize) and **`storage`** (DO storage key/format for bit-compat), plus pure feature
   logic / static truth tables: `items` (IPIP-15), `symbolic`, `predict`, `anchors`, `cycle`,
-  **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18), and `practice`
-  (本週小練習題庫、驗證與 API wire contract). This crate is the single source
+  and **`naming`** (姓名學 五格＋三才＋康熙筆畫表, 2026-09-18). This crate is the single source
   of truth that removes TS↔Rust drift.
 - `crates/domain/ziwei` — ZiWei engine (wraps `x-iztro`).
 - `crates/domain/western` — Western engine (hybrid: `solar-ephemeris` Moon + `vsop87` planets).
@@ -23,9 +22,9 @@
 - **Entry**: `lib.rs` — `#[event(fetch)]`, OPTIONS preflight, security headers, CORS
   (exact-hostname allowlist), x-request-id, JSON 404 normalization.
 - **Routes** (`routes/`): `auth.rs`, `users.rs`, `charts.rs`, `personality.rs` (F1 + F3
-  overlay + 資格矩陣), `predictions.rs`, `practice.rs`, `admin_invites.rs`, `oauth.rs`
+  overlay + 資格矩陣), `predictions.rs`, `tarot.rs`, `palm.rs`, `admin_invites.rs`, `oauth.rs`
   (+ `common.rs` shared helpers: `auth_user`, rate limit, `body_too_large` 64 KiB cap,
-  `embed_meta`, `extracted_version`).
+  `embed_meta`, `extracted_version`, `page_query` 歷史分頁 query 解析（tarot／palm 共用）).
 - **Durable Objects** (`durable_objects/`):
   - `SessionDO` — key `"session"`, 7-day TTL. `get` deletes expired; `refresh` extends.
   - `AIMutexDO` — true serialization (1 concurrent via `queue`+`oneshot`), `MAX_QUEUE_DEPTH=8`,
@@ -44,7 +43,8 @@
   `invite` (邀請碼 + `valid_expires_iso`), `login_token` (magic-link tokens).
 - **Database** — `users`, `interpretations`, `personality_profiles` + F5 四表
   (`predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations`) +
-  `invites` + `oauth_exchanges` + `practice_plans`/`practice_attempts`.
+  `invites` + `oauth_exchanges`. `practice_plans`/`practice_attempts`/`interest_results`
+  與 `users.practice_epoch`/`users.interest_epoch` 為已下架功能殘留（程式碼不再讀寫，待另案 drop）。
   `subscriptions`/`usage_tracking`/`ai_quota` are provisioned
   but unused. `services/db.rs` speaks Hrana over `worker::Fetch`; the `libsql` crate's own
   `cloudflare` feature is unusable here because it pins `worker ^0.6` against our 0.8.
@@ -62,27 +62,15 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
   `exchange_oauth_code`, `fetch_overlay`).
 - **Pages**: `Home`, `Login`, `Profile`, `Personality` (quiz + F3 overlay), `Divination`
   (ziwei/western), `Story`, `Admin`, `Naming`＋`Glossary`（2026-09-18 起公開頁，免登入）。
-- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PracticeCard`
-  （本週小練習）與 `PredictionsCard`（F5 本週預測 — F6 兩段式動線）；`glossary.rs`
+- **Components**: `BirthDataForm`, `ZiWeiPalaceGrid`, `Layout`; `Profile` 內含 `PredictionsCard`（F5 本週預測 — F6 兩段式動線）；`glossary.rs`
   靜態詞條（名詞解釋頁渲染）。
 - Uses `ft-schema::api` types directly — no wire-type drift.
 - `crates/web/_headers` — Pages 安全標頭(HSTS/CSP/X-Frame-Options/nosniff/Referrer/
   Permissions-Policy);`build-web.sh` 會複製進 dist。
 
-## 本週小練習（2026-10-20，已部署）
+## 本週小練習（2026-10-20 上線）
 
-登入者在「我的命格」自選固定題庫中的一個日常行動，記錄是否嘗試及主觀幫助程度，
-可以換動作、結束、查看分頁歷史或刪除全部練習資料。`ft_schema::practice` 是前後端
-共用契約與題庫；API 的七個 `/api/practice` 路由在 `routes/practice.rs`；
-`scripts/schema.sql` 是新資料庫權威，既有 Turso 使用
-`scripts/migrations/2026-10-20-practice.sql` 一次性遷移。單一進行中計畫由部分唯一索引
-保護；`requestId` 用於建立與回報重試，`users.practice_epoch` 阻止刪除後的過期分頁
-重新建立資料。每週摘要跨同週所有計畫合計，以台北週一起算。
-
-練習不讀人格分數、命盤、F5 預測或 F8 對照組資料，亦不把練習紀錄寫入 F5/F8。
-本功能是自助行動與回顧，不提供診斷或神經回饋。完整產品與資料契約見
-`docs/superpowers/specs/2026-10-20-weekly-practice-design.md`。2026-10-20 已遷移正式
-Turso 並部署 API 與前端，`verify-deployment.sh` 全過，未登入探測 `/api/practice` 回 401。
+已下架（2026-11-17，站長裁示；資料表保留待另案 drop）。
 
 ## 塔羅牌（2026-10-27，v1＋v2 已上線）
 
@@ -152,29 +140,9 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 審查＋spike 11 模型實測）：
 `docs/superpowers/specs/2026-10-27-palm-v1-design.md`。
 
-## 興趣探索 v1（2026-10-27 設計；2026-10-31 實作並部署，上線閘門待作者授權信）
+## 興趣探索 v1（2026-10-31 上線）
 
-「優勢探索」三面向（能力剖面／學習反應／發展環境）的第一步：在「我的命格」以
-Armstrong 等人（2008）RIASEC 量表（Activities **Set A**，48 題、不刪題）呈現使用者六型
-活動偏好。只測興趣、不測能力或天賦；中文版無常模，故不給百分位或他人比較。
-
-- **schema**：`ft_schema::interest`——`items.rs` 題庫（英文逐字＋本站中譯，改任一題 bump
-  `INTEREST_INSTRUMENT_VERSION`）、`score`／`directions`（差距 ≤ 0.5、最高分 < 3.0 不選、
-  取前 3）、`display_order`（作答時六型輪流交錯，answers 仍依題庫索引）、`copy.rs`
-  卡片／結果頁文案（禁用詞測試在此把關，因 ft-web 無測試執行環境）。
-- **API**（`routes/interest.rs`）：`GET /api/interest`、`GET /api/interest/history`、
-  `POST /api/interest/results`（requestId 冪等＋`interest_epoch` 條件寫入，伺服器重算分數）、
-  `DELETE /api/interest`（batch 刪除＋epoch 加一）；`interest_results` 表（FK CASCADE、
-  `CHECK(form IN ('A'))`、`UNIQUE(user_id,request_id)`）；遷移
-  `scripts/migrations/2026-10-30-interest.sql`；`verify-deployment.sh` Test 8d。
-- **web**：`components/interest_card.rs`（我的命格，人格卡後、小練習卡前；每頁 8 題、
-  六條長條、較明顯的方向、反思提問、歷史分頁、刪除前顯示筆數）；首頁興趣卡＋人格卡改可點；
-  人格結果頁導覽句；glossary-1.4 新增「自我探索」分類。命盤頁 v1 不放入口。
-- v1 暫不接命盤／AI（日後由故事層另案接入、需同意），不寫入 F5/F8，與小練習只有連結。
-- O\*NET Interest Profiler 因 CC BY-ND 禁翻譯、Developer License 要求自行驗證而不採用。
-  授權為**非商業＋註明出處**（日後商業化前重評）；**上線閘門：作者授權信（spec §5.1）**。
-
-設計：`docs/superpowers/specs/2026-10-27-interest-explore-design.md`。
+已下架（2026-11-17，站長裁示；資料表保留待另案 drop）。
 
 ## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
 

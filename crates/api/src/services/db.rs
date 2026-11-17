@@ -69,11 +69,6 @@ pub fn real(f: f64) -> Param<'static> {
     Param::Real(f)
 }
 
-/// Boolean SQL param.
-pub fn bool(b: bool) -> Param<'static> {
-    Param::Boolean(b)
-}
-
 /// `Option<String>` → text or NULL.
 pub fn opt_text(s: Option<&str>) -> Param<'_> {
     match s {

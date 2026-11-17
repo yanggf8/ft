@@ -392,3 +392,88 @@ fn fnv1a_64(bytes: &[u8]) -> u64 {
     }
     hash
 }
+
+/// UUID 形狀（8-4-4-4-12 hex）——分頁 cursor 的 id 段檢查。
+fn valid_uuid_shape(id: &str) -> bool {
+    id.len() == 36
+        && id.bytes().enumerate().all(|(i, b)| {
+            if [8, 13, 18, 23].contains(&i) {
+                b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
+}
+
+/// 分頁 cursor `"<ISO stamp>|<uuid>"`：stamp 必為 24 字 `YYYY-MM-DDTHH:MM:SS.sssZ`
+/// 且可解析，id 必為 UUID 形狀；其餘一律 None（→ 400 INVALID_PAGE）。
+fn parse_cursor(cursor: &str) -> Option<(&str, &str)> {
+    let (stamp, id) = cursor.split_once('|')?;
+    let valid_stamp = stamp.len() == 24
+        && stamp.bytes().enumerate().all(|(i, b)| match i {
+            4 | 7 => b == b'-',
+            10 => b == b'T',
+            13 | 16 => b == b':',
+            19 => b == b'.',
+            23 => b == b'Z',
+            _ => b.is_ascii_digit(),
+        })
+        && ft_schema::cycle::week_start_asia_taipei(stamp).is_some();
+    if !valid_stamp || !valid_uuid_shape(id) {
+        return None;
+    }
+    Some((stamp, id))
+}
+
+/// 歷史分頁 query（`limit` 1–20，預設 20；`cursor` 見 [`parse_cursor`]）。
+/// 供 tarot／palm 歷史端點共用。
+pub(crate) fn page_query(
+    query: Option<&str>,
+) -> std::result::Result<(usize, Option<(String, String)>), Response> {
+    let mut limit = 20usize;
+    let mut cursor = None;
+    if let Some(q) = query {
+        for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
+            match k.as_ref() {
+                "limit" => {
+                    limit = v
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|n| (1..=20).contains(n))
+                        .ok_or_else(|| error::error_code("Invalid limit", "INVALID_PAGE", 400))?
+                }
+                "cursor" => {
+                    let (stamp, id) = parse_cursor(&v)
+                        .ok_or_else(|| error::error_code("Invalid cursor", "INVALID_PAGE", 400))?;
+                    cursor = Some((stamp.to_string(), id.to_string()));
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok((limit, cursor))
+}
+
+#[cfg(test)]
+mod page_tests {
+    use super::*;
+
+    #[test]
+    fn uuid_shape_required() {
+        assert!(valid_uuid_shape("123e4567-e89b-42d3-a456-426614174000"));
+        assert!(!valid_uuid_shape("reuse"));
+        assert!(!valid_uuid_shape("123e4567-e89b-42d3-a456-42661417400z"));
+    }
+
+    #[test]
+    fn cursor_rejects_non_iso_or_non_uuid() {
+        assert!(
+            parse_cursor("2026-10-20T12:00:00.000Z|123e4567-e89b-42d3-a456-426614174000").is_some()
+        );
+        assert!(parse_cursor("2026-10-20|123e4567-e89b-42d3-a456-426614174000").is_none());
+        assert!(parse_cursor("2026-10-20T12:00:00.000Z|bad").is_none());
+        assert!(
+            parse_cursor("202X-10-20T12:00:00.000Z|123e4567-e89b-42d3-a456-426614174000").is_none()
+        );
+    }
+}

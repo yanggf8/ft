@@ -5,11 +5,9 @@
 pub mod anchors;
 pub mod api;
 pub mod cycle;
-pub mod interest;
 pub mod items;
 pub mod naming;
 pub mod palm;
-pub mod practice;
 pub mod predict;
 pub mod storage;
 pub mod symbolic;

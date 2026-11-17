@@ -11,11 +11,11 @@ use super::super::{
     error,
     services::{clock, db, uuid},
 };
+use super::common::page_query;
 use super::common::{
     apply_cache_headers, auth_user, body_too_large_with, client_ip, ok_json, rate_limit,
     rate_limit_strict, rate_limit_strict_refundable, refund_strict,
 };
-use super::practice::page_query;
 use super::R;
 use ft_schema::palm::wire::{
     gate_min_confidence, strip_json_fence, valid_hand, valid_image_b64, valid_mime,

@@ -1,6 +1,6 @@
 //! 塔羅 v1b — 三張牌陣（登入）。設計定稿：docs/ARCHITECTURE.md §Tarot。
 //!
-//! 處理順序（定稿，比照 practice／predictions 全站先例——IP 限流最先）：
+//! 處理順序（定稿，比照 predictions 全站先例——IP 限流最先）：
 //! IP 限流 → auth → body cap → parse → 驗證 → 冪等查詢（在 uid 限流前，
 //! 重放不受 429 擋）→ uid 24h 限流 → 伺服端抽牌（`secure_bytes` fail-closed，
 //! 明文禁 `Math::random`）→ 寫入 → 201。
@@ -10,11 +10,11 @@ use super::super::{
     error,
     services::{clock, db, uuid},
 };
+use super::common::page_query;
 use super::common::{
     apply_cache_headers, auth_user, body_too_large, client_ip, ok_json, rate_limit,
     rate_limit_strict,
 };
-use super::practice::page_query;
 use super::R;
 use ft_schema::tarot::{
     assemble_interpretation, card_by_id, shuffle_three, valid_tarot_request_id, validate_question,
@@ -25,7 +25,7 @@ use ft_schema::tarot::{
 use serde::{Deserialize, Serialize};
 use worker::*;
 
-/// 每分鐘每 IP 20 次（防腳本灌端點——比照 practice RATE_LIMIT 檔次）。
+/// 每分鐘每 IP 20 次（防腳本灌端點——比照全站寫入端點檔次）。
 const IP_LIMIT: u32 = 20;
 const IP_WINDOW_MS: f64 = 60_000.0;
 /// 每用戶 24 小時固定視窗 20 次（濫用緩衝，非曆日、fail-open 非硬上限——
@@ -425,7 +425,7 @@ pub fn register(router: R<'static>) -> R<'static> {
           ai_chart_context: None,
         }, 201)),
         failed => {
-          // UNIQUE 衝突或傳輸錯誤後的回查（同 practice 先例：先讀冪等鍵再分類）
+          // UNIQUE 衝突或傳輸錯誤後的回查（先讀冪等鍵再分類）
           match reading_by_request(&db, &user, &body.request_id).await {
             Ok(Some(existing)) => return Ok(if matches_reading(&existing, &body.spread, question.as_deref()) {
               match row_view(&existing) { Ok(v) => json(&v, 200), Err(_) => db_error() }

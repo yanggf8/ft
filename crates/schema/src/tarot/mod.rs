@@ -12,7 +12,7 @@ pub use catalog::{TarotCard, CATALOG};
 
 use serde::{Deserialize, Serialize};
 
-/// 語料版本（比照 `PRACTICE_CATALOG_VERSION`；改版 bump）。
+/// 語料版本（改版 bump）。
 pub const TAROT_CORPUS_VERSION: &str = "2";
 
 /// 種子編碼＋PRNG 演算法版本——改演算法必 bump，否則「同日同裝置同牌」會靜默改變。
@@ -96,7 +96,7 @@ pub struct TarotReadingView {
     pub ai_chart_context: Option<bool>,
 }
 
-/// v1b wire DTO — 歷史分頁（比照 practice 分頁形狀：items + nextCursor）。
+/// v1b wire DTO — 歷史分頁（分頁形狀：items + nextCursor）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TarotHistoryPage {
@@ -243,7 +243,7 @@ pub fn normalize_question(q: &str) -> Option<String> {
     Some(t.to_string())
 }
 
-/// requestId 形狀檢查（比照 practice `valid_request_id`：UUID 形狀——
+/// requestId 形狀檢查（UUID 形狀——
 /// 8/13/18/23 為 `-`、其餘為 hex）。
 pub fn valid_tarot_request_id(id: &str) -> bool {
     id.len() == 36
@@ -477,11 +477,11 @@ mod tests {
     }
 
     #[test]
-    fn request_id_shape_matches_practice() {
+    fn request_id_requires_uuid_shape() {
         assert!(valid_tarot_request_id(
             "01234567-89ab-cdef-0123-456789abcdef"
         ));
-        // 無連字號的 36 字 hex 不合法（practice 為完整 UUID 形狀檢查）
+        // 無連字號的 36 字 hex 不合法（完整 UUID 形狀檢查）
         assert!(!valid_tarot_request_id(
             "0123456789abcdef0123456789abcdef0123"
         ));

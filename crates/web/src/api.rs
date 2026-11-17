@@ -6,14 +6,7 @@
 //! the email; a session is minted solely by `verify_email`.
 
 use ft_schema::api::*;
-use ft_schema::interest::{
-    CreateInterestResultRequest, InterestHistoryPage, InterestOverview, InterestResult,
-};
 use ft_schema::palm::wire::{PalmAnalyzeRequest, PalmHistoryPage, PalmReadingView};
-use ft_schema::practice::{
-    CreatePracticeAttemptRequest, CreatePracticePlanRequest, PracticeAttempt, PracticeAttemptPage,
-    PracticeHistoryPage, PracticeOverview, PracticePlan,
-};
 use ft_schema::tarot::{TarotDrawRequest, TarotHistoryPage, TarotReadingView};
 use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
@@ -376,58 +369,6 @@ pub async fn delete_personality() -> Result<PersonalityDeleteResponse, ApiErr> {
     decode(resp).await
 }
 
-// ── 本週小練習 ──
-
-pub async fn get_practice() -> Result<PracticeOverview, ApiErr> {
-    get_json("/api/practice", true).await
-}
-
-pub async fn create_practice_plan(
-    body: &CreatePracticePlanRequest,
-) -> Result<PracticePlan, ApiErr> {
-    send_json(Request::post(&url("/api/practice/plans")), body).await
-}
-
-pub async fn create_practice_attempt(
-    plan_id: &str,
-    body: &CreatePracticeAttemptRequest,
-) -> Result<PracticeAttempt, ApiErr> {
-    send_json(
-        Request::post(&url(&format!("/api/practice/plans/{plan_id}/attempts"))),
-        body,
-    )
-    .await
-}
-
-pub async fn end_practice_plan(plan_id: &str) -> Result<PracticePlan, ApiErr> {
-    post_empty(&format!("/api/practice/plans/{plan_id}/end")).await
-}
-
-pub async fn get_practice_history(cursor: Option<&str>) -> Result<PracticeHistoryPage, ApiErr> {
-    let path = match cursor {
-        Some(cursor) => format!(
-            "/api/practice/history?cursor={}",
-            js_sys::encode_uri_component(cursor)
-        ),
-        None => "/api/practice/history".to_string(),
-    };
-    get_json(&path, true).await
-}
-
-pub async fn get_practice_attempts(
-    plan_id: &str,
-    cursor: Option<&str>,
-) -> Result<PracticeAttemptPage, ApiErr> {
-    let path = match cursor {
-        Some(cursor) => format!(
-            "/api/practice/plans/{plan_id}/attempts?cursor={}",
-            js_sys::encode_uri_component(cursor)
-        ),
-        None => format!("/api/practice/plans/{plan_id}/attempts"),
-    };
-    get_json(&path, true).await
-}
-
 // ── 塔羅 v1b（docs/ARCHITECTURE.md §Tarot）──
 
 /// `POST /api/tarot/draw` — 三張牌陣（request_id 冪等；同鍵同 body 重放回原結果，
@@ -525,57 +466,6 @@ pub async fn palm_delete_all() -> Result<i64, ApiErr> {
         .map_err(|e| ApiErr::Network(e.to_string()))?;
     let n: DeletedCount = decode(resp).await?;
     Ok(n.deleted)
-}
-
-pub async fn delete_practice() -> Result<(), ApiErr> {
-    let resp = with_auth(Request::delete(&url("/api/practice")))
-        .send()
-        .await
-        .map_err(|e| ApiErr::Network(e.to_string()))?;
-    let _: serde_json::Value = decode(resp).await?;
-    Ok(())
-}
-
-// ── 興趣探索 v1（docs/superpowers/specs/2026-10-27-interest-explore-design.md §4.2）──
-
-/// `GET /api/interest` — epoch、筆數與最新一筆結果（不含原始作答）。
-pub async fn get_interest() -> Result<InterestOverview, ApiErr> {
-    get_json("/api/interest", true).await
-}
-
-/// `POST /api/interest/results` — requestId 冪等（同鍵同作答重放回原結果，201／200
-/// 皆成功）；409 `STALE_INTEREST_STATE`／`STALE_INSTRUMENT`／`IDEMPOTENCY_CONFLICT`。
-pub async fn create_interest_result(
-    body: &CreateInterestResultRequest,
-) -> Result<InterestResult, ApiErr> {
-    send_json(Request::post(&url("/api/interest/results")), body).await
-}
-
-/// `GET /api/interest/history` — 歷史分頁（results + nextCursor）。
-pub async fn get_interest_history(cursor: Option<&str>) -> Result<InterestHistoryPage, ApiErr> {
-    let path = match cursor {
-        Some(cursor) => format!(
-            "/api/interest/history?cursor={}",
-            js_sys::encode_uri_component(cursor)
-        ),
-        None => "/api/interest/history".to_string(),
-    };
-    get_json(&path, true).await
-}
-
-/// `DELETE /api/interest` — 刪除本人全部結果並把 interestEpoch 加一，回新的 epoch。
-pub async fn delete_interest() -> Result<i64, ApiErr> {
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Deleted {
-        interest_epoch: i64,
-    }
-    let resp = with_auth(Request::delete(&url("/api/interest")))
-        .send()
-        .await
-        .map_err(|e| ApiErr::Network(e.to_string()))?;
-    let d: Deleted = decode(resp).await?;
-    Ok(d.interest_epoch)
 }
 
 // ── F5 predictions（docs/superpowers/specs/2026-09-04-f5-web-predictions-ui-design.md §2）──
