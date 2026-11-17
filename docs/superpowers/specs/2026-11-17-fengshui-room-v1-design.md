@@ -1,333 +1,222 @@
-# 空間風水 v1 設計：房間格局 × 你的大腦 × 先猜後試
+# 空間風水 v1 設計：房間格局 × 研究怎麼說 × 翻卡先猜 × 先猜後試
 
-狀態：v2（自審 → Kimi K3.1 Pro 審 15 條〔7 Blocking〕經 Claude 核實後吸收）→ 待 Fable 5.2 審
+狀態：v3（自審 → Kimi K3.1 Pro 15 條 → Fable 5.2 22 條，皆經 Claude 核實後吸收；Fable 四項產品題經站長裁示）→ 待站長看
 日期：2026-11-17
 依據：`docs/superpowers/reports/2026-11-17-fengshui-form-school-research.md`
-審查紀錄：`docs/superpowers/reports/2026-11-17-fengshui-room-kimi-review.md`
+審查紀錄：`…/2026-11-17-fengshui-room-kimi-review.md`、`…/2026-11-17-fengshui-room-fable-review.md`
 取代：`2026-11-17-fengshui-v1-design.md`（八宅，parked）
 
 ## 0. 定位與站長裁示
 
-- **風水負責引起興趣，預測大腦負責差異化。** 別家風水網站只告訴你「該怎麼擺」；本站把每條風水說法變成一個你可以拿自己房間觀察看看的問題。
-- 對照的是**現代風水**（港台與現代室內風水的通行說法），不追古籍、不做原典分級。
-- 並列表達、互不背書：每張卡都有「**風水怎麼說**」與「**你的大腦怎麼看**」兩欄。
-- **預測處理（PP）只能當解讀語言，不能當證據**：不得提升任何證據徽章；某條主張沒有研究時，不得改用 PP 編一個「大腦理論上會警戒」的合理故事來補（Kimi K02）。
-- 理氣成分（命卦、方位吉凶、財位、文昌、桃花、流年飛星、羅盤、五行、缺角對應家人）一律不收。
-- 站長是第一個使用者。v1 以站長自己的臥室和書房能實際走完、並正確理解（見 §7 站長驗收）為標準。
-
-三層體驗：
-
-1. **看房間**（公開、匿名、純前端）：選房型 → 視覺化問答 → 結果卡。
-2. **兩種說法並列**（同上）：每個格局特徵一張卡。
-3. **先猜後試**（登入）：挑一個低成本調整 → 記下過去一週的感受、猜調整後一週會是幾分 → 實際調整 → 回報 → 看預測與自評的差距，當作自我觀察的線索。
+- **風水負責引起興趣，預測大腦負責差異化。**
+- 對照**現代風水**（港台與現代室內風水通行說法），不追古籍。
+- 每張卡並列「**風水怎麼說**」與「**研究怎麼說**」，互不背書（站長 2026-11-17 裁示改名：原「你的大腦怎麼看」名實不符，內容是環境心理學研究，不是腦科學——Fable F05）。
+- **預測大腦由互動承載，不由內容承載**：
+  - 「翻卡先猜」：你先預測研究現況，再對答案（即時的預測誤差）。
+  - 「先猜後試」：你先預測一個調整對自己的影響，再觀察（延遲的預測誤差）。
+  - 卡片內容不得用預測處理（PP）補「大腦理論上會…」的故事；PP 只出現在說明卡，且明講它是解讀框架、不是證據。
+- 理氣成分（命卦、吉方、財位、文昌、桃花、流年飛星、羅盤、五行、缺角對應家人）一律不收。
+- 站長是第一個使用者；每批以站長自己用得下去、且理解正確為驗收。
 
 ## 1. 規則集（`FENGSHUI_ROOM_RULESET_VERSION = "1"`）
 
-### 1.1 房型
+房型：`bedroom`（臥室）、`study`（書房／工作位），題目各自獨立。每題單選，必有「不確定」（`unknown`）。每題附俯視示意 SVG，選項可直接點圖。
 
-`bedroom`（臥室）、`study`（書房／工作位）。兩種房型的題目各自獨立。
-
-### 1.2 題目與判定
-
-每題單選，必有「不確定」選項（狀態 `unknown`）。每題附俯視示意 SVG，選項也附小圖；選項可直接點圖選。
+狀態 `ok | mild | flag | unknown`；同為 flag 但風水說法或證據不同者以變體區分，各有自己的卡。**沒有分數、總評、吉凶等級。**題目不用無依據的精確距離。
 
 **臥室**
 
-| id | 題目 | 選項 → 狀態 | 對應主張 |
-|---|---|---|---|
-| `bed_back` | 床頭後面是什麼？ | 實牆 → ok；窗 → flag；門或走道 → flag；沒靠牆 → flag | 床頭靠實牆 |
-| `bed_door_view` | 躺在床上，看得到房門嗎？ | 看得到、門在斜前方 → ok；門正對床尾 → flag(`facing`)；看不到門 → flag(`hidden`) | 看得到門但不正對 |
-| `bed_overhead` | 床的正上方有什麼？ | 沒有 → ok；外露的樑 → flag(`beam`)；吊櫃、層板或大型吊燈 → flag(`heavy`) | 樑不壓床、頭頂無重物 |
-| `bed_mirror` | 躺著時，鏡子照得到你嗎？ | 照不到 → ok；照得到 → flag | 鏡不對床 |
-| `bed_corner` | 床旁邊有沒有柱角、牆角或櫃角，尖端朝著床？ | 沒有 → ok；有 → flag | 尖角不對人 |
-| `bed_door_door` | 房門和其他房門正對嗎？ | 沒有 → ok；正對 → flag | 門對門 |
-| `bed_light` | 晚上睡覺時，房間能暗下來嗎？ | 能 → ok；外面的光會照進來 → flag | 明廳暗房 |
-| `bed_clutter` | 地面和床底下的雜物多嗎？ | 很少 → ok；有一些 → mild；很多 → flag | 雜物堆積 |
+| id | 題目 | 選項 → 狀態（變體） |
+|---|---|---|
+| `bed_back` | 床頭後面是什麼？ | 實牆 → ok；窗 → flag(`window`)；門或走道 → flag(`passage`)；沒靠牆 → flag(`floating`) |
+| `bed_door_view` | 躺在床上，看得到房門嗎？ | 看得到、門在斜前方 → ok；門正對床尾 → flag(`facing`)；看不到門 → flag(`hidden`) |
+| `bed_overhead` | 床的正上方有什麼？ | 沒有 → ok；外露的樑 → flag(`beam`)；吊櫃、層板或大型吊燈 → flag(`heavy`) |
+| `bed_mirror` | 躺著時，鏡子照得到你嗎？ | 照不到 → ok；照得到 → flag |
+| `bed_corner` | 床旁邊有沒有柱角、牆角或櫃角，尖端朝著床？ | 沒有 → ok；有 → flag |
+| `bed_door_door` | 房門和其他房門正對嗎？ | 沒有 → ok；正對 → flag |
+| `bed_light` | 晚上睡覺時，房間能暗下來嗎？ | 能 → ok；外面的光會照進來 → flag |
+| `bed_clutter` | 地面和床底下的雜物多嗎？ | 很少 → ok；有一些 → mild；很多 → flag |
 
 **書房／工作位**
 
-| id | 題目 | 選項 → 狀態 | 對應主張 |
-|---|---|---|---|
-| `seat_back` | 坐著時，椅背後面是什麼？ | 實牆 → ok；窗 → flag；門或走道 → flag | 座位背後有靠 |
-| `seat_door_view` | 坐著時看得到房門嗎？ | 在視線內、不正對 → ok；正對著門 → flag(`facing`)；背對門 → flag(`hidden`) | 看得到門但不正對 |
-| `seat_overhead` | 座位上方有外露的樑嗎？ | 沒有 → ok；有 → flag | 樑不壓座位 |
-| `seat_front` | 桌子前方是開闊的嗎？ | 開闊或有窗景 → ok；直接面對很近的牆 → flag | 明堂開闊 |
-| `seat_corner` | 座位旁邊有尖角朝著你嗎？ | 沒有 → ok；有 → flag | 尖角不對人 |
-| `seat_light` | 白天座位的自然光夠嗎？ | 夠 → ok；不太夠 → flag | 採光 |
-| `seat_clutter` | 桌面和周圍的雜物多嗎？ | 很少 → ok；有一些 → mild；很多 → flag | 雜物堆積 |
+| id | 題目 | 選項 → 狀態（變體） |
+|---|---|---|
+| `seat_back` | 坐著時，椅背後面是什麼？ | 實牆 → ok；窗 → flag(`window`)；門或走道 → flag(`passage`) |
+| `seat_door_view` | 坐著時看得到房門嗎？ | 在視線內、不正對 → ok；正對著門 → flag(`facing`)；背對門 → flag(`hidden`) |
+| `seat_overhead` | 座位上方有外露的樑嗎？ | 沒有 → ok；有 → flag |
+| `seat_front` | 桌子前方是開闊的嗎？ | 開闊或有窗景 → ok；直接面對很近的牆 → flag |
+| `seat_corner` | 座位旁邊有尖角朝著你嗎？ | 沒有 → ok；有 → flag |
+| `seat_light` | 白天座位的自然光夠嗎？ | 夠 → ok；不太夠 → flag |
+| `seat_clutter` | 桌面和周圍的雜物多嗎？ | 很少 → ok；有一些 → mild；很多 → flag |
 
-狀態 `ok | mild | flag | unknown`；同為 flag 但證據不同的選項以變體區分（如 `facing`／`hidden`），各有自己的卡。**沒有分數、沒有總評、沒有吉凶等級。**題目中不使用無依據的精確距離（Kimi K15）。
-
-### 1.3 純邏輯位置
-
-`crates/schema/src/fengshui/`：`ruleset.rs`（題目、選項、判定）、`corpus.rs`（卡片語料）、`evidence.rs`（徽章與文獻）、`wire.rs`（實驗 DTO，前後端共用）、`mod.rs`（`assess(room, answers) -> Vec<Card>`）。純函式，native 可測；web 直接呼叫 ft-schema，看房間與卡片**不經 API**（塔羅 v1a 先例）。
+純邏輯：`crates/schema/src/fengshui/`——`ruleset.rs`、`corpus.rs`、`evidence.rs`、`mod.rs`（`assess(room, answers) -> Vec<Card>`）。native 可測；web 直接呼叫 ft-schema，全程不經 API（塔羅 v1a 先例）。
 
 ## 2. 卡片語料（`FENGSHUI_ROOM_CORPUS_VERSION = "1"`）
 
-卡片以 `(itemId, 狀態或變體)` 為單位。每張卡三段：
+卡片單位：`(itemId, 狀態, 變體)`。
 
-1. **風水怎麼說**（≤100 字）：現代風水通行說法，中性描述；分歧時照實寫「各家說法不一」。ok 卡也有（「這一項符合風水常見的建議」）。
-2. **你的大腦怎麼看**（≤140 字）：只陳述研究測了什麼、在什麼結果上（睡眠、情緒、注意力、偏好評分……）、強度多少；沒有研究就寫「目前沒有研究直接測過」，不再補任何理論推想。**證據徽章只放在這一欄內**，標題固定為「相關環境研究」，下方固定一行「這些研究不是在檢驗風水」（Kimi K02）。
-3. **可以試試看**（≤80 字，僅 flag／mild）：**不買化煞商品的低成本調整**，優先順序：關門、用現有的布簾或家具、整理一小區、調整枕頭方向；涉及大型家具時加「量力而為，不要獨自搬重物」（Kimi K13）。這一段是先猜後試的入口。
+### 2.1 卡片結構
 
-### 2.1 證據徽章（兩軸，Kimi K01）
+1. **風水怎麼說**（≤100 字）：一律用引述句型（「風水的說法是……」「風水師常建議……」）。可以引述**溫和後果**（睡不安穩、心神不寧、不易放鬆、容易分心）；**不可**引述疾病、婚姻、財務、死亡意象（Fable F06）。說法分歧照實寫「各家說法不一」。
+   - 題目是為了配合研究而改寫的（`bed_light`、`seat_light`），風水欄照實寫「風水講的明廳暗房不是指夜間遮光，這裡問的是相近但不同的事」（Fable F03）。
+2. **研究怎麼說**（≤140 字）：只陳述研究測了什麼、在什麼結果上（偏好評分、睡眠、情緒、注意力……）、限制；沒有研究就寫「目前沒有研究直接測過」，不再補任何推想。
+3. **研究徽章**（只在「研究怎麼說」欄內、只在 flag／mild 卡；**ok 卡不顯示徽章**，只留「看研究」連結——Fable F01）。
+4. **可以試試看**（僅 flag／mild）：`adjustments: [{id, text}]`，每卡 1–3 個，每個 ≤60 字（Fable F10）。不買化煞商品的低成本調整，優先：關門、用現有布簾或家具、整理一小區、調整枕頭方向；涉及大型家具加「量力而為，不要獨自搬重物」。
 
-`EvidenceBadge { reach, state }`：
+### 2.2 研究徽章（Fable F01/F19）
 
-- `reach`：`direct`「研究直接測過這個特徵」／`related`「只測過相關的空間特徵」／`none`「目前沒有研究直接測過」
-- `state`（`reach != none` 時）：`consistent`「結果大致一致」／`mixed`「結果不一致」／`correlational`「只有相關，不能推論因果」／`single`「只有單一研究」
+只留一軸 `reach`，加一句限制說明：
 
-效果量、樣本、研究設計放在「看研究」展開區，不放徽章。
+- `direct`「有研究直接測過這個特徵」
+- `related`「只有相關的空間研究」
+- `none`「目前沒有研究直接測過」
 
-初值（**未經 §2.2 原文核對前一律不得高於此表**）：
+徽章下一行是 `limitation` 短句，必須寫出**測的是什麼結果**，例如「測的是座位偏好評分，不是睡眠或壓力」。效果量、樣本、設計放在「看研究」展開區。
 
-| 卡 | reach | state | 依據摘要 |
-|---|---|---|---|
-| `bed_back` flag | related | mixed | 瞭望－庇護只測過座位與景觀偏好，統合分析不一致 |
-| `bed_door_view` hidden | related | mixed | 同上（「看得到」這一半） |
-| `bed_door_view` facing | none | — | 床尾對門無研究 |
-| `bed_overhead` beam | related | single | 橫樑無研究；封閉空間壓力下皮質醇（單一 VR 研究） |
-| `bed_overhead` heavy | none | — | |
-| `bed_mirror` | none | — | |
-| `bed_corner`、`seat_corner` | related | mixed | 曲線偏好以抽象圖形為主；真實桌椅 2025 未複製 |
-| `bed_door_door` | none | — | |
-| `bed_light` | direct | consistent | 夜間光照影響睡眠與作息（結果：睡眠） |
-| `bed_clutter`、`seat_clutter` | direct | correlational | Saxbe & Repetti 2010 等（結果：壓力荷爾蒙型態、情緒） |
-| `seat_back`、`seat_door_view` hidden | related | mixed | 座位偏好研究（結果：偏好，非壓力） |
-| `seat_door_view` facing | none | — | |
-| `seat_overhead` | related | single | 同 `bed_overhead` beam |
-| `seat_front` | related | mixed | 注意力恢復與窗景（結果：注意力、情緒；效果小、異質大） |
-| `seat_light` | related | single | 有窗與睡眠（Boubekri 2014，小樣本）；與「專心」無直接研究 |
+### 2.3 初值（下限；升級需 ledger 佐證——Fable F02）
 
-ok 卡沿用同題 flag 卡的徽章（同一批研究）。
-
-### 2.2 原文核對閘門（Kimi K03）
-
-Batch 1 交付 `docs/superpowers/reports/fengshui-research/evidence-ledger.md`，每篇文獻記錄：研究設計、樣本、實際測量的結果、限制、**是否讀過全文**。規則：
-
-- 未讀全文的文獻不得支撐 `consistent`；只讀摘要者，該卡徽章 `state` 降一級或維持保守文案。
-- 大腦段每句話都要能對到 ledger 的一列。
-
-### 2.3 說明的兩個位置（Kimi K02；調整原「已決 3」）
-
-- **開場一句**（問答前）：「每一項會並列風水的說法和相關的環境研究。這些研究不是在檢驗風水，有些項目根本沒有人研究過。」
-- **結果最後一張說明卡**：預測大腦是什麼、為什麼它只是解讀的框架不是證據、「你的預期本身就會影響你的感受」。
-
-### 2.4 文案紅線（測試＋人工審稿，Kimi K11）
-
-- `corpus_banned_words` 分段詞表（substring）：
-  - 全段禁用──背書：「證實」「證明」「科學解釋」「科學根據」「研究印證」「腦科學支持」「所以風水」；恐嚇：「凶」「血光」「破財」「漏財」「離婚」「影響婚姻」「生病」「有損健康」「災厄」「意外」「運勢」「出殯」「相罵」；化煞商品：「八卦鏡」「山海鎮」「五帝錢」「葫蘆」「水晶」「貔貅」「風鈴」「化解」；理氣：「命卦」「吉方」「財位」「文昌」「桃花」「流年」「飛星」「羅盤」「五行」「缺角」。
-  - 「煞」只能出現在「風水怎麼說」段，作為術語引用。
-  - 研究段允許「睡眠」「焦慮」「壓力」等詞，但與風水段的組合不得構成因果或醫療宣稱──由人工審稿把關。
-- **人工審稿閘門**：語料定稿前，Claude 逐卡審一次語意（含兩欄對讀），再給站長看；Batch 2 上線前看實際手機畫面，確認徽章不會被讀成「這條風水有研究支持」。
-- 長度上限以 `chars().count()` 測試；每題每個非 unknown 狀態／變體都必須有卡。
-
-### 2.5 版本規則（Kimi K09）
-
-任何使用者看得到的卡片文字、徽章、文獻語意改動，都必須 bump `FENGSHUI_ROOM_CORPUS_VERSION`；題目、選項、判定改動 bump `FENGSHUI_ROOM_RULESET_VERSION`。
-
-## 3. 先猜後試（登入）
-
-### 3.1 流程
-
-1. 在 flag／mild 卡按「試試看」。開始前一句揭露：「會上傳的只有：房型、這一項、你選的調整、以及你打的分數。」
-2. **起點**（過去 7 天），1–5 分，附兩端錨點：
-   - 安心感：「過去 7 天，待在這個位置你覺得多安心？」（1 很不安心 … 5 很安心）
-   - 功能感：臥室「過去 7 天睡得好嗎？」（1 很差 … 5 很好）；書房「過去 7 天在這裡能專心嗎？」（1 很難 … 5 很容易）
-3. **預測**：「調整後的 7 天，你猜這題會是幾分？」緊湊呈現「現在 3 → 一週後你猜 〔 〕」；可以維持或變差，不預設會改善（Kimi K08）。
-4. 實際調整；lab 顯示開放倒數，可下載 `.ics` 行事曆提醒（純前端產生，Kimi K14）。
-5. **回報**（滿 7 天開放、滿 30 天當下仍可、超過才過期）：
-   - 先問「這一週你有做這個調整嗎？」（有／部分／沒有）
-   - 再答過去 7 天的兩題分數。**回報時起點與預測都不顯示**，送出後一起揭曉（Kimi K08）。
-6. **對答案**：顯示起點、預測、實際三點，附固定說明：
-   > 「你可以把預測和實際的差距當作一個觀察線索。一次的結果分不出是調整、你的預期、生活上的其他變化，還是評分本身的起伏造成的，所以它不能說明這個調整有沒有用，也不能說明風水對不對。」
-   UI 用語是「自我觀察」，不用「實驗驗證」（Kimi K04）。
-
-### 3.2 為什麼回報時看不到預測
-
-先看到自己的預測（或起點），回報時容易被拉過去。這是**降低錨定的設計，不是保密**：使用者本來就知道自己填過什麼。由 API 統一的 view 轉換強制（§4.3）。
-
-### 3.3 限制
-
-- **每個房型同時最多 1 個進行中的觀察**（全帳號最多 2 個），避免同房間多個調整互相混雜（Kimi K04）。
-- 進行中 = `reported_at IS NULL AND created_at >= expiry_cutoff`；過期列不占名額（Kimi K05）。
-- 過期後可以看到起點與預測，不能回報。
-- 不收自由文字。
-
-## 4. API
-
-前綴 `/api/fengshui/experiments`；DTO 放 `ft_schema::fengshui::wire`（camelCase）。**所有回應（含錯誤）**都經 route 內 helper 加 `Cache-Control: private, no-store` 與 `Vary: Authorization`（現有 `error::error_code` 不帶 cache header，不能只照抄塔羅成功路徑，Kimi K10）。
-
-### 4.1 端點
-
-| 方法 | 路徑 | 成功 |
+| 卡 | reach | limitation 要點 |
 |---|---|---|
-| POST | `/api/fengshui/experiments` | 201 `ExperimentView`（冪等重放 200） |
-| GET | `/api/fengshui/experiments?limit&cursor` | 200 `{items: [ExperimentView], nextCursor}`，沿用 `page_query`（1–20、`(created_at,id)` cursor） |
-| POST | `/api/fengshui/experiments/:id/report` | 200 `ExperimentView`（完整） |
-| DELETE | `/api/fengshui/experiments/:id` | 200 `{deleted: 1}` |
-| DELETE | `/api/fengshui/experiments` | 200 `{deleted: n}` |
+| `bed_back` 各變體 | related | 瞭望－庇護研究測的是景觀與座位偏好，統合分析結果不一致；沒有床位研究 |
+| `bed_door_view` hidden | related | 同上（「看得到」這一半，支持稍多但仍不一致） |
+| `bed_door_view` facing | none | |
+| `bed_overhead` beam／heavy | none | 橫樑與頭頂重物都沒有研究；封閉空間的研究（Fich 2014）操弄的是房間開口，只列為延伸閱讀 |
+| `bed_mirror` | none | |
+| `bed_corner`、`seat_corner` | related | 曲線偏好主要用抽象圖形；真實桌椅的研究（2025）沒有重現 |
+| `bed_door_door` | none | |
+| `bed_light` | related | 題目與風水原意不同（§2.1）；夜間光照與睡眠的文獻待 ledger 補具名 |
+| `bed_clutter`、`seat_clutter` | related | 研究測的是對整個家的描述用語與壓力荷爾蒙型態、情緒；只有相關、不能推論因果；沒有測床底或桌面 |
+| `seat_back`、`seat_door_view` hidden | related | 測的是座位偏好，不是壓力或專注 |
+| `seat_door_view` facing、`seat_overhead` | none | |
+| `seat_front` | related | 注意力恢復與窗景研究，效果小、異質大；沒有測「面牆」 |
+| `seat_light` | related | 有窗與睡眠的小樣本研究；與「專心」沒有直接研究 |
 
-建立 body：`{requestId, room, itemId, variant?, adjustmentId, baseline:{calm, func}, predicted:{calm, func}}`
-回報 body：`{adherence: "yes"|"partly"|"no", actual:{calm, func}}`
+`direct` 目前沒有任何一張卡達到——這本身就是要讓使用者看見的事實。
 
-### 4.2 `ExperimentView`
+### 2.4 證據帳本（Kimi K03、Fable F18）
 
-`{id, room, itemId, variant?, adjustmentId, itemLabel, adjustmentText, status, baseline?, predicted?, adherence?, actual?, opensAt, expiresAt, createdAt, reportedAt?, rulesetVersion, corpusVersion}`
+`evidence.rs` 是唯一來源，每篇文獻：`key`、作者年份期刊、URL、`design`、`n`、`outcome`、`limitation`、`full_text_read: bool`。`docs/superpowers/reports/fengshui-research/evidence-ledger.md` 只寫敘述與核對筆記。
 
-- `status` ∈ `waiting`（未滿 7 天）／`open`（可回報）／`done`／`expired`，由伺服端用**同一次取得的 now** 衍生。
-- `itemLabel`、`adjustmentText` 讀自建立時的快照欄位（§5）。
+規則：`reach` 升為 `direct` 時，所引用文獻必須全部 `full_text_read == true`（T6 守門）。研究欄每句話都要能對到一篇文獻。
 
-### 4.3 遮蔽（唯一 view 轉換，Kimi K06）
+### 2.5 說明（兩個位置）
 
-一個函式 `to_view(row, now)` 產生所有回應（建立、冪等重放、列表、回報）：
-- `waiting`／`open`：省略 `baseline` 與 `predicted`（`skip_serializing_if`）。
-- `done`／`expired`：完整回傳。
-- 建立回應同樣遮蔽──前端在建立當下自己顯示剛填的值即可，不依賴伺服端回傳。
+- **開場一句**：「每一項會並列風水的說法和相關研究。下面這些研究多數不是為了檢驗風水而做，有些項目根本沒有人研究過。」（Fable F04 修正「說太滿」）
+- **結果最後的說明卡**：
+  1. 唯一直接比較過風水佈置的實驗：Zijlstra et al. 2024（PLOS ONE，N=558，線上虛擬病房）——風水佈置讓房間顯得較愉悅，對焦慮沒有直接效果；限制是線上、虛擬房間（Fable F04）。
+  2. 預測大腦是什麼；它只是解讀框架，不是證據。
+  3. 「你剛剛翻卡前的猜測和答案的落差，就是一次預測誤差」（接 §3）。
+  4. 「你的預期本身也會影響你的感受」（接 §4）。
 
-### 4.4 處理順序與錯誤
+### 2.6 文案紅線（測試＋人工審稿）
 
-順序（塔羅先例）：IP 便宜限流 `fengshui:ip:{ip}` 20/min（fail-open）→ auth → `body_too_large`（64 KiB）→ parse → 驗證 → 冪等查詢 → uid 限流 `fengshui:create:{uid}` 10/24h → 寫入。無 AI，不用 strict。
+- 禁用詞（分段、以片語比對，並有白名單片語避免誤殺「不能證明」「不意外」——Fable F06）：
+  - 背書：證實、證明、科學解釋、科學根據、研究印證、腦科學支持、所以風水、磁場、能量
+  - 恐嚇：凶、不吉、不祥、血光、破財、漏財、財運、離婚、影響婚姻、生病、有損健康、災厄、意外、運勢、出殯、相罵、小人、口舌、陰氣、衰、犯小人、招
+  - 化煞商品：八卦鏡、山海鎮、五帝錢、葫蘆、水晶、貔貅、風鈴、化解、開運、旺
+  - 理氣：命卦、吉方、財位、文昌、桃花、流年、飛星、羅盤、五行、缺角
+  - 白名單片語（允許）：「不能證明」「不是在證明」「沒有證實」「不意外」
+  - 「煞」只能出現在風水欄，作為術語引用。
+  - 測試範圍涵蓋卡片、開場句、說明卡、翻卡與先猜後試的所有固定文案。
+- **人工審稿閘門**：語料定稿前 Claude 逐卡兩欄對讀審一次，再給站長；Batch 2 上線前看手機實機畫面，確認徽章不會被讀成「這條風水有研究支持」。
+- 長度以 `chars().count()` 測試；每題每個非 unknown 狀態／變體都要有卡。
 
-| 情況 | 回應 |
-|---|---|
-| JSON 錯、`requestId` 非 UUID 形狀（比照 `valid_tarot_request_id`）、房型、題目、變體、調整歸屬、分數 1–5、`adherence` 值不合 | 400 `INVALID_EXPERIMENT` |
-| 路徑 `:id` 非 UUID 形狀、不存在、他人、重刪 | 404 `NOT_FOUND` |
-| 同房型已有進行中 | 409 `ROOM_ACTIVE` |
-| 同 `requestId` 不同 body | 409 `IDEMPOTENCY_CONFLICT` |
-| 回報太早 | 409 `REPORT_TOO_EARLY`（附 `opensAt`） |
-| 已回報且 body 不同 | 409 `ALREADY_REPORTED` |
-| 過期 | 409 `EXPIRED` |
-| DB 錯誤 | 500 `"db error"`，不夾帶細節 |
+### 2.7 版本規則
 
-### 4.5 時間
+使用者看得到的卡片文字、徽章、limitation、文獻語意改動 → bump `FENGSHUI_ROOM_CORPUS_VERSION`；題目、選項、判定改動 → bump `FENGSHUI_ROOM_RULESET_VERSION`。
 
-單次取得 `now = clock::now_iso()`，在 Rust 端算出 `open_cutoff = now − 7d`、`expiry_cutoff = now − 30d`（同格式 ISO 字串），傳入 SQL。邊界：`created_at <= open_cutoff` 開放；`created_at >= expiry_cutoff` 仍有效（滿 30 天當下可回報）。SQL 內不混用 `datetime('now')`。
+## 3. 翻卡先猜（Batch 2，站長裁示加入——Fable F21）
 
-## 5. DB（`schema.sql` ＋ `scripts/migrations/2026-11-XX-fengshui.sql`）
+答完問答後，flag／mild 卡先以**蓋牌**呈現：只顯示「風水怎麼說」，研究欄蓋住。
 
-```sql
-CREATE TABLE IF NOT EXISTS fengshui_experiments (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  request_id TEXT NOT NULL,
-  room TEXT NOT NULL,
-  item_id TEXT NOT NULL,
-  variant TEXT,
-  adjustment_id TEXT NOT NULL,
-  item_label TEXT NOT NULL,        -- 建立時快照
-  adjustment_text TEXT NOT NULL,   -- 建立時快照
-  ruleset_version TEXT NOT NULL,
-  corpus_version TEXT NOT NULL,
-  baseline_calm INTEGER NOT NULL,
-  baseline_func INTEGER NOT NULL,
-  predicted_calm INTEGER NOT NULL,
-  predicted_func INTEGER NOT NULL,
-  adherence TEXT,
-  actual_calm INTEGER,
-  actual_func INTEGER,
-  created_at TEXT NOT NULL,
-  reported_at TEXT
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_fengshui_user_request ON fengshui_experiments(user_id, request_id);
-CREATE INDEX IF NOT EXISTS idx_fengshui_user_created ON fengshui_experiments(user_id, created_at);
-```
+1. 每張卡先猜：「這條說法，研究做到哪了？」三選一：有研究直接測過／只有相關研究／沒有人研究過。
+2. 翻開：顯示研究欄與徽章，標示猜對或猜錯；猜錯時一句「你原本以為……，實際是……」。
+3. 全部翻完：「你猜對 X / Y 張」，並接說明卡（§2.5 第 3 點）。
+4. 可以「全部直接翻開」略過遊戲。
+5. 純前端；猜的結果只存在當下的頁面狀態，不落 localStorage、不上傳。
 
-### 5.1 建立（條件式 INSERT，Kimi K07）
+設計原則：這個遊戲預測的是**研究現況**，不是風水對不對，因此不會產生背書；它要傳達的正是「多數說法沒人測過」。
 
-```sql
-INSERT INTO fengshui_experiments (...)
-SELECT ?…
-WHERE NOT EXISTS (
-  SELECT 1 FROM fengshui_experiments
-  WHERE user_id = ?u AND room = ?room
-    AND reported_at IS NULL AND created_at >= ?expiry_cutoff)
-```
+## 4. 先猜後試（Batch 3，純前端——站長裁示，Fable F08）
 
-用 `db::exec_changes` 取 affected：
-- 1 → 201。
-- 0、UNIQUE 撞鍵、或傳輸錯誤（不確定是否寫入）→ **先以 `(user_id, request_id)` 回查**：存在且同 body → 200 原結果；存在但不同 body → 409 `IDEMPOTENCY_CONFLICT`；不存在 → affected=0 時回 409 `ROOM_ACTIVE`，其他錯誤回 500（塔羅 `tarot.rs:421-437` 先例）。
+### 4.1 範圍
 
-### 5.2 回報（條件式 UPDATE，Kimi K05）
+- 資料只存在瀏覽器 `localStorage`（`fengshui_obs_v1`），不登入、不上傳、不跨裝置。
+- spec 明文：這套流程**不保護任何測量**，只是給自己的觀察工具；遮蔽是降低錨定，不是保密。
+- 每個房型同時最多 1 個進行中的觀察。
 
-```sql
-UPDATE fengshui_experiments
-SET adherence = ?, actual_calm = ?, actual_func = ?, reported_at = ?now
-WHERE id = ? AND user_id = ?
-  AND reported_at IS NULL
-  AND created_at <= ?open_cutoff
-  AND created_at >= ?expiry_cutoff
-```
+### 4.2 流程
 
-affected=1 → 回讀後 200 完整 view。affected=0 → 以 `id + user_id` 回查分類：不存在 → 404；已回報且 `adherence`／`actual` 與本次相同 → 200 完整 view（回應遺失後的重試，Kimi K07）；已回報但不同 → 409 `ALREADY_REPORTED`；太早 → 409 `REPORT_TOO_EARLY`；過期 → 409 `EXPIRED`。
+1. 在 flag／mild 卡的某個調整上按「試試看」。
+2. 提示「先做完這個調整，再按開始」——**開始時間＝調整完成時間**（Fable F07）。
+3. **起點**（調整前的過去 7 天），0–10 分，兩端錨點：
+   - 安心感：「待在這個位置你覺得多安心？」（0 很不安心 … 10 很安心）
+   - 功能感：臥室「睡得好嗎？」（0 很差 … 10 很好）；書房「能專心嗎？」（0 很難 … 10 很容易）
+4. **預測**：每題猜一個**區間**——「調整後這段時間，你猜會落在 〔 〕 到 〔 〕」，可以猜維持或變差（站長裁示，Fable F09）。
+5. 開始後顯示開放倒數（7 天）；30 天後過期。提醒只顯示日期；`.ics` 下載為加分項，iOS 實機不穩就拿掉（Fable F22）。
+6. **回報**（調整後這段時間）：
+   - 先問「這段時間你有維持這個調整嗎？」（有／部分／沒有）
+   - 再答兩題 0–10。回報時起點與預測都不顯示，送出後一起揭曉。
+7. **對答案**：顯示起點、預測區間、實際；標示「落在你猜的區間內／外」。
+   - 固定說明：「預測和實際的落差，可以當作一個觀察線索。一次的結果分不出是調整、你的預期、生活上的其他變化，還是評分本身的起伏造成的，所以它不能說明這個調整有沒有用，也不能說明風水對不對。」
+   - **沒有維持調整時**另用文案：「這段時間你沒有調整，分數還是變了 X。這就是平常的起伏有多大。」（Fable F07）
+8. **校準紀錄**：累計「落在自己區間內」的比例（例如「你的預測 5 次中有 3 次落在區間內」），讓使用者看到自己的預測準不準。只用自己的資料，不做跨使用者比較。
 
-### 5.3 其他
+UI 用語是「自我觀察」，不用「實驗驗證」。
 
-- 房間問答答案不落庫。
-- 帳號刪除靠 `ON DELETE CASCADE`（站上無刪帳路由，各表皆此慣例）。
-- **風水資料永不寫入** `predictions`／`prediction_feedback`／`f8_assignments`（route 檔頭註明）。
+## 5. 前端
 
-## 6. 前端
-
-- `/fengshui`（公開）：開場一句揭露（§2.3）＋「答案只存在這個瀏覽器，不會上傳」→ 選房型 → 問答（俯視圖點選、進度條、可返回）→ 結果。
-  - 答案存 `localStorage` `fengshui_room_v1_{room}`（key 帶 ruleset 版本），結果頁與開場都有顯眼的「清除我的房間答案」。不設 TTL（明文取捨：個人裝置為主，清除鈕足夠）（Kimi K12）。
-- 結果頁（Kimi K14）：預設只展開 flag／mild 卡；ok 卡收在「已符合常見建議」折疊區、unknown 收在「還不確定的項目」；最後是說明卡。flag／mild 卡有「試試看」。
-- 卡片：手機上「風水怎麼說」與「你的大腦怎麼看」上下排，桌機左右並列；徽章在大腦欄內；「看研究」展開文獻。
-- `/fengshui/lab`（Protected）：我的觀察（等待中附倒數與 `.ics` 下載、可回報、已完成、過期）、回報流程、對答案畫面、刪除與全刪（二次確認、回報筆數）。
+- `/fengshui`（公開）：開場一句（§2.5）＋「答案只存在這個瀏覽器，不會上傳」→ 選房型 → 問答（俯視圖點選、進度條、可返回）→ 翻卡先猜 → 說明卡。
+  - 答案存 `localStorage` `fengshui_room_v1_{room}`；開場與結果頁都有「清除我的房間答案」。不設 TTL（明文取捨：個人裝置為主）。
+- 結果頁：flag／mild 卡（蓋牌）在前；ok 卡收進「已符合常見建議」、unknown 收進「還不確定的項目」，皆折疊。
+- 卡片：手機上下排、桌機左右並列；「看研究」展開文獻。
+- Batch 2 的卡片只顯示「可以試試看」文字，**不放按鈕**；按鈕在 Batch 3 隨觀察功能一起上（Fable F16）。
+- Batch 3：`/fengshui` 內加「我的觀察」區（進行中附倒數、可回報、已完成、過期、校準紀錄、清除）。
 - 首頁 feature-grid 加入口；名詞解釋加「風水」分類（樑壓、明堂、門對門等），bump glossary 版本。
-- 示意 SVG 以 Leptos `view!` 內嵌繪製，不引入外部 JS（CSP）。
-- 色彩沿用現有 token；新色票照色彩紅線重採玻璃底對比。
+- SVG 以 Leptos `view!` 內嵌繪製，不引入外部 JS（CSP）。色彩沿用現有 token；新色票照色彩紅線重採玻璃底對比。
 
-## 7. 測試與驗收
+## 6. 測試與驗收
 
 **ft-schema（native）**
-- T1 規則集完整：每題選項皆有狀態；題目 id 不重複；變體只出現在 flag。
-- T2 語料完整：每題每個非 unknown 狀態／變體都有卡；flag／mild 都有調整段。
-- T3 分段禁用詞與「煞」位置限制。
+- T1 規則集完整：每個選項都有狀態；題目 id 不重複；變體只出現在 flag。
+- T2 語料完整：每題每個非 unknown 狀態／變體都有卡；flag／mild 卡有 1–3 個調整、id 不重複。
+- T3 禁用詞（含白名單片語）與「煞」位置限制，涵蓋所有固定文案。
 - T4 長度上限。
 - T5 `assess` 分組（flag → mild → ok 折疊 → unknown 折疊）。
-- T6 每張卡都有徽章；`reach=none` 時 `state` 必為空；徽章引用的文獻鍵都在 ledger 中存在。
-- T7 wire 驗證函式：房型、題目、變體、調整歸屬、分數、`adherence`、`requestId` 形狀。
+- T6 徽章：flag／mild 卡都有 `reach` 與非空 `limitation`；ok 卡無徽章；`direct` 的引用文獻全部 `full_text_read`；引用的文獻 key 都存在。
+- T7 先猜後試純邏輯（放 schema，web 呼叫）：開放與過期判定（剛好 7 天、剛好 30 天的邊界）、區間命中判定、校準比例。日期算術新增 `ft_schema` 純函式 `iso_shift_days(iso, days)`，重用 `cycle.rs` 的 `days_from_civil`／`civil_from_days`（Fable F14）。
 
-**ft-api（native，純函式）**
-- T8 `to_view`：`waiting`／`open` 序列化後的 **JSON 實際不含** `baseline`、`predicted` 鍵；`done`／`expired` 含。
-- T9 時窗：`status` 判定與 cutoff 計算，邊界（剛好 7 天、剛好 30 天）。
+**站長驗收**
+1. 用自己的臥室或書房走完問答與翻卡，覺得好玩、不像問卷。
+2. 能用自己的話說出：「這些研究多數不是在證明風水」、「有些項目根本沒人研究過」。
+3. （Batch 3 後）完成一輪觀察，看到對答案畫面，並能說出「這次結果不能說明調整有沒有用」。
 
-**併發與 DB 行為（驗收腳本，Kimi K07）**
-`scripts/fengshui-e2e.sh`，比照 `f8-acceptance.sh`（DB 自造 login token、`--cleanup`），對正式站跑：
-- 同房型並發建立 4 次 → 恰好 1 列。
-- 同 `requestId` 並發 → 恰好 1 列，其餘 200 重放。
-- 並發回報 → 不覆寫；相同 body 重試 → 200。
-- 時窗邊界以 SQL 直接改 `created_at` 製造（6 天 23 時、7 天、30 天、30 天＋1 秒）。
-- 未回報前所有回應（建立、重放、列表）都不含 `predicted`。
-- 錯誤回應也帶 `no-store`。
+## 7. 分批與閘門
 
-**部署驗證**：`verify-deployment.sh` 加 `GET /api/fengshui/experiments` 未登入 401。
+1. **Batch 1（schema＋語料＋證據）**：規則集、語料、`evidence.rs`、ledger 原文核對、`assess`、T1–T6。語料經 Claude 審稿後給站長看。
+2. **Batch 2（web 看房間＋翻卡先猜）**：`/fengshui`、首頁入口、名詞解釋；手機實機審徽章呈現。純前端，可單獨部署。
+   - **閘門 A**：站長用自己的房間走過，決定 Batch 3 做不做。
+3. **Batch 3（先猜後試，純前端）**：觀察流程、校準紀錄、T7。
+   - **閘門 B**：站長走完一輪，覺得有感，且確實需要跨裝置，才另立 spec 做 API＋DB 版。
 
-**站長驗收**：
-1. 用自己的臥室或書房走完看房間，覺得好玩、不像問卷。
-2. 看完卡片能用自己的話說出：「這些研究不是在證明風水」、「有些項目根本沒人研究過」。
-3. （Batch 3 後）開一個觀察，七天後回報，看到對答案畫面，並能說出「這次結果不能說明調整有沒有用」。
+全部純前端，**沒有 migration、沒有新 API 路由**；部署只需 build web 後 `deploy-web.sh`。
 
-## 8. 分批
+## 8. 不做（v1）
 
-1. **Batch 1（schema＋語料＋ledger）**：規則集、語料、徽章、`assess`、wire DTO、T1–T7；`evidence-ledger.md` 原文核對。語料經 Claude 語意審稿後給站長看。
-2. **Batch 2（web 看房間）**：`/fengshui`、首頁入口、名詞解釋；手機實機審徽章呈現。純前端，可單獨部署。
+照片與 AI 判讀（v2，需先 spike）、平面圖拖拉、全屋格局（穿堂、入門見灶等）、窗外形煞、任何理氣內容、跨使用者統計、自由文字、伺服端儲存（閘門 B 之後再議）。
 
-**站長驗收閘門（2026-11-17 裁示）**：Batch 1＋2 上線後，站長先用自己的房間實際走過，再決定 Batch 3 做不做、怎麼做。理由：先猜後試是記錄型互動，和已下架的小練習同型，有「不好玩」的風險。
+## 9. 已決
 
-3. **Batch 3（API＋DB＋lab，待閘門）**：migration、routes、`/fengshui/lab`、T8–T9、`fengshui-e2e.sh`、verify。部署順序：migration → API → web。
+2026-11-17 站長裁示，含兩輪審查後的調整：
 
-## 9. 不做（v1）
+1. 欄名「風水怎麼說／研究怎麼說」（Fable F05）。
+2. Batch 2 加翻卡先猜（Fable F21）。
+3. 先猜後試先做純前端版（Fable F08）；API＋DB 版待閘門 B。
+4. 預測用 0–10 區間，累計校準紀錄（Fable F09）。
+5. 回報滿 7 天開放、滿 30 天當下仍可、超過才過期；只是回訪時窗，不代表 7 天足以判斷效果。
+6. 說明分兩處：開場一句、結果最後完整說明卡（Kimi K02）。
+7. 每個房型同時最多 1 個進行中的觀察（Kimi K04）。
 
-照片與 AI 判讀（v2，需先 spike）、平面圖拖拉、全屋格局（穿堂、入門見灶等）、窗外形煞、任何理氣內容、統計彙總或跨使用者比較、自由文字。
+## 附錄：閘門 B 之後的 API＋DB 版備忘
 
-## 10. 已決
-
-2026-11-17 站長同意預設，並經 Kimi 審查後微調：
-
-1. 回報滿 7 天開放、滿 30 天當下仍有效、超過才過期。這只是產品回訪時窗，不代表 7 天足以判斷效果。
-2. 量尺：三次都用「過去 7 天」或「調整後的 7 天」同一參照期間，1–5 絕對分數加兩端錨點（§3.1）；不包裝成經驗證量表。
-3. 說明分兩處：開場一句、結果最後一張完整說明卡（原「只放最後」依 Kimi K02 調整）。
-4. 資料表依專案先例：FK `ON DELETE CASCADE`＋`UNIQUE(user_id, request_id)`。UNIQUE 是並發冪等的必要條件；值域檢查由 app 驗證、不加 CHECK。
-5. 進行中上限由「全帳號 3 個」改為「每房型 1 個」（Kimi K04）。
+v2 草稿的伺服端設計（條件式 INSERT／UPDATE、冪等回查、唯一遮蔽轉換、e2e 腳本）見 commit `0818b84` 的 §4–§5，並須先吸收 Fable 工程意見：F10（`state` 欄位）、F11（限流 20、e2e 重用同列）、F12（回查落空分支回 500）、F13（no-store 集中在 `lib.rs decorate`）、F14（`iso_shift_days`）、F15（對齊塔羅：`{deleted:true}`、非 UUID 回 400、開放 `valid_uuid_shape`）。
