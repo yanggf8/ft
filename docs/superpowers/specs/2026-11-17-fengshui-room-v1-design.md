@@ -75,35 +75,38 @@
 
 ### 2.3 初值（下限；升級需 ledger 佐證——Fable F02）
 
+2026-11-18 依證據帳本（`docs/superpowers/reports/fengshui-research/evidence-ledger.md` §4）＋站長裁示更新；標 ★ 者與初版不同。
+
 | 卡 | reach | limitation 要點 |
 |---|---|---|
-| `bed_back` 各變體 | related | 瞭望－庇護研究測的是景觀與座位偏好，統合分析結果不一致；沒有床位研究 |
-| `bed_door_view` hidden | related | 同上（「看得到」這一半，支持稍多但仍不一致） |
-| `bed_door_view` facing | none | |
-| `bed_overhead` beam／heavy | none | 橫樑與頭頂重物都沒有研究；封閉空間的研究（Fich 2014）操弄的是房間開口，只列為延伸閱讀 |
-| `bed_mirror` | none | |
-| `bed_corner`、`seat_corner` | related | 曲線偏好主要用抽象圖形；真實桌椅的研究（2025）沒有重現 |
+| `bed_back` 各變體 | related | 瞭望－庇護研究測的是空間偏好評分，文獻彙整（計票）結果不一致；window／floating 另引平面圖擺床實驗（Spörrle 2010），測的是擺床偏好，不是睡眠 |
+| `bed_door_view` hidden | ★ direct | 測的是在平面圖上擺床的偏好，不是睡眠（Spörrle 2010，138 人，83% 選看得到門；Bonin 2023 重現研究未讀全文，列延伸） |
+| `bed_door_view` facing | ★ related | 唯一相近的擺床實驗結果方向相反（多數人選床尾朝門那面牆）；平面圖不能斜擺，測的是偏好不是睡眠 |
+| `bed_overhead` beam／heavy | none | 橫樑與頭頂重物都沒有研究；天花板高度研究（Meyers-Levy 2007）沒測到舒適感差異、封閉空間研究（Fich 2014，只讀摘要）操弄牆面開口，皆列延伸閱讀 |
+| `bed_mirror` | none | 不引用 Tamaki 2016（首夜效應，與鏡子無關） |
+| `bed_corner`、`seat_corner` | related | 測的是看圖片的喜歡評分；統合分析中室內空間類圖片效果為零，真實桌椅研究（2025）沒有重現 |
 | `bed_door_door` | none | |
-| `bed_light` | related | 題目與風水原意不同（§2.1）；夜間光照與睡眠的文獻待 ledger 補具名 |
-| `bed_clutter`、`seat_clutter` | related | 研究測的是對整個家的描述用語與壓力荷爾蒙型態、情緒；只有相關、不能推論因果；沒有測床底或桌面 |
-| `seat_back`、`seat_door_view` hidden | related | 測的是座位偏好，不是壓力或專注 |
-| `seat_door_view` facing、`seat_overhead` | none | |
-| `seat_front` | related | 注意力恢復與窗景研究，效果小、異質大；沒有測「面牆」 |
-| `seat_light` | related | 有窗與睡眠的小樣本研究；與「專心」沒有直接研究 |
+| `bed_light` | related | 題目與風水原意不同（§2.1）；測的是開燈睡與睡眠（Mason 2022，20 人）；「外面照進來的光」在大型問卷研究（Sweeney 2023）中結果偏弱 |
+| `bed_clutter`、`seat_clutter` | related | 研究測的是導覽自家的用字與妻子的壓力荷爾蒙型態、情緒；只有相關、不能推論因果；沒有測床底或桌面；Roster 2016 未讀不引用 |
+| `seat_back`、`seat_door_view` hidden | related | 測的是座位使用率與偏好／自評專注，不是壓力或門本身；觀察研究（Psathiti 2017）中背向走道的座位反而最常被坐 |
+| `seat_door_view` facing | ★ related | 觀察研究中正面直視主要走道的座位較少人坐；對象是走道不是門 |
+| `seat_overhead` | none | 同 `bed_overhead` |
+| `seat_front` | related | 注意力恢復（認知測驗，小到中度）與窗景（術後恢復）研究；沒有測「面牆」 |
+| `seat_light` | related | 有窗與睡眠的小樣本研究（49 人）；測的是睡眠與自評生活品質，不是專心 |
 
-`direct` 目前沒有任何一張卡達到——這本身就是要讓使用者看見的事實。
+`direct` 目前只有 `bed_door_view` hidden 一張（2026-11-18 依證據帳本＋站長裁示），而且測的是平面圖上的擺床偏好、不是睡眠；其餘都只有相關研究或沒有研究——這本身就是要讓使用者看見的事實。
 
 ### 2.4 證據帳本（Kimi K03、Fable F18）
 
 `evidence.rs` 是唯一來源，每篇文獻：`key`、作者年份期刊、URL、`design`、`n`、`outcome`、`limitation`、`full_text_read: bool`。`docs/superpowers/reports/fengshui-research/evidence-ledger.md` 只寫敘述與核對筆記。
 
-規則：`reach` 升為 `direct` 時，所引用文獻必須全部 `full_text_read == true`（T6 守門）。研究欄每句話都要能對到一篇文獻。
+規則：`reach` 升為 `direct` 時，所引用文獻必須全部 `full_text_read == true`（T6 守門）。卡片文獻分兩欄：`refs`（研究欄所依據、徽章以此為準）與 `further`（延伸閱讀，例如只讀到摘要者）；`direct` 卡的 `refs` 不得含未讀全文者（2026-11-18）。研究欄每句話都要能對到一篇文獻。
 
 ### 2.5 說明（兩個位置）
 
 - **開場一句**：「每一項會並列風水的說法和相關研究。下面這些研究多數不是為了檢驗風水而做，有些項目根本沒有人研究過。」（Fable F04 修正「說太滿」）
 - **結果最後的說明卡**：
-  1. 唯一直接比較過風水佈置的實驗：Zijlstra et al. 2024（PLOS ONE，N=558，線上虛擬病房）——風水佈置讓房間顯得較愉悅，對焦慮沒有直接效果；限制是線上、虛擬房間（Fable F04）。
+  1. 唯一直接比較過風水佈置的實驗：Zijlstra et al. 2024（PLOS ONE，N=558，線上看病房的影片與圖片，不是 VR）——風水佈置讓房間顯得較愉悅，對焦慮沒有直接效果；限制是線上、非真實住院、15 處同時改動無法分離、共同作者之一隸屬國際風水協會（Fable F04；2026-11-18 依證據帳本 §4.2）。
   2. 預測大腦是什麼；它只是解讀框架，不是證據。
   3. 「你剛剛翻卡前的猜測和答案的落差，就是一次預測誤差」（接 §3）。
   4. 「你的預期本身也會影響你的感受」（接 §4）。

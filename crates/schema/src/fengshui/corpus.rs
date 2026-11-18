@@ -2,6 +2,8 @@
 //! （§2.5 開場句與說明卡、§3 翻卡先猜、§4.2 先猜後試）。
 //!
 //! 狀態：**草稿**——語料定稿前須經 Claude 逐卡兩欄對讀審稿，再給站長（spec §2.6）。
+//! 2026-11-18 依證據帳本更新（`docs/superpowers/reports/fengshui-research/evidence-ledger.md` §4
+//! ＋站長裁示：`bed_door_view` hidden 升 direct；兩張 facing 卡 none → related）。
 //!
 //! 文案紅線（spec §2.6，測試守門）：
 //! - 風水欄一律引述句型、只引溫和後果；「煞」只能出現在風水欄。
@@ -36,8 +38,10 @@ pub struct CardText {
     pub research: &'static str,
     /// 只在 flag／mild 卡。
     pub badge: Option<Badge>,
-    /// 「看研究」展開的文獻 key（見 `evidence.rs`）。
+    /// 研究欄所依據的文獻 key（見 `evidence.rs`）；徽章 reach 以這些為準。
     pub refs: &'static [&'static str],
+    /// 延伸閱讀（研究欄提及但不作為徽章依據，例如只讀到摘要者）。
+    pub further: &'static [&'static str],
     /// 可以試試看（flag／mild：1–3 個；ok：空）。
     pub adjustments: &'static [Adjustment],
 }
@@ -83,34 +87,54 @@ const fn no_research(limitation: &'static str) -> Option<Badge> {
     })
 }
 
+const fn direct(limitation: &'static str) -> Option<Badge> {
+    Some(Badge {
+        reach: Reach::Direct,
+        limitation,
+    })
+}
+
 const NO_ADJ: &[Adjustment] = &[];
 
 const ADJ_SWAP_PILLOW: Adjustment = adj("swap_pillow", "試著把枕頭換到床的另一頭，睡幾晚看看。");
 const ADJ_CLOSE_DOOR_NIGHT: Adjustment = adj("close_door", "睡覺時把房門關上。");
 
-const R_PROSPECT_REFUGE: &[&str] = &["dosen_ostwald2016"];
-const R_CURVE: &[&str] = &["bar_neta2006", "chuquichambi2022", "furniture2025"];
-const R_CLUTTER: &[&str] = &["saxbe_repetti2010", "roster2016"];
-const R_ENCLOSURE: &[&str] = &["fich2014"];
+const R_NONE: &[&str] = &[];
+const R_PROSPECT_REFUGE: &[&str] = &["dosen2016"];
+const R_BED_PLACEMENT: &[&str] = &["dosen2016", "sporrle2010"];
+const R_SPORRLE: &[&str] = &["sporrle2010"];
+const R_SEAT_BACK: &[&str] = &["dosen2016", "psathiti2017"];
+const R_SEAT_VIEW: &[&str] = &["psathiti2017", "sailer2021"];
+const R_PSATHITI: &[&str] = &["psathiti2017"];
+const R_CURVE: &[&str] = &["barneta2006", "chuquichambi2022", "chuquichambi2025"];
+const R_CLUTTER: &[&str] = &["saxbe2010"];
 const R_VIEW: &[&str] = &["stevenson2018", "ulrich1984"];
 const R_DAYLIGHT: &[&str] = &["boubekri2014"];
-const R_NONE: &[&str] = &[];
+const R_NIGHT_LIGHT: &[&str] = &["mason2022", "sweeney2023"];
 
-const RESEARCH_BED_BACK: &str = "瞭望－庇護理論認為人偏好背後有遮蔽的位置。統合分析整理這類研究後認為結果不一致；這些研究測的是對景觀與座位的偏好評分，目前沒有研究測過床位與睡眠。";
-const RESEARCH_BED_CORNER: &str = "曲線偏好的研究顯示，人平均略偏好曲線圖形，但用的多是抽象圖形；2025 年一篇用真實桌椅的研究沒有重現這個偏好。目前沒有研究測過尖角與睡眠。";
-const RESEARCH_SEAT_CORNER: &str = "曲線偏好的研究顯示，人平均略偏好曲線圖形，但用的多是抽象圖形；2025 年一篇用真實桌椅的研究沒有重現這個偏好。目前沒有研究測過尖角與專注。";
-const RESEARCH_BED_CLUTTER: &str = "有研究分析人導覽自家時的描述用語，把家說得較雜亂的人，一天中的壓力荷爾蒙型態與情緒較差；另有問卷研究發現雜物程度與幸福感有關。兩者都只有相關、不能推論因果，也沒有測過床底。";
-const RESEARCH_SEAT_CLUTTER: &str = "有研究分析人導覽自家時的描述用語，把家說得較雜亂的人，一天中的壓力荷爾蒙型態與情緒較差；另有問卷研究發現雜物程度與幸福感有關。兩者都只有相關、不能推論因果，也沒有測過桌面。";
-const RESEARCH_BEAM: &str = "目前沒有研究直接測過橫樑。有一篇虛擬實境研究比較開放與封閉的房間對壓力反應的影響，操弄的是房間開口，不是樑，這裡只列為延伸閱讀。";
-const RESEARCH_BED_LIGHT: &str = "有研究比較有窗與無窗辦公室的員工，有窗的人睡眠自評較好，測的是白天光照。夜間光線與睡眠的具名文獻還在整理；也沒有研究測過明廳暗房這個說法。";
-const RESEARCH_SEAT_LIGHT: &str = "有研究比較有窗與無窗辦公室的員工，有窗的人睡眠自評較好，但樣本小、不是隨機分組。目前沒有研究直接測過座位自然光與專心。";
-const RESEARCH_SEAT_BACK: &str = "瞭望－庇護理論認為人偏好背後有遮蔽的座位。統合分析整理這類研究後認為結果不一致；這些研究測的是座位偏好評分，不是壓力或專注。";
-const RESEARCH_SEAT_FRONT: &str = "注意力恢復研究的統合分析顯示，接觸自然環境對注意力測驗有小幅效果，研究之間差異大；另有醫院研究比較窗外看得到樹的病人。這些研究都沒有測過座位面牆。";
+const F_NONE: &[&str] = &[];
+const F_BONIN: &[&str] = &["bonin2023"];
+const F_SAILER: &[&str] = &["sailer2021"];
+const F_CURVE: &[&str] = &["vartanian2013"];
+const F_OVERHEAD: &[&str] = &["meyerslevy2007", "fich2014"];
+const F_NIGHT_LIGHT: &[&str] = &["xu2023"];
 
-const LIM_BED_BACK: &str = "測的是景觀與座位偏好，結果不一致；沒有床位研究";
-const LIM_CORNER: &str = "測的是圖形偏好評分，真實家具研究沒有重現";
-const LIM_CLUTTER: &str = "測的是對整個家的描述與壓力荷爾蒙、情緒，只有相關";
-const LIM_SEAT_BACK: &str = "測的是座位偏好評分，不是壓力或專注";
+const RESEARCH_BED_BACK: &str = "瞭望－庇護理論認為人偏好背後有遮蔽的位置。整理 34 篇研究的文獻彙整認為結果不一致，「背後有遮蔽」在室內研究多為中性；這些研究測的是空間偏好評分，目前沒有研究測過床頭與睡眠。";
+const RESEARCH_BED_CORNER: &str = "看圖片的研究中，人平均較喜歡曲線版本的物件；但統合分析裡，室內空間類圖片的效果為零，2025 年用真實桌椅照片的研究也沒有曲線偏好。目前沒有研究測過尖角朝著人或睡眠。";
+const RESEARCH_SEAT_CORNER: &str = "看圖片的研究中，人平均較喜歡曲線版本的物件；但統合分析裡，室內空間類圖片的效果為零，2025 年用真實桌椅照片的研究也沒有曲線偏好。目前沒有研究測過尖角朝著人或專注。";
+const RESEARCH_BED_CLUTTER: &str = "有研究分析 30 對夫妻導覽自家時的用語，把家說得較雜亂、待整修的妻子，一天中的壓力荷爾蒙型態與情緒較差，丈夫沒有這個現象。只有相關、不能推論因果，也沒有測過床底。";
+const RESEARCH_SEAT_CLUTTER: &str = "有研究分析 30 對夫妻導覽自家時的用語，把家說得較雜亂、待整修的妻子，一天中的壓力荷爾蒙型態與情緒較差，丈夫沒有這個現象。只有相關、不能推論因果，也沒有測過桌面。";
+const RESEARCH_BED_OVERHEAD: &str = "目前沒有研究直接測過橫樑或床上方的重物。延伸閱讀：天花板高度的實驗中，低天花板加上頭頂吊燈籠，情緒與舒適感評分沒有差異；另一篇虛擬實境研究操弄的是牆面開口，不是頭頂。";
+const RESEARCH_SEAT_OVERHEAD: &str = "目前沒有研究直接測過橫樑。延伸閱讀：天花板高度的實驗中，低天花板加上頭頂吊燈籠，情緒與舒適感評分沒有差異；另一篇虛擬實境研究操弄的是牆面開口，不是頭頂。";
+const RESEARCH_BED_LIGHT: &str = "一項 20 人的實驗中，開著室內燈睡一晚，深睡與快速動眼期的比例較低、夜間心率較高。但「外面照進來的光」在一項近 4.8 萬人的問卷研究中，與多數睡眠指標無關。沒有研究測過明廳暗房這個說法。";
+const RESEARCH_SEAT_LIGHT: &str = "一項 49 人的研究比較有窗與無窗辦公室的員工，有窗的人工作時光照較多、睡得較長；樣本小、不是隨機分組。目前沒有研究直接測過座位自然光與專心。";
+const RESEARCH_SEAT_BACK: &str = "瞭望－庇護研究測的是空間偏好評分，結果不一致。一項休息室觀察研究測座位使用率，背向走道的座位反而最常被坐，和風水的方向相反；那篇沒有測背後靠牆。這些研究都沒有測壓力或專注。";
+const RESEARCH_SEAT_FRONT: &str = "注意力恢復研究的統合分析顯示，接觸自然環境後，部分認知測驗有小到中度的改善；另一項病歷研究中，窗外看到樹的術後病人比看到磚牆的住院略短。這些研究都沒有測過書桌直接面牆。";
+
+const LIM_BED_BACK_PLACEMENT: &str = "測的是空間偏好與平面圖擺床偏好，不是睡眠";
+const LIM_CORNER: &str = "測的是看圖片的喜歡評分；室內空間類效果為零";
+const LIM_CLUTTER: &str = "測的是導覽用字與妻子的壓力荷爾蒙、情緒，只有相關";
+const LIM_SEAT_BACK: &str = "測的是座位使用率與偏好評分，不是壓力或專注";
 
 pub static CARDS: &[CardText] = &[
   // ═══ 臥室 ═══
@@ -124,6 +148,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_BACK,
     badge: None,
     refs: R_PROSPECT_REFUGE,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -131,9 +156,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("window"),
     fengshui: "風水的說法是床頭靠窗等於「沒有靠」，風水師常認為容易睡不安穩、心神不寧；也有人只建議晚上把窗簾拉上。各家說法不一。",
-    research: RESEARCH_BED_BACK,
-    badge: related(LIM_BED_BACK),
-    refs: R_PROSPECT_REFUGE,
+    research: "瞭望－庇護研究測的是空間偏好評分，結果不一致。一項 138 人在平面圖上擺床的實驗中，對面牆有窗時，把床頭貼著那面牆的人從 81% 降到 59%。兩者都沒有測睡眠。",
+    badge: related(LIM_BED_BACK_PLACEMENT),
+    refs: R_BED_PLACEMENT,
+    further: F_NONE,
     adjustments: &[
       adj("draw_curtain", "睡前把現有的窗簾拉好，讓床頭後面多一層遮擋。"),
       ADJ_SWAP_PILLOW,
@@ -146,8 +172,9 @@ pub static CARDS: &[CardText] = &[
     variant: Some("passage"),
     fengshui: "風水的說法是床頭後面是門或走道，背後有人走動、沒有依靠，睡覺時不易放鬆、睡不安穩。",
     research: RESEARCH_BED_BACK,
-    badge: related(LIM_BED_BACK),
+    badge: related("測的是空間偏好評分；沒有研究測過床頭靠門或走道"),
     refs: R_PROSPECT_REFUGE,
+    further: F_NONE,
     adjustments: &[
       adj("close_back_door", "睡覺時把床頭後面的門關上。"),
       ADJ_SWAP_PILLOW,
@@ -159,9 +186,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("floating"),
     fengshui: "風水的說法是床頭沒靠牆、四面懸空，等於「沒有靠」，容易睡不安穩、心神不寧。",
-    research: RESEARCH_BED_BACK,
-    badge: related(LIM_BED_BACK),
-    refs: R_PROSPECT_REFUGE,
+    research: "瞭望－庇護研究測的是空間偏好評分，結果不一致。一項 138 人在平面圖上擺床的實驗中，70% 把床頭貼緊離門最遠的那面牆。這是想像中的擺法，兩者都沒有測睡眠。",
+    badge: related("測的是想像中的擺床偏好，不是睡眠"),
+    refs: R_BED_PLACEMENT,
+    further: F_NONE,
     adjustments: &[
       adj("move_bed_push", "把床頭推近最近的實牆；量力而為，不要獨自搬重物。"),
       adj("move_cabinet_back", "用現有的矮櫃或書櫃擋在床頭後方；量力而為，不要獨自搬重物。"),
@@ -173,9 +201,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Ok,
     variant: None,
     fengshui: "風水師常建議躺在床上看得到房門、但床不要正對門，門在斜前方是常見的理想位置。你的配置符合這個常見建議。",
-    research: "有些研究顯示人偏好看得到入口的位置，但結果不一致；這些研究測的是座位與景觀偏好，不是睡眠。",
+    research: "一項 138 人的實驗請受試者在平面圖上擺床，83% 選擇躺著看得到門的位置；測的是想像中的擺床偏好，不是睡眠。",
     badge: None,
-    refs: R_PROSPECT_REFUGE,
+    refs: R_SPORRLE,
+    further: F_BONIN,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -183,9 +212,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("facing"),
     fengshui: "風水的說法是床尾不要正對房門，傳統上帶有不好的聯想；風水師常建議避開，認為容易睡不安穩。各家理由不一。",
-    research: "目前沒有研究直接測過床尾對門。",
-    badge: no_research("沒有研究測過床尾與房門的相對位置，也沒有睡眠資料"),
-    refs: R_NONE,
+    research: "唯一相近的研究結果方向相反：一項 138 人的平面圖擺床實驗中，多數人選的位置正是床尾朝向門所在的那面牆。但平面圖不能斜擺，分不出正對與斜對；測的是擺床偏好，不是睡眠。",
+    badge: related("測的是擺床偏好，結果方向與風水相反；不是睡眠"),
+    refs: R_SPORRLE,
+    further: F_NONE,
     adjustments: &[
       ADJ_CLOSE_DOOR_NIGHT,
       adj("move_bed_shift", "把床稍微挪開，讓床尾不正對門口；量力而為，不要獨自搬重物。"),
@@ -196,9 +226,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("hidden"),
     fengshui: "風水的說法是躺著看不到房門，對進出的動靜沒有掌握，容易心神不寧、不易放鬆。",
-    research: "瞭望－庇護研究裡「看得到入口」這一半，支持的結果比「背後有遮蔽」稍多，但整體仍不一致；測的是座位與景觀偏好評分，目前沒有研究測過床位與睡眠。",
-    badge: related("測的是座位與景觀偏好，不是睡眠；結果不一致"),
-    refs: R_PROSPECT_REFUGE,
+    research: "一項 138 人的實驗直接測過：在平面圖上擺床時，83% 選擇躺著看得到門的位置。2023 年一項重現研究的摘要稱結果相近，全文還沒讀到。這些都是想像中的擺法，沒有測睡眠。",
+    badge: direct("測的是在平面圖上擺床的偏好，不是睡眠"),
+    refs: R_SPORRLE,
+    further: F_BONIN,
     adjustments: &[
       ADJ_CLOSE_DOOR_NIGHT,
       adj("turn_head", "換個方向睡幾晚，讓躺著時門在視線內。"),
@@ -210,9 +241,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Ok,
     variant: None,
     fengshui: "風水的說法是床的正上方不要有橫樑或重物。你的床上方淨空，符合這個常見建議。",
-    research: RESEARCH_BEAM,
+    research: RESEARCH_BED_OVERHEAD,
     badge: None,
-    refs: R_ENCLOSURE,
+    refs: R_NONE,
+    further: F_OVERHEAD,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -220,9 +252,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("beam"),
     fengshui: "風水稱為「樑壓床」，也有人叫「壓樑煞」，說法是樑橫在床上方讓人有壓迫感、睡不安穩。樑的位置要多正才算，各家說法不一。",
-    research: RESEARCH_BEAM,
-    badge: no_research("沒有研究測過橫樑；封閉空間研究操弄的是房間開口"),
-    refs: R_ENCLOSURE,
+    research: RESEARCH_BED_OVERHEAD,
+    badge: no_research("沒有研究測過橫樑；天花板高度研究沒測到舒適感差異"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
     adjustments: &[
       ADJ_SWAP_PILLOW,
       adj("move_bed_beam", "把床挪到樑不在正上方的位置；量力而為，不要獨自搬重物。"),
@@ -233,9 +266,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("heavy"),
     fengshui: "風水的說法是頭頂上方有吊櫃、層板或大型吊燈，像有東西懸在上方，容易心神不寧、不易放鬆。",
-    research: "目前沒有研究直接測過床上方的吊櫃、層板或吊燈。有一篇虛擬實境研究比較開放與封閉的房間，操弄的是房間開口，這裡只列為延伸閱讀。",
-    badge: no_research("沒有研究測過頭頂重物；封閉空間研究操弄的是房間開口"),
-    refs: R_ENCLOSURE,
+    research: RESEARCH_BED_OVERHEAD,
+    badge: no_research("沒有研究測過頭頂重物；天花板高度研究沒測到舒適感差異"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
     adjustments: &[
       adj("lower_items", "把層板或吊櫃上較重的東西移到低處。"),
       ADJ_SWAP_PILLOW,
@@ -250,6 +284,7 @@ pub static CARDS: &[CardText] = &[
     research: "目前沒有研究直接測過鏡子和睡眠。",
     badge: None,
     refs: R_NONE,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -260,6 +295,7 @@ pub static CARDS: &[CardText] = &[
     research: "目前沒有研究直接測過臥室鏡子和睡眠。",
     badge: no_research("沒有研究測過臥室鏡子與睡眠"),
     refs: R_NONE,
+    further: F_NONE,
     adjustments: &[
       adj("cover_mirror", "睡前用現有的布或毛巾把鏡子蓋起來。"),
       adj("turn_mirror", "如果是可移動的立鏡，轉個方向讓它照不到床。"),
@@ -274,6 +310,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_CORNER,
     badge: None,
     refs: R_CURVE,
+    further: F_CURVE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -284,6 +321,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_CORNER,
     badge: related(LIM_CORNER),
     refs: R_CURVE,
+    further: F_CURVE,
     adjustments: &[
       adj("move_cabinet_turn", "把櫃子稍微轉向或挪開，讓角不朝著床；量力而為，不要獨自搬重物。"),
       adj("block_corner", "用現有的盆栽或小家具擋在尖角前面。"),
@@ -298,6 +336,7 @@ pub static CARDS: &[CardText] = &[
     research: "目前沒有研究直接測過門對門。",
     badge: None,
     refs: R_NONE,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -308,6 +347,7 @@ pub static CARDS: &[CardText] = &[
     research: "目前沒有研究直接測過門對門。",
     badge: no_research("沒有研究測過門對門的配置"),
     refs: R_NONE,
+    further: F_NONE,
     adjustments: &[
       adj("close_door_daily", "平常把房門關上。"),
       adj("hang_cloth", "如果家裡有現成的布簾，可以掛在房門內側。"),
@@ -321,7 +361,8 @@ pub static CARDS: &[CardText] = &[
     fengshui: "風水常說「明廳暗房」，臥室宜暗。風水講的明廳暗房不是指夜間遮光，這裡問的是相近但不同的事。你的房間晚上能暗下來。",
     research: RESEARCH_BED_LIGHT,
     badge: None,
-    refs: R_DAYLIGHT,
+    refs: R_NIGHT_LIGHT,
+    further: F_NIGHT_LIGHT,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -330,8 +371,9 @@ pub static CARDS: &[CardText] = &[
     variant: None,
     fengshui: "風水常說「明廳暗房」，臥室宜暗、利於休息。風水講的明廳暗房不是指夜間遮光，這裡問的是相近但不同的事。",
     research: RESEARCH_BED_LIGHT,
-    badge: related("相關研究測的是白天光照與睡眠；題目與風水原意不同"),
-    refs: R_DAYLIGHT,
+    badge: related("測的是開燈睡與睡眠；外面照進來的光結果偏弱"),
+    refs: R_NIGHT_LIGHT,
+    further: F_NIGHT_LIGHT,
     adjustments: &[
       adj("draw_curtain_tight", "睡前把現有的窗簾拉緊，縫隙用夾子夾住。"),
       adj("cover_leds", "把會發光的充電器、指示燈轉向或用東西蓋住。"),
@@ -346,6 +388,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_CLUTTER,
     badge: None,
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -356,6 +399,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_CLUTTER,
     badge: related(LIM_CLUTTER),
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: &[
       adj("tidy_corner", "挑床邊一小區，先整理十分鐘就好。"),
       adj("clear_under_bed", "把床底的東西清出一格空位。"),
@@ -369,6 +413,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_BED_CLUTTER,
     badge: related(LIM_CLUTTER),
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: &[
       adj("tidy_corner", "先整理床邊一小區，不用一次做完。"),
       adj("group_under_bed", "把床底不常用的東西集中到同一個現有的箱子裡。"),
@@ -385,7 +430,8 @@ pub static CARDS: &[CardText] = &[
     fengshui: "風水的說法是座位背後要有實牆，稱為「有靠」，坐得比較安心。你的座位背後是實牆，符合這個常見建議。",
     research: RESEARCH_SEAT_BACK,
     badge: None,
-    refs: R_PROSPECT_REFUGE,
+    refs: R_SEAT_BACK,
+    further: F_SAILER,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -395,7 +441,8 @@ pub static CARDS: &[CardText] = &[
     fengshui: "風水的說法是座位背後是窗等於「沒有靠」，容易心神不寧、不易專心。也有人認為只要窗簾拉上就好，各家說法不一。",
     research: RESEARCH_SEAT_BACK,
     badge: related(LIM_SEAT_BACK),
-    refs: R_PROSPECT_REFUGE,
+    refs: R_SEAT_BACK,
+    further: F_SAILER,
     adjustments: &[
       adj("half_curtain", "工作時把背後現有的窗簾拉上一半。"),
       adj("move_desk_wall", "試著把桌椅轉個方向，讓背後靠牆；量力而為，不要獨自搬重物。"),
@@ -408,7 +455,8 @@ pub static CARDS: &[CardText] = &[
     fengshui: "風水的說法是座位背後是門或走道，身後有人走動，容易分心、不易放鬆。",
     research: RESEARCH_SEAT_BACK,
     badge: related(LIM_SEAT_BACK),
-    refs: R_PROSPECT_REFUGE,
+    refs: R_SEAT_BACK,
+    further: F_SAILER,
     adjustments: &[
       adj("close_back_door", "工作時把背後的門關上。"),
       adj("move_shelf_back", "把現有的書櫃或櫃子移到座位後方；量力而為，不要獨自搬重物。"),
@@ -420,9 +468,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Ok,
     variant: None,
     fengshui: "風水師常建議坐著時房門在視線內、但不要正對門。你的座位符合這個常見建議。",
-    research: "有些研究顯示人偏好看得到入口的座位，但結果不一致；這些研究測的是座位偏好評分，不是專注。",
+    research: "相近的研究測的是座位使用率與「面向整個房間」的自評專注，不是門本身；一項觀察研究中，正面對著主要走道的座位較少人坐。結果方向不一。",
     badge: None,
-    refs: R_PROSPECT_REFUGE,
+    refs: R_SEAT_VIEW,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -430,9 +479,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("facing"),
     fengshui: "風水的說法是座位正對房門，進出的人直衝而來，容易分心、心神不寧。",
-    research: "目前沒有研究直接測過座位正對門。",
-    badge: no_research("沒有研究測過座位正對門，也沒有專注方面的資料"),
-    refs: R_NONE,
+    research: "唯一相近的是一項休息室觀察研究：正面直視主要走道的座位，比背向走道的少人坐。方向和風水說法一致，但對象是走道不是門，測的是座位使用率，不是專注。",
+    badge: related("測的是座位使用率，對象是走道不是門"),
+    refs: R_PSATHITI,
+    further: F_NONE,
     adjustments: &[
       adj("close_door_work", "工作時把房門關上。"),
       adj("move_desk_angle", "把桌子稍微斜放，讓門在斜前方；量力而為，不要獨自搬重物。"),
@@ -443,9 +493,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: Some("hidden"),
     fengshui: "風水的說法是背對門坐，看不到身後的進出，容易心神不寧、不易專心。",
-    research: "瞭望－庇護研究裡「看得到入口」這一半，支持的結果比「背後有遮蔽」稍多，但整體仍不一致；測的是座位偏好評分，不是壓力或專注。",
-    badge: related(LIM_SEAT_BACK),
-    refs: R_PROSPECT_REFUGE,
+    research: "一項休息室觀察研究中，背向走道的座位反而最常被坐，和風水的方向相反；另一項辦公室研究中，座位越像「面向整個房間」，員工自評越能專注。測的是使用率與自評，不是門本身。",
+    badge: related("測的是座位使用率與自評專注，不是門本身"),
+    refs: R_SEAT_VIEW,
+    further: F_NONE,
     adjustments: &[
       adj("close_door_work", "工作時把房門關上。"),
       adj("move_desk_turn", "把桌子轉個方向，讓門進入視線；量力而為，不要獨自搬重物。"),
@@ -457,9 +508,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Ok,
     variant: None,
     fengshui: "風水的說法是座位上方不要有橫樑。你的座位上方沒有外露的樑，符合這個常見建議。",
-    research: RESEARCH_BEAM,
+    research: RESEARCH_SEAT_OVERHEAD,
     badge: None,
-    refs: R_ENCLOSURE,
+    refs: R_NONE,
+    further: F_OVERHEAD,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -467,9 +519,10 @@ pub static CARDS: &[CardText] = &[
     status: Status::Flag,
     variant: None,
     fengshui: "風水稱為「樑壓」，也有人叫「壓樑煞」，說法是坐在樑下讓人有壓迫感、容易分心。各家說法不一。",
-    research: RESEARCH_BEAM,
-    badge: no_research("沒有研究測過橫樑；封閉空間研究操弄的是房間開口"),
-    refs: R_ENCLOSURE,
+    research: RESEARCH_SEAT_OVERHEAD,
+    badge: no_research("沒有研究測過橫樑；天花板高度研究沒測到舒適感差異"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
     adjustments: &[
       adj("shift_chair", "把椅子往旁邊挪一點，坐的位置避開樑的正下方。"),
       adj("move_desk_beam", "把桌子移到樑不在正上方的位置；量力而為，不要獨自搬重物。"),
@@ -484,6 +537,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_FRONT,
     badge: None,
     refs: R_VIEW,
+    further: F_SAILER,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -492,8 +546,9 @@ pub static CARDS: &[CardText] = &[
     variant: None,
     fengshui: "風水稱座位前方為「明堂」，說法是前方直接面對很近的牆，明堂太窄，容易覺得侷促、不易專心。",
     research: RESEARCH_SEAT_FRONT,
-    badge: related("測的是自然景觀與注意力，效果小、差異大；沒有測面牆"),
+    badge: related("測的是自然景觀與認知測驗、術後恢復；沒有測面牆"),
     refs: R_VIEW,
+    further: F_SAILER,
     adjustments: &[
       adj("clear_wall", "把桌前牆面上的東西清掉一些，留一點空白。"),
       adj("move_desk_open", "把桌子轉向窗或房間較開闊的一側；量力而為，不要獨自搬重物。"),
@@ -508,6 +563,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_CORNER,
     badge: None,
     refs: R_CURVE,
+    further: F_CURVE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -518,6 +574,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_CORNER,
     badge: related(LIM_CORNER),
     refs: R_CURVE,
+    further: F_CURVE,
     adjustments: &[
       adj("shift_chair_corner", "把椅子挪一點，讓尖角不正對著你。"),
       adj("block_corner", "用現有的盆栽或小家具擋在尖角前面。"),
@@ -532,6 +589,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_LIGHT,
     badge: None,
     refs: R_DAYLIGHT,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -540,8 +598,9 @@ pub static CARDS: &[CardText] = &[
     variant: None,
     fengshui: "風水師常建議書桌要採光充足、明亮，認為光線昏暗讓人精神不振、不易專心。",
     research: RESEARCH_SEAT_LIGHT,
-    badge: related("測的是有窗與睡眠，樣本小；沒有測專心"),
+    badge: related("測的是睡眠與自評生活品質，不是專心"),
     refs: R_DAYLIGHT,
+    further: F_NONE,
     adjustments: &[
       adj("open_curtain", "白天工作時把窗簾拉開。"),
       adj("move_desk_window", "把座位往窗邊挪一點；量力而為，不要獨自搬重物。"),
@@ -556,6 +615,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_CLUTTER,
     badge: None,
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: NO_ADJ,
   },
   CardText {
@@ -566,6 +626,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_CLUTTER,
     badge: related(LIM_CLUTTER),
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: &[
       adj("clear_desk_zone", "先清出桌面正前方一個手臂寬的空間。"),
       adj("tidy_ten_min", "收工前花十分鐘，把桌面的東西歸位。"),
@@ -579,6 +640,7 @@ pub static CARDS: &[CardText] = &[
     research: RESEARCH_SEAT_CLUTTER,
     badge: related(LIM_CLUTTER),
     refs: R_CLUTTER,
+    further: F_NONE,
     adjustments: &[
       adj("clear_desk_zone", "先清出桌面正前方一個手臂寬的空間。"),
       adj("group_items", "把散在桌上的東西先集中到一個現有的盒子裡。"),
@@ -605,7 +667,7 @@ pub const OPENING: &str = "每一項會並列風水的說法和相關研究。�
 // ── §2.5 結果最後的說明卡 ──
 pub const EXPLAINER_TITLE: &str = "關於這些說法和研究";
 pub const EXPLAINER: [&str; 4] = [
-  "目前唯一直接比較過風水佈置的實驗，是 Zijlstra 等人 2024 年發表在 PLOS ONE 的研究：558 人在線上看虛擬病房，風水佈置讓房間顯得較愉悅，對焦慮沒有直接效果。限制是線上進行、看的是虛擬房間。",
+  "目前唯一直接比較過風水佈置的實驗，是 Zijlstra 等人 2024 年發表在 PLOS ONE 的研究：558 人在線上看病房的影片與圖片，風水佈置讓房間顯得較愉悅，對焦慮沒有直接效果。限制是線上進行、不是真實住院，而且 15 處同時改動，看不出是哪一項起作用；共同作者之一隸屬國際風水協會。",
   "「預測大腦」是一種看待心智的理論：大腦不斷預測接下來會發生什麼，再拿實際情況來對答案。這裡只把它當成解讀框架，它不是證據，也沒有研究用它檢驗過任何一條風水說法。",
   "你剛剛翻卡前的猜測和答案的落差，就是一次預測誤差。",
   "你的預期本身也會影響你的感受。想自己試一個調整時，可以先把預期寫下來，再回頭對照。",
@@ -1009,10 +1071,7 @@ mod tests {
 
     #[test]
     fn t3_light_items_disclose_question_differs() {
-        for c in CARDS
-            .iter()
-            .filter(|c| c.item_id == "bed_light")
-        {
+        for c in CARDS.iter().filter(|c| c.item_id == "bed_light") {
             assert!(
                 c.fengshui.contains("這裡問的是相近但不同的事"),
                 "{}",
@@ -1067,9 +1126,12 @@ mod tests {
             (true, None) => return Some("flag/mild card needs a badge".into()),
             _ => {}
         }
-        for r in c.refs {
+        for r in c.refs.iter().chain(c.further) {
             if evidence_by_key(r).is_none() {
                 return Some(format!("unknown evidence key {r}"));
+            }
+            if c.refs.contains(r) && c.further.contains(r) {
+                return Some(format!("{r} in both refs and further"));
             }
         }
         if let Some(b) = c.badge {
@@ -1111,12 +1173,20 @@ mod tests {
 
     #[test]
     fn t6_direct_requires_full_text_read() {
-        let mut c = *card_text("bed_back", Status::Flag, Some("window")).unwrap();
-        c.badge = Some(Badge {
-            reach: Reach::Direct,
-            limitation: "測試",
-        });
-        // 帳本目前全為 false → 升 direct 必被擋
+        // 現行唯一的 direct 卡：所引文獻都已讀全文
+        let real = card_text("bed_door_view", Status::Flag, Some("hidden")).unwrap();
+        assert_eq!(real.badge.map(|b| b.reach), Some(Reach::Direct));
+        assert_eq!(badge_violation(real), None);
+        assert!(real
+            .refs
+            .iter()
+            .all(|r| evidence_by_key(r).unwrap().full_text_read));
+        // 把未讀全文的文獻（Bonin 2023）移進 refs → 必被擋
+        let mut c = *real;
+        c.refs = &["sporrle2010", "bonin2023"];
+        c.further = &[];
+        assert!(badge_violation(&c).is_some());
+        c.refs = &[];
         assert!(badge_violation(&c).is_some());
         c.refs = &["no_such_paper"];
         assert!(badge_violation(&c).is_some());
@@ -1136,8 +1206,8 @@ mod tests {
             ("bed_back", Some("window"), Related),
             ("bed_back", Some("passage"), Related),
             ("bed_back", Some("floating"), Related),
-            ("bed_door_view", Some("hidden"), Related),
-            ("bed_door_view", Some("facing"), NoResearch),
+            ("bed_door_view", Some("hidden"), Direct),
+            ("bed_door_view", Some("facing"), Related),
             ("bed_overhead", Some("beam"), NoResearch),
             ("bed_overhead", Some("heavy"), NoResearch),
             ("bed_mirror", None, NoResearch),
@@ -1148,7 +1218,7 @@ mod tests {
             ("seat_back", Some("window"), Related),
             ("seat_back", Some("passage"), Related),
             ("seat_door_view", Some("hidden"), Related),
-            ("seat_door_view", Some("facing"), NoResearch),
+            ("seat_door_view", Some("facing"), Related),
             ("seat_overhead", None, NoResearch),
             ("seat_front", None, Related),
             ("seat_corner", None, Related),
@@ -1163,10 +1233,30 @@ mod tests {
                 assert_eq!(c.badge.map(|b| b.reach), Some(*reach), "{}", c.key());
             }
         }
-        // spec §2.3：目前沒有任何一張卡達到 direct
-        assert!(CARDS
+        // spec §2.3（2026-11-18 依證據帳本＋站長裁示）：只有 bed_door_view hidden 是 direct
+        let directs: Vec<String> = CARDS
             .iter()
-            .all(|c| c.badge.map(|b| b.reach) != Some(Direct)));
+            .filter(|c| c.badge.map(|b| b.reach) == Some(Direct))
+            .map(|c| c.key())
+            .collect();
+        assert_eq!(directs, vec!["bed_door_view:flag:hidden".to_string()]);
+        let hidden = card_text("bed_door_view", Status::Flag, Some("hidden")).unwrap();
+        assert!(hidden
+            .badge
+            .unwrap()
+            .limitation
+            .contains("測的是在平面圖上擺床的偏好，不是睡眠"));
+    }
+
+    #[test]
+    fn t6_ledger_rejected_papers_not_cited() {
+        // 帳本 §4.1：Roster 2016 未讀不引用；Tamaki 2016 與鏡子無關不引用
+        for c in CARDS {
+            for r in c.refs.iter().chain(c.further) {
+                assert_ne!(*r, "roster2016", "{}", c.key());
+                assert_ne!(*r, "tamaki2016", "{}", c.key());
+            }
+        }
     }
 
     // ── 固定文案形狀 ──
