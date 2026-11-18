@@ -72,7 +72,7 @@ pub static EVIDENCE: &[Evidence] = &[
         design: "Spörrle & Stich 2010 的重現與延伸：法國 2D 平面圖、斯洛伐克 3D 房間圖兩研究",
         n: None,
         outcome: "想像中的擺床位置",
-        limitation: "尚未讀到全文，只見摘要片段；數字未核實",
+        limitation: "只有摘要可讀，細節數字待確認",
         full_text_read: false,
     },
     Evidence {
@@ -152,7 +152,7 @@ pub static EVIDENCE: &[Evidence] = &[
         design: "三個實驗（各 32、100、34 人）：10 呎與 8 呎天花板，以吊掛燈籠提高天花板的顯著性",
         n: None,
         outcome: "思考方式（關聯或具體處理）、自評自由或受限感；補充研究測情緒與舒適感",
-        limitation: "學生樣本、短時停留；補充研究中情緒與舒適評分在各條件間沒有差異；全文來自非官方複本",
+        limitation: "學生樣本、短時停留；補充研究中情緒與舒適評分在各條件間沒有差異",
         full_text_read: true,
     },
     Evidence {
@@ -222,7 +222,7 @@ pub static EVIDENCE: &[Evidence] = &[
         design: "大型世代研究基線資料的橫斷面分析",
         n: Some(47765),
         outcome: "自陳睡覺時的臥室光源與多項自陳睡眠指標",
-        limitation: "橫斷面、皆為自陳；「房外的光」與多數睡眠指標無關；數字經工具代讀、未親自逐字核對",
+        limitation: "橫斷面、皆為自陳；「房外的光」與多數睡眠指標無關；細節數字待確認",
         full_text_read: false,
     },
     Evidence {

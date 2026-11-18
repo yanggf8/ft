@@ -358,7 +358,7 @@ pub static CARDS: &[CardText] = &[
     item_id: "bed_light",
     status: Status::Ok,
     variant: None,
-    fengshui: "風水常說「明廳暗房」，臥室宜暗。風水講的明廳暗房不是指夜間遮光，這裡問的是相近但不同的事。你的房間晚上能暗下來。",
+    fengshui: "風水常說「明廳暗房」：臥室宜暗、光線柔和。這題問的是夜裡外面的光能不能擋住，跟這個說法相近，但不完全一樣。你的房間晚上能暗下來。",
     research: RESEARCH_BED_LIGHT,
     badge: None,
     refs: R_NIGHT_LIGHT,
@@ -369,7 +369,7 @@ pub static CARDS: &[CardText] = &[
     item_id: "bed_light",
     status: Status::Flag,
     variant: None,
-    fengshui: "風水常說「明廳暗房」，臥室宜暗、利於休息。風水講的明廳暗房不是指夜間遮光，這裡問的是相近但不同的事。",
+    fengshui: "風水常說「明廳暗房」：臥室宜暗、光線柔和，利於休息。這題問的是夜裡外面的光能不能擋住，跟這個說法相近，但不完全一樣。",
     research: RESEARCH_BED_LIGHT,
     badge: related("測的是開燈睡與睡眠；外面照進來的光結果偏弱"),
     refs: R_NIGHT_LIGHT,
@@ -1072,11 +1072,7 @@ mod tests {
     #[test]
     fn t3_light_items_disclose_question_differs() {
         for c in CARDS.iter().filter(|c| c.item_id == "bed_light") {
-            assert!(
-                c.fengshui.contains("這裡問的是相近但不同的事"),
-                "{}",
-                c.key()
-            );
+            assert!(c.fengshui.contains("相近，但不完全一樣"), "{}", c.key());
         }
     }
 

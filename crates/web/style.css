@@ -1189,7 +1189,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   background: rgba(10, 23, 51, 0.55); color: var(--silver-dim);
   font-weight: 600; font-size: 0.9rem; line-height: 1.4;
 }
-.fs-opt:hover { border-color: var(--metal-mid); background: rgba(255, 255, 255, 0.07); }
+/* hover 只換框線、底板維持 navy（淺底會吃掉 silver 字；手機點擊後 hover 會黏在下一題同位置） */
+@media (hover: hover) { .fs-opt:not(.selected):hover { border-color: var(--metal-mid); background: rgba(10, 23, 51, 0.7); } }
 .fs-opt:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
 .fs-opt.selected {
   background: linear-gradient(180deg, #f8fafc, #c8d0dc);
