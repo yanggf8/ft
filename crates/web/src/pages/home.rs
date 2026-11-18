@@ -46,6 +46,13 @@ pub fn HomePage() -> impl IntoView {
                     </h3>
                     <p>"拍一張掌心照，AI 抽取掌紋特徵（免出生資料）；教學示意免登入"</p>
                 </A>
+                <A href="/fengshui" attr:class="feature">
+                    <h3>
+                        <span class="feature-icon">"🏠"</span>" 空間風水"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>"臥室或書房的擺設，並列風水的說法與相關研究；先猜研究做到哪了再翻卡（免登入）"</p>
+                </A>
                 <div class="feature">
                     <h3><span class="feature-icon">"🔮"</span>" 紫微斗數"</h3>
                     <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
@@ -68,7 +75,7 @@ pub fn HomePage() -> impl IntoView {
                 </A>
                 <A href="/glossary" attr:class="feature">
                     <h3><span class="feature-icon">"📖"</span>" 名詞解釋"</h3>
-                    <p>"紫微、占星、塔羅、手相、姓名學常見名詞一次看懂"</p>
+                    <p>"紫微、占星、塔羅、手相、姓名學、風水常見名詞一次看懂"</p>
                 </A>
             </div>
         </div>

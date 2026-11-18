@@ -1153,3 +1153,136 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
     align-items: flex-start;
   }
 }
+
+/* ── 空間風水 v1（/fengshui；色彩一律既有 token 與既有 rgba 板，不新增色值）──
+   底板對照（AA 基準＝玻璃合成底）：.fs-opt／.fs-guess 用 quiz-choice 同款 navy .55 板、
+   選取態用 quiz-choice 同款反相鉻板＋ink；.fs-col-research 蓋牌用 ocean-dim 同款 white .04；
+   文字色只用 --text／--heading／--silver-dim／--silver-faint／--ink-on-chrome。 */
+.fs-page { max-width: 960px; }
+.fs-h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+.fs-opening { color: var(--text); line-height: 1.8; margin: 0 0 0.5rem; }
+.fs-local { font-size: 0.875rem; margin: 0 0 1.5rem; }
+.fs-text { color: var(--text); line-height: 1.8; margin: 0 0 0.75rem; }
+.fs-text:last-child { margin-bottom: 0; }
+.fs-rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.fs-room {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem;
+  min-height: 88px; padding: 1.1rem 1.25rem; cursor: pointer; text-align: left;
+  border: 1px solid var(--metal-lo); border-radius: 18px 6px 18px 6px;
+  background: rgba(10, 23, 51, 0.55); color: var(--text);
+}
+.fs-room:hover { border-color: var(--metal-hi); background: rgba(255, 255, 255, 0.07); }
+.fs-room:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.fs-room-name { font-size: 1.15rem; font-weight: 600; color: var(--heading); }
+.fs-room-note { font-size: 0.85rem; color: var(--silver-dim); }
+.fs-clear { font-size: 0.875rem; padding: 0.25rem 0; margin: 0.5rem 0 1rem; }
+
+/* 問答 */
+.fs-quiz-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.fs-q-prompt { font-size: 1.2rem; margin: 0 0 0.35rem; }
+.fs-q-hint { font-size: 0.8125rem; margin: 0 0 1rem; }
+.fs-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.625rem; }
+.fs-opt {
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+  padding: 0.6rem 0.5rem 0.7rem; min-height: 44px; cursor: pointer;
+  border: 1px solid var(--glass-border); border-radius: 10px;
+  background: rgba(10, 23, 51, 0.55); color: var(--silver-dim);
+  font-weight: 600; font-size: 0.9rem; line-height: 1.4;
+}
+.fs-opt:hover { border-color: var(--metal-mid); background: rgba(255, 255, 255, 0.07); }
+.fs-opt:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.fs-opt.selected {
+  background: linear-gradient(180deg, #f8fafc, #c8d0dc);
+  border-color: var(--metal-hi);
+  color: var(--ink-on-chrome);
+}
+.fs-opt-label { text-align: center; }
+.fs-quiz-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
+.fs-quiz-nav .btn-link { padding: 0.5rem 0; min-height: 44px; }
+
+/* 俯視示意圖：線條吃 currentColor；強調件用 --starlight（選取態改 ink） */
+.fs-fig { width: 100%; max-width: 168px; height: auto; display: block; color: var(--silver-faint); }
+.fs-fig rect, .fs-fig line, .fs-fig path, .fs-fig circle, .fs-fig polygon, .fs-fig polyline {
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.fs-fig .fs-wall { stroke-width: 2.5; }
+.fs-fig .fs-wallmark { stroke-width: 5; }
+.fs-fig .fs-door path { stroke-dasharray: 2 2; }
+.fs-fig .fs-dash, .fs-fig .fs-band { stroke-dasharray: 3 2.5; }
+.fs-fig .fs-mirror { stroke-width: 4; }
+.fs-fig .fs-box { fill: currentColor; }
+.fs-fig .fs-sight { fill: currentColor; fill-opacity: 0.12; stroke: none; }
+.fs-fig .fs-hl,
+.fs-fig .fs-hl line,
+.fs-fig .fs-hl path,
+.fs-fig .fs-hl rect { stroke: var(--starlight); }
+.fs-fig .fs-box.fs-hl { fill: var(--starlight); }
+.fs-fig .fs-qmark { fill: currentColor; stroke: none; font-size: 30px; font-weight: 700; }
+.fs-opt.selected .fs-fig { color: var(--ink-on-chrome); }
+.fs-opt.selected .fs-fig .fs-hl,
+.fs-opt.selected .fs-fig .fs-hl line,
+.fs-opt.selected .fs-fig .fs-hl path,
+.fs-opt.selected .fs-fig .fs-hl rect { stroke: var(--ink-on-chrome); }
+.fs-opt.selected .fs-fig .fs-box.fs-hl { fill: var(--ink-on-chrome); }
+
+/* 結果 */
+.fs-result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; margin: 0.5rem 0 0.5rem; }
+.fs-result-actions { display: flex; gap: 1rem; }
+.fs-result-actions .btn-link { padding: 0.5rem 0; }
+.fs-howto { font-size: 0.875rem; margin: 0 0 0.5rem; }
+.fs-skip { font-size: 0.875rem; padding: 0.5rem 0; margin-bottom: 0.75rem; }
+.fs-card-q { margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.fs-card-q strong { color: var(--heading); font-weight: 600; }
+.fs-answer { font-size: 0.85rem; color: var(--silver-dim); }
+.fs-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 720px) {
+  .fs-cols { grid-template-columns: 1fr 1fr; }
+}
+.fs-col { min-width: 0; }
+.fs-col-title { font-size: 1rem; margin: 0 0 0.5rem; }
+.fs-col-research { border-top: 1px solid var(--metal-line); padding-top: 1rem; }
+@media (min-width: 720px) {
+  .fs-col-research { border-top: 0; padding-top: 0; border-left: 1px solid var(--metal-line); padding-left: 1rem; }
+}
+.fs-col-research.fs-covered {
+  border: 1px dashed var(--glass-border); border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); padding: 0.875rem 1rem;
+}
+.fs-guess-prompt { color: var(--text); margin: 0 0 0.6rem; }
+.fs-guess-row { display: grid; grid-template-columns: 1fr; gap: 0.4rem; margin-bottom: 0.75rem; }
+.fs-guess {
+  min-height: 44px; padding: 0.5rem 0.75rem; cursor: pointer; text-align: left;
+  border: 1px solid var(--glass-border); border-radius: 8px;
+  background: rgba(10, 23, 51, 0.55); color: var(--silver-dim); font-weight: 600;
+}
+.fs-guess:hover { border-color: var(--metal-mid); background: rgba(255, 255, 255, 0.07); }
+.fs-guess:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.fs-guess.selected {
+  background: linear-gradient(180deg, #f8fafc, #c8d0dc);
+  border-color: var(--metal-hi);
+  color: var(--ink-on-chrome);
+}
+.fs-flip { width: 100%; }
+.fs-verdict { color: var(--heading); font-weight: 600; margin: 0 0 0.6rem; line-height: 1.6; }
+.fs-badge-wrap { margin: 0 0 0.75rem; }
+.fs-badge {
+  display: inline-block; font-size: 0.85rem; font-weight: 600; color: var(--heading);
+  border: 1px solid var(--metal-lo); border-radius: 999px; padding: 0.15rem 0.7rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+.fs-limit { font-size: 0.85rem; color: var(--silver-dim); margin: 0.35rem 0 0; line-height: 1.6; }
+.fs-refs { margin-top: 0.5rem; }
+.fs-refs summary { cursor: pointer; color: var(--metal-mid); font-size: 0.9rem; padding: 0.35rem 0; }
+.fs-ref-list { margin: 0.5rem 0 0; padding-left: 1.1rem; line-height: 1.7; }
+.fs-ref-list li { margin-bottom: 0.6rem; overflow-wrap: anywhere; }
+.fs-ref-meta { display: block; font-size: 0.8rem; color: var(--silver-dim); }
+.fs-ref-head { font-size: 0.85rem; color: var(--silver-dim); font-weight: 600; margin: 0.75rem 0 0; }
+.fs-ref-empty { font-size: 0.85rem; margin: 0.5rem 0 0; }
+.fs-adj { border-top: 1px solid var(--metal-line); margin-top: 1rem; padding-top: 0.875rem; }
+.fs-adj-title { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.fs-adj ul { margin: 0; padding-left: 1.1rem; line-height: 1.8; color: var(--text); }
+.fs-score-line { font-size: 1.15rem; font-weight: 600; color: var(--heading); margin: 0 0 0.25rem; }
+.fs-group summary { cursor: pointer; color: var(--heading); font-weight: 600; }
+.fs-mini { border-top: 1px solid var(--metal-line); margin-top: 1rem; padding-top: 1rem; }
+.fs-inline-title { color: var(--silver-dim); font-weight: 600; }
+.fs-version { font-size: 0.8rem; margin: 0.5rem 0 0; }

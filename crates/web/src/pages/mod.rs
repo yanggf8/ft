@@ -1,5 +1,6 @@
 mod admin;
 mod divination;
+mod fengshui;
 mod glossary;
 mod home;
 mod login;
@@ -12,6 +13,7 @@ mod tarot;
 
 pub use admin::AdminPage;
 pub use divination::DivinationPage;
+pub use fengshui::FengshuiPage;
 pub use glossary::GlossaryPage;
 pub use home::HomePage;
 pub use login::LoginPage;

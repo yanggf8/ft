@@ -13,6 +13,7 @@ pub enum Category {
     Tarot,
     Palm,
     Naming,
+    Fengshui,
 }
 
 impl Category {
@@ -24,6 +25,7 @@ impl Category {
             Category::Tarot => "塔羅",
             Category::Palm => "手相",
             Category::Naming => "姓名學",
+            Category::Fengshui => "風水",
         }
     }
 }
@@ -41,7 +43,9 @@ pub struct Term {
 /// 2026-10-28 glossary-1.3：加手相 9 條（手相 v1 同日上線））。
 /// 2026-10-31 glossary-1.4：新增「自我探索」分類＋興趣探索 2 條（興趣探索 spec §4.3）。
 /// 2026-11-17 glossary-1.5：興趣探索下架（站長裁示），移除「自我探索」分類與其 2 條。
-pub const GLOSSARY_VERSION: &str = "glossary-1.5";
+/// 2026-11-18 glossary-1.6：新增「風水」分類 10 條（空間風水 v1 Batch 2；風水詞條用引述
+/// 語氣、研究詞條照實，避開 spec §2.6 禁用詞）。
+pub const GLOSSARY_VERSION: &str = "glossary-1.6";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -240,5 +244,56 @@ pub static TERMS: &[Term] = &[
         term: "81 數理",
         category: Category::Naming,
         def: "1 至 81 每個數字各有吉凶定評，超過 81 減 80 循環查表。",
+    },
+    // 風水（空間風水 v1；風水詞條為引述，不代表本站背書）
+    Term {
+        term: "有靠",
+        category: Category::Fengshui,
+        def: "風水用語。風水的說法是床頭或座位背後要有實牆，像有靠山一樣，睡或坐起來比較安穩。",
+    },
+    Term {
+        term: "樑壓",
+        category: Category::Fengshui,
+        def: "風水用語，也稱樑壓床、壓樑。風水的說法是床或座位正上方有外露的橫樑，會讓人有壓迫感、不易放鬆；目前沒有研究直接測過。",
+    },
+    Term {
+        term: "明堂",
+        category: Category::Fengshui,
+        def: "風水用語，指房屋或座位前方的空間。風水的說法是座位前方宜開闊，前方直接面對很近的牆就是明堂太窄。",
+    },
+    Term {
+        term: "門對門",
+        category: Category::Fengshui,
+        def: "風水用語。風水的說法是兩扇房門正對，進出的動靜互相干擾，讓人不易放鬆；嚴重程度各家說法不一。",
+    },
+    Term {
+        term: "壁刀",
+        category: Category::Fengshui,
+        def: "風水用語，也稱角煞，指柱角、牆角或櫃角的尖端朝著床或座位。風水的說法是會讓人心神不寧、不易放鬆。",
+    },
+    Term {
+        term: "明廳暗房",
+        category: Category::Fengshui,
+        def: "風水用語。風水的說法是客廳宜明亮、臥室宜較暗，利於休息；原意講的是採光配置，不是夜間遮光。",
+    },
+    Term {
+        term: "瞭望－庇護",
+        category: Category::Fengshui,
+        def: "環境心理學理論（Appleton 1975）：人偏好既能看得見外面、背後又有遮蔽的位置。相關研究多測照片或場景的偏好評分，室內研究結果不一致。",
+    },
+    Term {
+        term: "注意力恢復理論",
+        category: Category::Fengshui,
+        def: "環境心理學理論：接觸自然環境能讓需要刻意專注的注意力恢復。統合分析顯示部分認知測驗有小到中度改善，沒有研究測過書桌面牆。",
+    },
+    Term {
+        term: "預測大腦",
+        category: Category::Fengshui,
+        def: "一種看待心智的理論（預測處理）：大腦不斷預測接下來會發生什麼，再拿實際情況來對答案。本站只把它當成解讀框架，它不是證據。",
+    },
+    Term {
+        term: "預測誤差",
+        category: Category::Fengshui,
+        def: "預期和實際之間的落差。空間風水的翻卡先猜，就是先猜研究現況、再對答案。",
     },
 ];
