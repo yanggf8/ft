@@ -150,7 +150,7 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 
 - **全案純前端**：`/fengshui` 公開頁，無 API、無 DB、無 migration。答案只存 localStorage `fengshui_room_v1_{room}`；翻卡猜測只在頁面狀態。
 - 純邏輯與語料在 `crates/schema/src/fengshui/`（`ruleset`／`corpus`／`evidence`／`observe`／`date`）；版本常數 `FENGSHUI_ROOM_RULESET_VERSION`、`FENGSHUI_ROOM_CORPUS_VERSION`，使用者可見文字或判定改動必 bump。
-- 卡片並列「風水怎麼說／研究怎麼說」，互不背書；研究徽章＝立場 `stance`（同方向／相反／沒差異或不一致／沒人測過）＋`reach`（direct／related／none）＋limitation，每張作答過的卡（含 ok）都能翻（Batch 2.1，語料版本 2）。預測大腦由「翻卡先猜」（猜研究站在哪一邊）互動承載，卡片內容不得用預測處理補故事。
+- 卡片並列「風水怎麼說／研究怎麼說」，互不背書；研究徽章＝立場 `stance`（同方向／相反／沒差異或不一致／沒人測過）＋`reach`（direct／related／none）＋limitation，每張作答過的卡（含 ok）都能翻（Batch 2.1；語料版本 3）。預測大腦由「翻卡先猜」（猜研究站在哪一邊）互動承載，卡片內容不得用預測處理補故事。
 - `evidence.rs` 是文獻唯一來源（`full_text_read` 由 T6 守門：direct 卡引用文獻必須全讀過）；核對筆記在 `docs/superpowers/reports/fengshui-research/evidence-ledger.md`。
 - 紅線由 `corpus.rs` 測試守門：分段禁用詞（背書／恐嚇／化煞商品／理氣）、「煞」只在風水欄、長度上限。
 - 閘門 A：站長自用後決定是否做 Batch 3（先猜後試，純前端）；API＋DB 版待閘門 B。

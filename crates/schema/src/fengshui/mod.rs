@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 pub const FENGSHUI_ROOM_RULESET_VERSION: &str = "1";
 
 /// 使用者看得到的卡片文字、徽章、limitation、文獻語意改動 → bump（spec §2.7）。
-pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "2";
+pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "3";
 
 /// 房型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -109,7 +109,7 @@ impl Reach {
     pub fn badge_label(&self) -> &'static str {
         match self {
             Reach::Direct => "有研究直接測過這個特徵",
-            Reach::Related => "只有相關的空間研究",
+            Reach::Related => "只有相關研究",
             Reach::NoResearch => "目前沒有研究直接測過",
         }
     }

@@ -688,6 +688,8 @@ pub const REVEAL_ALL_OK: &str =
     "你回答的項目都符合常見風水建議。符合建議不代表研究也站在同一邊，一樣可以猜猜看。";
 pub const LABEL_OK_TAG: &str = "符合常見建議";
 pub const REVEAL_FLIP: &str = "翻開";
+/// 計分下的參考基準（四選一）。
+pub const REVEAL_CHANCE: &str = "隨便猜大約會對 1/4。";
 pub const REVEAL_HIT: &str = "猜對了";
 pub const REVEAL_MISS: &str = "猜錯了";
 pub const REVEAL_SKIP_ALL: &str = "全部直接翻開";
@@ -789,6 +791,7 @@ pub fn fixed_texts() -> Vec<String> {
         REVEAL_ALL_OK,
         LABEL_OK_TAG,
         REVEAL_FLIP,
+        REVEAL_CHANCE,
         REVEAL_HIT,
         REVEAL_MISS,
         REVEAL_SKIP_ALL,

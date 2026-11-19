@@ -15,8 +15,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use ft_schema::fengshui::corpus::{
     reveal_miss_line, reveal_score_line, EXPLAINER, EXPLAINER_TITLE, LABEL_ADJUSTMENTS,
     LABEL_CLEAR_ANSWERS, LABEL_FENGSHUI, LABEL_LOCAL_ONLY, LABEL_OK_TAG, LABEL_RESEARCH,
-    LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP, OPENING, REVEAL_ALL_OK, REVEAL_FLIP, REVEAL_HIT,
-    REVEAL_HOWTO, REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
+    LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP, OPENING, REVEAL_ALL_OK, REVEAL_CHANCE, REVEAL_FLIP,
+    REVEAL_HIT, REVEAL_HOWTO, REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
 };
 use ft_schema::fengshui::{
     assess, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Room, Stance,
@@ -625,8 +625,11 @@ fn flip_card(c: Card, rs: RevealState) -> Option<AnyView> {
             {guess_line.clone()}
             <div class="fs-badge-wrap">
                 <span class="fs-badge">{actual.label()}</span>
-                <span class="fs-badge fs-badge-reach">{badge.reach.badge_label()}</span>
-                <p class="fs-limit">{badge.limitation}</p>
+                // 沒人測過：reach 與 limitation 只會重複同一句，研究欄第一句已說明
+                {(actual != Stance::Untested).then(|| view! {
+                    <span class="fs-badge fs-badge-reach">{badge.reach.badge_label()}</span>
+                    <p class="fs-limit">{badge.limitation}</p>
+                })}
             </div>
             <p class="fs-text">{t.research}</p>
             <details class="fs-refs">
@@ -882,7 +885,10 @@ pub fn FengshuiPage() -> impl IntoView {
             Some(view! {
                 <div class="card fs-score">
                     {if guessed > 0 {
-                        view! { <p class="fs-score-line">{reveal_score_line(correct, guessed)}</p> }.into_any()
+                        view! {
+                            <p class="fs-score-line">{reveal_score_line(correct, guessed)}</p>
+                            <p class="muted">{REVEAL_CHANCE}</p>
+                        }.into_any()
                     } else {
                         view! { <p class="fs-score-line">"全部翻開了"</p> }.into_any()
                     }}
