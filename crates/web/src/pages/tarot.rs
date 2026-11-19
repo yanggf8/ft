@@ -104,6 +104,7 @@ pub fn TarotPage() -> impl IntoView {
                         d.card.id, TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION
                     );
                     view! {
+                        <div class="tarot-stage">
                         <button
                             class="tarot-card"
                             class:flipped=move || flipped.get()
@@ -133,6 +134,18 @@ pub fn TarotPage() -> impl IntoView {
                                 </div>
                             </div>
                         </button>
+                        // 吉祥物陪翻牌：翻前期待、翻後開心（裝飾，整塊 aria-hidden；
+                        // 結果已由 #tarot-daily-result 取得焦點）。兩張圖都先載入，切換不閃。
+                        <div class="tarot-mascot" aria-hidden="true">
+                            <span class="mascot-bubble">
+                                {move || if flipped.get() { "抽到了！" } else { "翻開看看？" }}
+                            </span>
+                            <img class="mascot" class:mascot-hidden=move || flipped.get()
+                                src="/assets/mascot/wait.webp" alt="" width="96" height="153" />
+                            <img class="mascot mascot-joy" class:mascot-hidden=move || !flipped.get()
+                                src="/assets/mascot/joy.webp" alt="" width="96" height="131" />
+                        </div>
+                        </div>
 
                         <Show when=move || flipped.get()>
                             <div class="card" id="tarot-daily-result" tabindex="-1" style="margin-top:1.5rem">

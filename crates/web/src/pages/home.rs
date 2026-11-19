@@ -12,6 +12,8 @@ pub fn HomePage() -> impl IntoView {
     view! {
         <div class="hero">
             <div class="hero-head">
+                // 吉祥物月亮貓（裝飾；alt="" ＋ aria-hidden，不進報讀）
+                <img class="mascot mascot-hero" src="/assets/mascot/wave.webp" alt="" aria-hidden="true" width="120" height="185" />
                 <h1>"FortuneT - AI 智能命理分析"</h1>
                 <p class="hero-sub">"紫微斗數與西洋占星的專業解讀"</p>
                 <Show

@@ -1330,3 +1330,28 @@ input[type="range"]:disabled { opacity: 0.6; }
     transition: none;
   }
 }
+
+/* ═══ 吉祥物月亮貓（2026-11-19；m4m recraft 產圖、去背 WebP，assets/mascot/）═══
+   裝飾用：HTML 端 alt="" ＋ aria-hidden。對話框字 --heading on --surface 15.88。 */
+.mascot { display: block; height: auto; pointer-events: none; user-select: none; }
+.mascot-hidden { display: none; }
+.mascot-hero { width: 120px; margin: 0 auto 0.75rem; animation: mascot-bob 3.2s ease-in-out infinite; }
+@keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.tarot-stage { display: flex; align-items: flex-end; gap: 0.5rem; }
+.tarot-mascot { flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
+/* 有吉祥物時牌寬讓出 96px＋gap（蓋過 ≤480px 的 min(240px,62vw)；不影響牌陣 --sm） */
+.tarot-stage .tarot-card { width: min(220px, calc(100% - 96px - 0.5rem)); }
+.tarot-mascot .mascot { width: 96px; }
+.mascot-bubble {
+  font-size: 0.8rem; font-weight: 700; line-height: 1.3; text-align: center;
+  color: var(--heading); background: var(--surface);
+  border: 2px solid var(--glass-border); border-radius: 14px;
+  padding: 0.3rem 0.55rem; box-shadow: var(--shadow-card);
+}
+.mascot-joy:not(.mascot-hidden) { animation: mascot-hop 0.55s ease-out; }
+@keyframes mascot-hop { 0% { transform: translateY(0); } 40% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
+
+/* reduced-motion：吉祥物不浮動、不跳（放在檔尾，K07） */
+@media (prefers-reduced-motion: reduce) {
+  .mascot-hero, .mascot-joy:not(.mascot-hidden) { animation: none; }
+}
