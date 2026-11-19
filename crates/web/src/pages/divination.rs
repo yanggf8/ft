@@ -178,7 +178,7 @@ pub fn DivinationPage() -> impl IntoView {
                         </div>
                     }
                 >
-                    <div class="prose">{move || interpretation.get().unwrap_or_default()}</div>
+                    <div class="ai-reading">{move || super::story::render_markdown(&interpretation.get().unwrap_or_default())}</div>
                 </Show>
             </div>
         </div>
@@ -195,7 +195,7 @@ fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
     let meta = chart.meta.clone();
     let four = chart.four_pillars.clone();
     view! {
-        <div style="display:grid;gap:1rem">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:1rem">
             <div class="chart-meta" style="display:grid;gap:0.35rem">
                 <span>
                     {move || {

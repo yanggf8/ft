@@ -744,6 +744,12 @@ pub fn PalmCapturePage() -> impl IntoView {
                                     <button class="btn-primary" on:click=on_shoot>"拍照"</button>
                                 </div>
                             </Show>
+                            <Show when=move || cam_state.get() == CamState::Failed>
+                                <p class="muted" style="font-size:0.85rem;margin:0 0 0.5rem 0">
+                                    "無法開啟相機（可能被拒絕或裝置不支援）——可以用下面的檔案方式選一張照片。"
+                                </p>
+                            </Show>
+                            <div class="palm-capture-actions">
                             <Show when=move || cam_state.get() != CamState::On>
                                 <button class="btn-primary" on:click=start_camera>
                                     {move || if cam_state.get() == CamState::Failed {
@@ -752,11 +758,6 @@ pub fn PalmCapturePage() -> impl IntoView {
                                         "開啟相機"
                                     }}
                                 </button>
-                                <Show when=move || cam_state.get() == CamState::Failed>
-                                    <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0 0">
-                                        "無法開啟相機（可能被拒絕或裝置不支援）——可以用下面的檔案方式選一張照片。"
-                                    </p>
-                                </Show>
                             </Show>
                             <label class="btn-link palm-file-label">
                                 "改用相簿或檔案"
@@ -768,6 +769,7 @@ pub fn PalmCapturePage() -> impl IntoView {
                                     on:change=on_file
                                 />
                             </label>
+                            </div>
                         }.into_any(),
                     }}
 

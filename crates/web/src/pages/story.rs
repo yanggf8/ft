@@ -43,6 +43,19 @@ enum InlinePart {
 enum Block {
     Paragraph(String),
     List(Vec<String>),
+    /// `1. ` / `1) ` 開頭的編號清單（AI 解讀常見）。
+    OrderedList(Vec<String>),
+}
+
+/// `12. 內容` / `3) 內容` → Some("內容")。
+fn ordered_item(line: &str) -> Option<&str> {
+    let digits = line.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits == 0 || digits > 3 {
+        return None;
+    }
+    let rest = &line[digits..];
+    let rest = rest.strip_prefix('.').or_else(|| rest.strip_prefix(')'))?;
+    rest.starts_with(' ').then(|| rest.trim())
 }
 
 /// Split inline `**bold**` segments. Unmatched `**` is treated as plain text.
@@ -104,18 +117,32 @@ fn parse_blocks(body: &str) -> Vec<Block> {
             blocks.push(Block::List(std::mem::take(list_buf)));
         }
     };
+    let mut ol_buf: Vec<String> = Vec::new();
+    let flush_ol = |ol_buf: &mut Vec<String>, blocks: &mut Vec<Block>| {
+        if !ol_buf.is_empty() {
+            blocks.push(Block::OrderedList(std::mem::take(ol_buf)));
+        }
+    };
 
     for raw_line in body.lines() {
         let trimmed = raw_line.trim();
         if trimmed.is_empty() {
             flush_list(&mut list_buf, &mut blocks);
+            flush_ol(&mut ol_buf, &mut blocks);
             flush_para(&mut para_buf, &mut blocks);
+            continue;
+        }
+        if let Some(item) = ordered_item(trimmed) {
+            flush_para(&mut para_buf, &mut blocks);
+            flush_list(&mut list_buf, &mut blocks);
+            ol_buf.push(item.to_string());
             continue;
         }
         let is_list_item =
             trimmed.starts_with("- ") || (trimmed.starts_with('-') && trimmed.len() > 1);
         if is_list_item {
             flush_para(&mut para_buf, &mut blocks);
+            flush_ol(&mut ol_buf, &mut blocks);
             let item = if trimmed.starts_with("- ") {
                 trimmed[2..].trim().to_string()
             } else {
@@ -124,10 +151,12 @@ fn parse_blocks(body: &str) -> Vec<Block> {
             list_buf.push(item);
         } else {
             flush_list(&mut list_buf, &mut blocks);
+            flush_ol(&mut ol_buf, &mut blocks);
             para_buf.push(trimmed.to_string());
         }
     }
     flush_list(&mut list_buf, &mut blocks);
+    flush_ol(&mut ol_buf, &mut blocks);
     flush_para(&mut para_buf, &mut blocks);
     blocks
 }
@@ -154,6 +183,36 @@ fn render_inline_parts(parts: Vec<InlinePart>) -> AnyView {
         .into_any()
 }
 
+/// AI 解讀（紫微／西洋）用：`#`～`####` 行轉小標，其餘沿用 parse_blocks 的段落／清單／粗體。
+pub(super) fn render_markdown(text: &str) -> AnyView {
+    let mut out: Vec<AnyView> = Vec::new();
+    let mut buf = String::new();
+    for line in text.lines() {
+        let t = line.trim_start();
+        let level = t.chars().take_while(|c| *c == '#').count();
+        let is_rule = t.trim_end().len() >= 3 && t.trim_end().chars().all(|c| c == '-');
+        let is_heading = (1..=4).contains(&level) && t[level..].starts_with(' ');
+        if is_heading || is_rule {
+            if !buf.trim().is_empty() {
+                out.push(render_blocks(&parse_blocks(&buf)));
+            }
+            buf.clear();
+            // 標題整行純文字（去掉 `**`）：沿用 h3 字重／色，不吃 <strong> 行內樣式。
+            let h = t[level..].replace("**", "").trim().to_string();
+            if is_heading && !h.is_empty() {
+                out.push(view! { <h3 class="ai-reading-h">{h}</h3> }.into_any());
+            }
+        } else {
+            buf.push_str(line);
+            buf.push('\n');
+        }
+    }
+    if !buf.trim().is_empty() {
+        out.push(render_blocks(&parse_blocks(&buf)));
+    }
+    out.into_iter().collect_view().into_any()
+}
+
 fn render_blocks(blocks: &[Block]) -> AnyView {
     blocks
     .iter()
@@ -178,6 +237,17 @@ fn render_blocks(blocks: &[Block]) -> AnyView {
         }
         .into_any()
       }
+      Block::OrderedList(items) => {
+        view! {
+          <ol style="margin:0 0 0.85rem 1.5rem;line-height:1.8;color:var(--text)">
+            {items.iter().map(|it| {
+              let parts = parse_inline(it);
+              view! { <li style="margin-bottom:0.3rem">{render_inline_parts(parts)}</li> }.into_any()
+            }).collect_view()}
+          </ol>
+        }
+        .into_any()
+      }
     })
     .collect_view()
     .into_any()
@@ -198,7 +268,7 @@ fn ChapterCard(heading: String, body: String) -> impl IntoView {
             for b in &blocks {
                 let len = match b {
                     Block::Paragraph(t) => t.chars().count(),
-                    Block::List(items) => {
+                    Block::List(items) | Block::OrderedList(items) => {
                         items.iter().map(|s| s.chars().count()).sum::<usize>() + items.len() * 2
                     }
                 };
@@ -258,7 +328,7 @@ fn FallbackCard(body: String) -> impl IntoView {
             for b in &blocks {
                 let len = match b {
                     Block::Paragraph(t) => t.chars().count(),
-                    Block::List(items) => {
+                    Block::List(items) | Block::OrderedList(items) => {
                         items.iter().map(|s| s.chars().count()).sum::<usize>() + items.len() * 2
                     }
                 };

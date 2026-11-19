@@ -541,8 +541,8 @@ pub fn PersonalityPage() -> impl IntoView {
                                         };
                                         let radar = if v.prior_source.is_some() {
                                             view! {
-                                                <svg viewBox="0 0 200 200"
-                                                    style="width:min(320px,80%);display:block;margin:0 auto"
+                                                <svg viewBox="-68 -18 336 222"
+                                                    style="width:min(380px,100%);display:block;margin:0 auto"
                                                 >
                                                     <polygon
                                                         points={pts(vec![100.0; 5])}
@@ -562,15 +562,15 @@ pub fn PersonalityPage() -> impl IntoView {
                                                     {axis_labels.iter().enumerate().map(|(i, label)| {
                                                         let ang = -90.0f64 + 72.0 * i as f64;
                                                         let (x, y) = (
-                                                            100.0 + 92.0 * ang.to_radians().cos(),
-                                                            100.0 + 92.0 * ang.to_radians().sin(),
+                                                            100.0 + 100.0 * ang.to_radians().cos(),
+                                                            100.0 + 100.0 * ang.to_radians().sin(),
                                                         );
                                                         view! {
                                                             <text
                                                                 x={x.to_string()}
                                                                 y={y.to_string()}
-                                                                text-anchor="middle"
-                                                                style="font-size:7px;fill:var(--silver-dim)"
+                                                                text-anchor={if y > 150.0 { "middle" } else if x < 90.0 { "end" } else if x > 110.0 { "start" } else { "middle" }}
+                                                                style="font-size:13px;fill:var(--silver-dim)"
                                                             >{*label}</text>
                                                         }
                                                     }).collect_view()}

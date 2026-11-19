@@ -44,7 +44,7 @@ pub fn ZiWeiPalaceGrid(palaces: Vec<ZiWeiPalaceV3>) -> impl IntoView {
     ];
 
     view! {
-        <div class="palace-grid" style="display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:6px;aspect-ratio:1">
+        <div class="palace-grid">
             {sorted
                 .into_iter()
                 .enumerate()
