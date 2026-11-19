@@ -37,7 +37,7 @@
 | `--glass-bg`／`--glass-border` | `#ffffff`／`#eadcf5` | 卡片底／框 |
 | `--glass-bg-strong` | `#ffffff`（**不透明**，K01） | nav、sticky quiz、塔羅正面 |
 | `--metal-hi`／`--metal-mid` | `#5b21b6`／`#6d28d9`（白底 9.0／7.1） | 可互動字與 hover（原為近白銀色，K01） |
-| `--metal-lo` | `#c4b0ef`（白底 ≥3:1，非文字框線） | 控制項邊框 |
+| `--metal-lo` | `#9a7fe0`（白底 3.24，非文字框線；初稿 `#c4b0ef` 實算僅 1.94 已更正） | 控制項邊框 |
 | `--metal-line`／`--metal-edge` | `#f0e4f7`／粉紫綠三色漸層 | 分隔線／卡片框 |
 | 拆掉 `--ink-on-chrome`（K04） | 主紫板上用新 `--ink-on-primary #fff`；淺底（含 `.on-light`）改用 `--heading`／`--text`；全部引用遷移後刪除 | 避免一個 token 兩種相反語意 |
 | 新增 `--success` | `#047857`（白 5.48、tint ≥4.9；K05） | 成功字（取代 `#34d399` 1.92） |
