@@ -298,9 +298,34 @@ main { flex: 1; }
   box-shadow: var(--shadow-card);
   padding: 2rem; border-radius: 20px;
 }
-.feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--heading); }
+.feature h3 {
+  font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--heading);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.5rem;
+}
 .feature p { color: var(--silver-dim); }
-.feature-icon { color: var(--starlight); }
+/* 功能卡圖示：粉彩圓底＋深紫線條（取代 emoji）。描邊 --primary-deep 對各圓底 6.01–8.21（非文字門檻 3） */
+.feature-icon {
+  display: inline-grid; place-items: center; flex: none;
+  width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  background: var(--primary-soft);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1.5px var(--glass-border);
+}
+.feature-icon svg {
+  width: 1.5rem; height: 1.5rem;
+  fill: none; stroke: var(--primary-deep); stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.feature-icon .fi-fill { fill: var(--surface); stroke: none; }
+.fi-tarot { background: var(--rose-soft); }
+.fi-palm { background: var(--sign-leo-light); }
+.fi-fengshui { background: var(--success-soft); }
+.fi-ziwei { background: var(--primary-soft); }
+.fi-western { background: var(--sign-sagittarius-light); }
+.fi-naming { background: var(--sign-gemini-light); }
+.fi-ai { background: var(--sign-aquarius-light); }
+.fi-personality { background: var(--sign-libra-light); }
+.fi-glossary { background: var(--surface-tint); }
 /* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/改色，
    讓連結卡與 div 卡視覺一致（全域 a:hover 會穿透子元素，故逐項重設） */
 a.feature { display: block; text-decoration: none; color: inherit; transition: transform 0.18s ease, box-shadow 0.18s ease; }
@@ -731,8 +756,6 @@ input[type="range"]:disabled { opacity: 0.6; }
 /* ═══ 塔羅首頁主打卡 NEW 徽章（2026-10-27，最新功能標記）═══ */
 .feature-new {
   display: inline-block;
-  vertical-align: 0.35em;
-  margin-left: 0.5rem;
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.12em;
