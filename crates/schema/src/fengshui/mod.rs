@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 pub const FENGSHUI_ROOM_RULESET_VERSION: &str = "1";
 
 /// 使用者看得到的卡片文字、徽章、limitation、文獻語意改動 → bump（spec §2.7）。
-pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "1";
+pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "2";
 
 /// 房型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -113,13 +113,47 @@ impl Reach {
             Reach::NoResearch => "目前沒有研究直接測過",
         }
     }
+}
 
-    /// 翻卡先猜的三選一選項（spec §3）。
-    pub fn guess_label(&self) -> &'static str {
+/// 研究站在哪一邊（spec §2.2、§3，Batch 2.1）：翻卡先猜的猜測軸。
+/// 判定只看 `refs` 文獻測到的結果方向，不管測的結果變項是否與風水說法相同
+/// （結果變項的落差由徽章 `limitation` 寫出）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Stance {
+    /// 測到的結果和風水說法同方向。
+    Same,
+    /// 測到的結果和風水說法相反。
+    Opposite,
+    /// 沒有差異，或幾項研究方向不一致。
+    Mixed,
+    /// 沒有研究測過（與 `Reach::NoResearch` 一一對應）。
+    Untested,
+}
+
+impl Stance {
+    pub const ALL: [Stance; 4] = [
+        Stance::Same,
+        Stance::Opposite,
+        Stance::Mixed,
+        Stance::Untested,
+    ];
+
+    pub fn wire(&self) -> &'static str {
         match self {
-            Reach::Direct => "有研究直接測過",
-            Reach::Related => "只有相關研究",
-            Reach::NoResearch => "沒有人研究過",
+            Stance::Same => "same",
+            Stance::Opposite => "opposite",
+            Stance::Mixed => "mixed",
+            Stance::Untested => "untested",
+        }
+    }
+
+    /// 翻卡先猜的四選一選項，也是翻開後的主徽章（spec §3）。
+    pub fn label(&self) -> &'static str {
+        match self {
+            Stance::Same => "和風水同方向",
+            Stance::Opposite => "和風水相反",
+            Stance::Mixed => "沒差異或不一致",
+            Stance::Untested => "沒人測過",
         }
     }
 }

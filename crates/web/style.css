@@ -1271,6 +1271,11 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   border: 1px solid var(--metal-lo); border-radius: 999px; padding: 0.15rem 0.7rem;
   background: rgba(255, 255, 255, 0.07);
 }
+.fs-badge-reach { font-weight: 400; color: var(--silver-dim); margin-left: 0.4rem; }
+.fs-ok-tag {
+  display: inline-block; font-size: 0.75rem; color: var(--silver-dim); margin-left: 0.5rem;
+  border: 1px solid var(--metal-lo); border-radius: 999px; padding: 0.05rem 0.55rem;
+}
 .fs-limit { font-size: 0.85rem; color: var(--silver-dim); margin: 0.35rem 0 0; line-height: 1.6; }
 .fs-refs { margin-top: 0.5rem; }
 .fs-refs summary { cursor: pointer; color: var(--metal-mid); font-size: 0.9rem; padding: 0.35rem 0; }

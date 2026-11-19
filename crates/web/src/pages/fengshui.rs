@@ -14,13 +14,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ft_schema::fengshui::corpus::{
     reveal_miss_line, reveal_score_line, EXPLAINER, EXPLAINER_TITLE, LABEL_ADJUSTMENTS,
-    LABEL_CLEAR_ANSWERS, LABEL_FENGSHUI, LABEL_LOCAL_ONLY, LABEL_OK_GROUP, LABEL_RESEARCH,
-    LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP, OPENING, REVEAL_FLIP, REVEAL_HIT, REVEAL_MISS,
-    REVEAL_PROMPT, REVEAL_SKIP_ALL,
+    LABEL_CLEAR_ANSWERS, LABEL_FENGSHUI, LABEL_LOCAL_ONLY, LABEL_OK_TAG, LABEL_RESEARCH,
+    LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP, OPENING, REVEAL_ALL_OK, REVEAL_FLIP, REVEAL_HIT,
+    REVEAL_HOWTO, REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
 };
 use ft_schema::fengshui::{
-    assess, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Reach, Room, Status,
-    FENGSHUI_ROOM_CORPUS_VERSION, FENGSHUI_ROOM_RULESET_VERSION,
+    assess, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Room, Stance,
+    Status, FENGSHUI_ROOM_CORPUS_VERSION, FENGSHUI_ROOM_RULESET_VERSION,
 };
 use leptos::prelude::*;
 use leptos_router::components::A;
@@ -523,8 +523,8 @@ enum Stage {
 /// 翻卡先猜的頁面狀態（不落 localStorage，spec §3-5）。key = `CardText::key()`。
 #[derive(Clone, Copy)]
 struct RevealState {
-    pending: RwSignal<HashMap<String, Reach>>,
-    guessed: RwSignal<HashMap<String, Reach>>,
+    pending: RwSignal<HashMap<String, Stance>>,
+    guessed: RwSignal<HashMap<String, Stance>>,
     flipped: RwSignal<HashSet<String>>,
 }
 
@@ -543,11 +543,12 @@ impl RevealState {
     }
 }
 
-/// flag／mild 卡：蓋牌 → 先猜 → 翻開。
-fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
+/// 每張作答過的卡（flag／mild／ok，Batch 2.1）：蓋牌 → 先猜研究站在哪一邊 → 翻開。
+fn flip_card(c: Card, rs: RevealState) -> Option<AnyView> {
     let t = c.text?;
-    let badge = t.badge?;
-    let actual = badge.reach;
+    let badge = t.badge;
+    let actual = badge.stance;
+    let is_ok = c.status == Status::Ok;
     let key = t.key();
     let answer = answer_line(&c);
 
@@ -584,7 +585,7 @@ fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
             view! {
                 <p class="fs-guess-prompt">{REVEAL_PROMPT}</p>
                 <div class="fs-guess-row" role="group" aria-label=REVEAL_PROMPT>
-                    {Reach::ALL.into_iter().map(|r| {
+                    {Stance::ALL.into_iter().map(|r| {
                         let key = key.clone();
                         let pending_of = pending_of.clone();
                         let sel = move || pending_of() == Some(r);
@@ -598,7 +599,7 @@ fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
                                     rs.pending.update(|p| { p.insert(key.clone(), r); });
                                 }
                             >
-                                {r.guess_label()}
+                                {r.label()}
                             </button>
                         }
                     }).collect_view()}
@@ -623,7 +624,8 @@ fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
         view! {
             {guess_line.clone()}
             <div class="fs-badge-wrap">
-                <span class="fs-badge">{actual.badge_label()}</span>
+                <span class="fs-badge">{actual.label()}</span>
+                <span class="fs-badge fs-badge-reach">{badge.reach.badge_label()}</span>
                 <p class="fs-limit">{badge.limitation}</p>
             </div>
             <p class="fs-text">{t.research}</p>
@@ -640,6 +642,7 @@ fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
                 <p class="fs-card-q">
                     <strong>{c.prompt}</strong>
                     <span class="fs-answer">{answer}</span>
+                    {is_ok.then(|| view! { <span class="fs-ok-tag">{LABEL_OK_TAG}</span> })}
                 </p>
                 <div class="fs-cols">
                     <section class="fs-col">
@@ -655,42 +658,15 @@ fn actionable_card(c: Card, rs: RevealState) -> Option<AnyView> {
                         }}
                     </section>
                 </div>
-                <div class="fs-adj">
-                    <h4 class="fs-adj-title">{LABEL_ADJUSTMENTS}</h4>
-                    <ul>
-                        {t.adjustments.iter().map(|a| view! { <li>{a.text}</li> }).collect_view()}
-                    </ul>
-                </div>
+                {(!t.adjustments.is_empty()).then(|| view! {
+                    <div class="fs-adj">
+                        <h4 class="fs-adj-title">{LABEL_ADJUSTMENTS}</h4>
+                        <ul>
+                            {t.adjustments.iter().map(|a| view! { <li>{a.text}</li> }).collect_view()}
+                        </ul>
+                    </div>
+                })}
             </article>
-        }
-        .into_any(),
-    )
-}
-
-/// ok 卡（折疊區內）：無徽章、只有「看研究」。
-fn ok_item(c: Card) -> Option<AnyView> {
-    let t = c.text?;
-    let answer = answer_line(&c);
-    Some(
-        view! {
-            <div class="fs-mini">
-                <p class="fs-card-q">
-                    <strong>{c.prompt}</strong>
-                    <span class="fs-answer">{answer}</span>
-                </p>
-                <p class="fs-text">
-                    <span class="fs-inline-title">{format!("{LABEL_FENGSHUI}：")}</span>
-                    {t.fengshui}
-                </p>
-                <details class="fs-refs">
-                    <summary>{LABEL_SEE_RESEARCH}</summary>
-                    <p class="fs-text">
-                        <span class="fs-inline-title">{format!("{LABEL_RESEARCH}：")}</span>
-                        {t.research}
-                    </p>
-                    {evidence_list(t.refs, t.further)}
-                </details>
-            </div>
         }
         .into_any(),
     )
@@ -860,33 +836,30 @@ pub fn FengshuiPage() -> impl IntoView {
         let cards = answers.with(|a| assess(r, a));
         let qs: Vec<&'static str> = questions(r).map(|q| q.id).collect();
 
-        let actionable: Vec<Card> = cards
+        // 作答過的每一題都能翻（flag → mild → ok，assess 已排序）
+        let answered: Vec<Card> = cards
             .iter()
-            .filter(|c| c.status.actionable())
+            .filter(|c| c.status != Status::Unknown)
             .cloned()
             .collect();
-        let oks: Vec<Card> = cards
-            .iter()
-            .filter(|c| c.status == Status::Ok)
-            .cloned()
-            .collect();
+        let has_actionable = answered.iter().any(|c| c.status.actionable());
         let unknowns: Vec<Card> = cards
             .iter()
             .filter(|c| c.status == Status::Unknown)
             .cloned()
             .collect();
 
-        // (卡片 key, 實際 reach)：計分與「全部直接翻開」用
-        let keys: Vec<(String, Reach)> = actionable
+        // (卡片 key, 實際立場)：計分與「全部直接翻開」用
+        let keys: Vec<(String, Stance)> = answered
             .iter()
             .filter_map(|c| {
                 let t = c.text?;
-                Some((t.key(), t.badge?.reach))
+                Some((t.key(), t.badge.stance))
             })
             .collect();
         let keys_skip = keys.clone();
         let keys_score = keys.clone();
-        let has_actionable = !keys.is_empty();
+        let has_cards = !keys.is_empty();
 
         let any_covered = move || {
             rs.flipped
@@ -932,11 +905,12 @@ pub fn FengshuiPage() -> impl IntoView {
                 </div>
             </div>
 
-            {if has_actionable {
+            {has_cards.then(|| {
                 view! {
-                    <p class="muted fs-howto">
-                        "每張卡先只看風水的說法。猜猜看研究做到哪了，再翻開對答案。"
-                    </p>
+                    {(!has_actionable).then(|| view! {
+                        <div class="card"><p class="fs-text">{REVEAL_ALL_OK}</p></div>
+                    })}
+                    <p class="muted fs-howto">{REVEAL_HOWTO}</p>
                     <Show when=any_covered.clone()>
                         <button class="btn-link fs-skip" on:click={
                             let keys_skip = keys_skip.clone();
@@ -947,27 +921,11 @@ pub fn FengshuiPage() -> impl IntoView {
                             }
                         }>{REVEAL_SKIP_ALL}</button>
                     </Show>
-                    {actionable.into_iter().filter_map(|c| actionable_card(c, rs)).collect_view()}
-                }.into_any()
-            } else {
-                view! {
-                    <div class="card"><p class="fs-text">
-                        "你回答的項目裡，沒有和常見風水建議不同的地方。"
-                    </p></div>
-                }.into_any()
-            }}
-
-            {score}
-
-            {(!oks.is_empty()).then(|| {
-                let n = oks.len();
-                view! {
-                    <details class="card fs-group">
-                        <summary>{format!("{LABEL_OK_GROUP}（{n} 項）")}</summary>
-                        {oks.into_iter().filter_map(ok_item).collect_view()}
-                    </details>
+                    {answered.into_iter().filter_map(|c| flip_card(c, rs)).collect_view()}
                 }
             })}
+
+            {score}
 
             {(!unknowns.is_empty()).then(|| {
                 let n = unknowns.len();

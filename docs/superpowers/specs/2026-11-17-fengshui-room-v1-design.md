@@ -51,7 +51,7 @@
 
 純邏輯：`crates/schema/src/fengshui/`——`ruleset.rs`、`corpus.rs`、`evidence.rs`、`mod.rs`（`assess(room, answers) -> Vec<Card>`）。native 可測；web 直接呼叫 ft-schema，全程不經 API（塔羅 v1a 先例）。
 
-## 2. 卡片語料（`FENGSHUI_ROOM_CORPUS_VERSION = "1"`）
+## 2. 卡片語料（`FENGSHUI_ROOM_CORPUS_VERSION = "2"`，Batch 2.1 起）
 
 卡片單位：`(itemId, 狀態, 變體)`。
 
@@ -60,12 +60,21 @@
 1. **風水怎麼說**（≤100 字）：一律用引述句型（「風水的說法是……」「風水師常建議……」）。可以引述**溫和後果**（睡不安穩、心神不寧、不易放鬆、容易分心）；**不可**引述疾病、婚姻、財務、死亡意象（Fable F06）。說法分歧照實寫「各家說法不一」。
    - 題目是為了配合研究而改寫的（`bed_light`），風水欄照實揭露題目與「明廳暗房」原意相近但不完全一樣（Fable F03；試玩後改為使用者語氣）。`seat_light` 直接引用現代風水「書桌宜採光充足」的通行說法，不需揭露（Batch 1 審稿修正）。
 2. **研究怎麼說**（≤140 字）：只陳述研究測了什麼、在什麼結果上（偏好評分、睡眠、情緒、注意力……）、限制；沒有研究就寫「目前沒有研究直接測過」，不再補任何推想。
-3. **研究徽章**（只在「研究怎麼說」欄內、只在 flag／mild 卡；**ok 卡不顯示徽章**，只留「看研究」連結——Fable F01）。
+3. **研究徽章**（只在「研究怎麼說」欄內，**每張卡都有**，翻開後才看得到）。Batch 2.1（2026-11-19，站長裁示）推翻 Fable F01 的「ok 卡不顯示徽章」：主徽章改成「研究站在哪一邊」，會照實寫出「相反」「沒差異或不一致」，徽章本身不再預設是支持；ok 卡另加「符合常見建議」小標，並保留限制說明。
 4. **可以試試看**（僅 flag／mild）：`adjustments: [{id, text}]`，每卡 1–3 個，每個 ≤60 字（Fable F10）。不買化煞商品的低成本調整，優先：關門、用現有布簾或家具、整理一小區、調整枕頭方向；涉及大型家具加「量力而為，不要獨自搬重物」。
 
-### 2.2 研究徽章（Fable F01/F19）
+### 2.2 研究徽章（Fable F01/F19；Batch 2.1 加立場軸）
 
-只留一軸 `reach`，加一句限制說明：
+**主徽章：立場 `stance`**（翻卡先猜的答案，§3）：
+
+- `same`「和風水同方向」
+- `opposite`「和風水相反」
+- `mixed`「沒差異或不一致」
+- `untested`「沒人測過」（⇔ `reach = none`，測試守門）
+
+判定規則：以 `refs` 中**最具體測到該配置**的研究方向為準；只有籠統研究（如瞭望－庇護文獻彙整）時看其結論。只看結果方向，不管測的結果變項是否和風水說法相同——落差一律由 `limitation` 寫出。研究欄寫到「相反」的卡，立場只能是 `opposite` 或 `mixed`（測試守門）。
+
+**副徽章：`reach`**，加一句限制說明：
 
 - `direct`「有研究直接測過這個特徵」
 - `related`「只有相關的空間研究」
@@ -77,22 +86,28 @@
 
 2026-11-18 依證據帳本（`docs/superpowers/reports/fengshui-research/evidence-ledger.md` §4）＋站長裁示更新；標 ★ 者與初版不同。
 
-| 卡 | reach | limitation 要點 |
-|---|---|---|
-| `bed_back` 各變體 | related | 瞭望－庇護研究測的是空間偏好評分，文獻彙整（計票）結果不一致；window／floating 另引平面圖擺床實驗（Spörrle 2010），測的是擺床偏好，不是睡眠 |
-| `bed_door_view` hidden | ★ direct | 測的是在平面圖上擺床的偏好，不是睡眠（Spörrle 2010，138 人，83% 選看得到門；Bonin 2023 重現研究未讀全文，列延伸） |
-| `bed_door_view` facing | ★ related | 唯一相近的擺床實驗結果方向相反（多數人選床尾朝門那面牆）；平面圖不能斜擺，測的是偏好不是睡眠 |
-| `bed_overhead` beam／heavy | none | 橫樑與頭頂重物都沒有研究；天花板高度研究（Meyers-Levy 2007）沒測到舒適感差異、封閉空間研究（Fich 2014，只讀摘要）操弄牆面開口，皆列延伸閱讀 |
-| `bed_mirror` | none | 不引用 Tamaki 2016（首夜效應，與鏡子無關） |
-| `bed_corner`、`seat_corner` | related | 測的是看圖片的喜歡評分；統合分析中室內空間類圖片效果為零，真實桌椅研究（2025）沒有重現 |
-| `bed_door_door` | none | |
-| `bed_light` | related | 題目與風水原意不同（§2.1）；測的是開燈睡與睡眠（Mason 2022，20 人）；「外面照進來的光」在大型問卷研究（Sweeney 2023）中結果偏弱 |
-| `bed_clutter`、`seat_clutter` | related | 研究測的是導覽自家的用字與妻子的壓力荷爾蒙型態、情緒；只有相關、不能推論因果；沒有測床底或桌面；Roster 2016 未讀不引用 |
-| `seat_back`、`seat_door_view` hidden | related | 測的是座位使用率與偏好／自評專注，不是壓力或門本身；觀察研究（Psathiti 2017）中背向走道的座位反而最常被坐 |
-| `seat_door_view` facing | ★ related | 觀察研究中正面直視主要走道的座位較少人坐；對象是走道不是門 |
-| `seat_overhead` | none | 同 `bed_overhead` |
-| `seat_front` | related | 注意力恢復（認知測驗，小到中度）與窗景（術後恢復）研究；沒有測「面牆」 |
-| `seat_light` | related | 有窗與睡眠的小樣本研究（49 人）；測的是睡眠與自評生活品質，不是專心 |
+立場欄為 Batch 2.1 新增（同方向 14、相反 2、不一致 13、沒人測過 9，共 38 張；以前「永遠猜只有相關研究」可猜對 74%，現在任一選項最多 37%）。ok 卡的 reach 與同題 flag 卡相同。
+
+| 卡 | stance | reach | limitation 要點 |
+|---|---|---|---|
+| `bed_back` ok／passage | mixed | related | 瞭望－庇護研究測的是空間偏好評分，室內研究多為中性 |
+| `bed_back` window／floating | same | related | 瞭望－庇護研究測的是空間偏好評分，文獻彙整（計票）結果不一致；window／floating 另引平面圖擺床實驗（Spörrle 2010），測的是擺床偏好，不是睡眠 |
+| `bed_door_view` ok | mixed | related | 83% 選看得到門（同方向），但多數人選床尾朝門那面牆（和「不要正對」相反）|
+| `bed_door_view` hidden | same | ★ direct | 測的是在平面圖上擺床的偏好，不是睡眠（Spörrle 2010，138 人，83% 選看得到門；Bonin 2023 重現研究未讀全文，列延伸） |
+| `bed_door_view` facing | opposite | ★ related | 唯一相近的擺床實驗結果方向相反（多數人選床尾朝門那面牆）；平面圖不能斜擺，測的是偏好不是睡眠 |
+| `bed_overhead` 全部 | untested | none | 橫樑與頭頂重物都沒有研究；天花板高度研究（Meyers-Levy 2007）沒測到舒適感差異、封閉空間研究（Fich 2014，只讀摘要）操弄牆面開口，皆列延伸閱讀 |
+| `bed_mirror` | untested | none | 不引用 Tamaki 2016（首夜效應，與鏡子無關） |
+| `bed_corner`、`seat_corner` | mixed | related | 測的是看圖片的喜歡評分；統合分析中室內空間類圖片效果為零，真實桌椅研究（2025）沒有重現 |
+| `bed_door_door` | untested | none | |
+| `bed_light` | mixed | related | 題目與風水原意不同（§2.1）；測的是開燈睡與睡眠（Mason 2022，20 人）；「外面照進來的光」在大型問卷研究（Sweeney 2023）中結果偏弱 |
+| `bed_clutter`、`seat_clutter` | same | related | 研究測的是導覽自家的用字與妻子的壓力荷爾蒙型態、情緒；只有相關、不能推論因果；沒有測床底或桌面；Roster 2016 未讀不引用 |
+| `seat_back` ok、`seat_door_view` ok／hidden | mixed | related | 測的是座位使用率與偏好／自評專注，不是壓力或門本身；觀察研究（Psathiti 2017）中背向走道的座位反而最常被坐 |
+| `seat_back` window | mixed | related | 只引瞭望－庇護（研究欄另寫，不提走道研究）|
+| `seat_back` passage | opposite | related | 觀察研究中背向走道的座位反而最常被坐 |
+| `seat_door_view` facing | same | ★ related | 觀察研究中正面直視主要走道的座位較少人坐；對象是走道不是門 |
+| `seat_overhead` | untested | none | 同 `bed_overhead` |
+| `seat_front` | same | related | 注意力恢復（認知測驗，小到中度）與窗景（術後恢復）研究；沒有測「面牆」 |
+| `seat_light` | same | related | 有窗與睡眠的小樣本研究（49 人）；測的是睡眠與自評生活品質，不是專心 |
 
 `direct` 目前只有 `bed_door_view` hidden 一張（2026-11-18 依證據帳本＋站長裁示），而且測的是平面圖上的擺床偏好、不是睡眠；其餘都只有相關研究或沒有研究——這本身就是要讓使用者看見的事實。
 
@@ -128,17 +143,20 @@
 
 使用者看得到的卡片文字、徽章、limitation、文獻語意改動 → bump `FENGSHUI_ROOM_CORPUS_VERSION`；題目、選項、判定改動 → bump `FENGSHUI_ROOM_RULESET_VERSION`。
 
-## 3. 翻卡先猜（Batch 2，站長裁示加入——Fable F21）
+## 3. 翻卡先猜（Batch 2，站長裁示加入——Fable F21；Batch 2.1 改版）
 
-答完問答後，flag／mild 卡先以**蓋牌**呈現：只顯示「風水怎麼說」，研究欄蓋住。
+答完問答後，**每一題作答過的卡**（flag／mild／ok）都先以**蓋牌**呈現：只顯示「風水怎麼說」，研究欄蓋住。順序 flag → mild → ok；ok 卡標「符合常見建議」、沒有「可以試試看」。
 
-1. 每張卡先猜：「這條說法，研究做到哪了？」三選一：有研究直接測過／只有相關研究／沒有人研究過。
-2. 翻開：顯示研究欄與徽章，標示猜對或猜錯；猜錯時一句「你原本以為……，實際是……」。
+1. 每張卡先猜：「研究站在哪一邊？」四選一：和風水同方向／和風水相反／沒差異或不一致／沒人測過。
+2. 翻開：主徽章顯示立場、副徽章顯示 reach，下一行 limitation；標示猜對或猜錯，猜錯時一句「你原本以為……，實際是……」。
 3. 全部翻完：「你猜對 X / Y 張」，並接說明卡（§2.5 第 3 點）。
 4. 可以「全部直接翻開」略過遊戲。
-5. 純前端；猜的結果只存在當下的頁面狀態，不落 localStorage、不上傳。
+5. 全部 ok 時，頂端一句「你回答的項目都符合常見風水建議。符合建議不代表研究也站在同一邊，一樣可以猜猜看。」
+6. 純前端；猜的結果只存在當下的頁面狀態，不落 localStorage、不上傳。
 
-設計原則：這個遊戲預測的是**研究現況**，不是風水對不對，因此不會產生背書；它要傳達的正是「多數說法沒人測過」。
+設計原則：猜的對象是**這條風水說法**，和使用者的房間擺得好不好無關，所以 ok 卡也能玩。
+
+**Batch 2.1 改版理由（2026-11-19 試玩）**：舊版猜「研究做到哪了」（reach 三選一），flag／mild 卡中 17/23 是 related，永遠猜它就有 74% 命中，是必勝策略；而且舊版只翻 flag／mild 卡，房間大致符合風水的人完全玩不到，最有意思的研究（Spörrle 83%）反而藏在 ok 卡。新的猜測軸分布較平均，也比較容易猜錯，例如以為研究支持「背後不要是走道」，翻開才發現背對走道的座位最常被坐。
 
 ## 4. 先猜後試（Batch 3，純前端——站長裁示，Fable F08）
 
@@ -171,7 +189,7 @@ UI 用語是「自我觀察」，不用「實驗驗證」。
 
 - `/fengshui`（公開）：開場一句（§2.5）＋「答案只存在這個瀏覽器，不會上傳」→ 選房型 → 問答（俯視圖點選、進度條、可返回）→ 翻卡先猜 → 說明卡。
   - 答案存 `localStorage` `fengshui_room_v1_{room}`；開場與結果頁都有「清除我的房間答案」。不設 TTL（明文取捨：個人裝置為主）。
-- 結果頁：flag／mild 卡（蓋牌）在前；ok 卡收進「已符合常見建議」、unknown 收進「還不確定的項目」，皆折疊。
+- 結果頁：作答過的卡全部蓋牌，順序 flag → mild → ok（ok 卡標「符合常見建議」）；unknown 收進「還不確定的項目」折疊（Batch 2.1）。
 - 卡片：手機上下排、桌機左右並列；「看研究」展開文獻。
 - Batch 2 的卡片只顯示「可以試試看」文字，**不放按鈕**；按鈕在 Batch 3 隨觀察功能一起上（Fable F16）。
 - Batch 3：`/fengshui` 內加「我的觀察」區（進行中附倒數、可回報、已完成、過期、校準紀錄、清除）。
@@ -186,7 +204,7 @@ UI 用語是「自我觀察」，不用「實驗驗證」。
 - T3 禁用詞（含白名單片語）與「煞」位置限制，涵蓋所有固定文案。
 - T4 長度上限。
 - T5 `assess` 分組（flag → mild → ok 折疊 → unknown 折疊）。
-- T6 徽章：flag／mild 卡都有 `reach` 與非空 `limitation`；ok 卡無徽章；`direct` 的引用文獻全部 `full_text_read`；引用的文獻 key 都存在。
+- T6 徽章：每張卡都有 `stance`、`reach` 與非空 `limitation`；`untested` ⇔ `none`；立場與 §2.3 表一致；研究欄寫「相反」者立場只能是 opposite／mixed；flag／mild 必有調整、ok 卡無調整；`direct` 的引用文獻全部 `full_text_read`；引用的文獻 key 都存在。
 - T7 先猜後試純邏輯（放 schema，web 呼叫）：開放與過期判定（剛好 7 天、剛好 30 天的邊界）、區間命中判定、校準比例。日期算術新增 `ft_schema` 純函式 `iso_shift_days(iso, days)`，重用 `cycle.rs` 的 `days_from_civil`／`civil_from_days`（Fable F14）。
 
 **站長驗收**
