@@ -615,11 +615,11 @@ input[type="range"]:disabled { opacity: 0.6; }
    無 glint／粒子動畫，觸控裝置不再需要另一套實底或 :root 覆寫（F07）。 */
 
 
-/* ═══ 塔羅 今日抽牌（v1a）— 卡面仍是舊風格圖，亮底上以白色相框收邊（F16）═══ */
+/* ═══ 塔羅 今日抽牌（v1a）— kawaii 卡面（m4m recraft 產圖）＋白色相框收邊═══ */
 .tarot-card {
   display: block;
   width: min(220px, 60vw);
-  aspect-ratio: 1 / 2; /* 生成圖原生 1:2——零裁切，塔羅實牌比例 */
+  aspect-ratio: 2 / 3; /* 卡面圖 682×1024（2:3）——與圖同比例才不會裁到四周的扇貝框 */
   background: none;
   border: none;
   padding: 0;

@@ -129,6 +129,8 @@ CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, cre
 - 卡面：~~符號化~~ → **2026-10-27 已升級為 AI 生成美術**（museimage、
   cosmic-silver 方向、78＋1 張入 `assets/tarot/`；符號化版本被完全取代，
   「RWS 自托管 v3+ 議題」隨之消失——生成圖無掃描授權問題）。
+  **2026-11-19 全數重產為 kawaii 亮底版**（m4m `imgen -b recraft`，78 張＋牌背，682×1024，
+  prompt 清單 `docs/superpowers/tarot-art-prompts-2026-11-19.txt`）；`.tarot-card` 比例同步改 2:3。
 - 翻牌 a11y：卡為 button（Enter/Space 可翻）、翻後 focus 移至結果卡、
   aria-label 含牌名與正逆位；`prefers-reduced-motion` 下直接揭牌不播動畫
   （`style.css` 現行 media query 需補卡面規則）。
