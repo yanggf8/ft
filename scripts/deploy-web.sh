@@ -9,6 +9,6 @@ echo "🔧 building frontend ..."
 
 echo "🚀 deploying to Cloudflare Pages ..."
 unset CLOUDFLARE_API_TOKEN 2>/dev/null || true
-wrangler pages deploy dist --project-name=fortunet --branch=main
+npx wrangler pages deploy dist --project-name=fortunet --branch=main
 
 echo "✅ done — https://fortunet.pages.dev"
