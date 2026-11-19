@@ -155,7 +155,37 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 - 紅線由 `corpus.rs` 測試守門：分段禁用詞（背書／恐嚇／化煞商品／理氣）、「煞」只在風水欄、長度上限。
 - 閘門 A：站長自用後決定是否做 Batch 3（先猜後試，純前端）；API＋DB 版待閘門 B。
 
-## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16)
+## Kawaii light theme (2026-11-19)
+
+Plan + review record: `docs/superpowers/plans/2026-11-19-kawaii-light-redesign.md`
+(Kimi K01–K12, Fable F01–F21). Replaces cosmic-silver below.
+
+- **Tokens**: every colour lives in `style.css` `:root`; old names kept with new
+  values (`--heading/--text/--silver-dim/--silver-faint` = 標題/內文/次要/最淡),
+  plus `--primary*`, `--accent`, `--ink-on-primary`, `--surface(-tint)`,
+  `--success(-soft)`, `--rose(-soft)`, `--sign-<12>-deep/-light` + `--ink-on-sign`.
+  Fixed-colour exceptions (camera overlay `--cam-*`, dark tarot back
+  `--tarot-back-*`) are deliberate: their backdrop is not themed.
+- **Ground**: `--void #fff5fa → --deep-space #f4eeff` + two faint glows; white
+  opaque cards (no glass/blur), 20px radius, purple 3D primary buttons. Starfield
+  (`galaxy.js`, sky divs, `gen-stars.js`) removed; `build-web.sh` wipes `dist/`.
+- **Guards**: `scripts/css-guard.py` (no literal colours outside `:root`, allowlist
+  `scripts/css-guard-allowlist.txt` with reasons; every `var()` defined),
+  `scripts/contrast-check.py` (token pairs incl. each sign stop),
+  `scripts/contrast-audit.mjs` (Playwright, real composited pixels, text-fill /
+  SVG / opacity / non-text). Tightest: Capricorn deep 4.80; `--success` only
+  inside cards (4.40 on the deepest glow).
+- **Western flip cards** (`divination.rs` `WesternView`, CSS `zc-*` at end of
+  `style.css`): sun/moon/asc as 3D buttons, auto-flip on load (350/500/650ms),
+  `aria-pressed` + stable sr-only name, faces `aria-hidden`, reduced-motion shows
+  backs with no animation. Sign/planet/element names via `ft_schema::zodiac`
+  (`sign_zh`/`sign_class`/`planet_zh`, case-insensitive, unknown → raw string).
+- **reduced-motion** blocks sit at the end of the stylesheet (after the rules they
+  override) — earlier placement silently disabled the tarot opt-out.
+
+## Cosmic-silver theme + 星空藍 ground (2026-08-30 / 2026-09-16) — RETIRED 2026-11-19
+
+*Superseded by §Kawaii light theme; kept for history.*
 
 All styling is plain CSS in `crates/web/style.css`; no Rust owns a token.
 Spec: `docs/superpowers/specs/2026-08-30-cosmic-silver-theme-design.md` §1

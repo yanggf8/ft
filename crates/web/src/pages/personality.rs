@@ -546,19 +546,16 @@ pub fn PersonalityPage() -> impl IntoView {
                                                 >
                                                     <polygon
                                                         points={pts(vec![100.0; 5])}
-                                                        fill="none"
-                                                        stroke="#e5e7eb"
+                                                        style="fill:none;stroke:var(--metal-lo)"
                                                     />
                                                     <polygon
                                                         points={measured_pts.clone()}
-                                                        fill="rgba(59,130,246,0.12)"
-                                                        stroke="#3b82f6"
+                                                        style="fill:var(--primary-soft);fill-opacity:0.6;stroke:var(--primary)"
                                                         stroke-width="2"
                                                     />
                                                     <polygon
                                                         points={prior_pts.clone()}
-                                                        fill="none"
-                                                        stroke="#9aa3b2"
+                                                        style="fill:none;stroke:var(--silver-faint)"
                                                         stroke-width="2"
                                                         stroke-dasharray="5,4"
                                                     />
@@ -573,7 +570,7 @@ pub fn PersonalityPage() -> impl IntoView {
                                                                 x={x.to_string()}
                                                                 y={y.to_string()}
                                                                 text-anchor="middle"
-                                                                style="font-size:7px;fill:#6b7280"
+                                                                style="font-size:7px;fill:var(--silver-dim)"
                                                             >{*label}</text>
                                                         }
                                                     }).collect_view()}
@@ -589,7 +586,7 @@ pub fn PersonalityPage() -> impl IntoView {
                                             {note_view}
                                             {radar}
                                             {v.dims.iter().map(|d| view! {
-                                                <div style="padding:0.4rem 0;border-top:1px solid #f3f4f6">
+                                                <div style="padding:0.4rem 0;border-top:1px solid var(--metal-line)">
                                                     <div style="display:flex;justify-content:space-between">
                                                         <span>{dim_label(&d.dim)}</span>
                                                         <span class="muted">

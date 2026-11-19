@@ -175,13 +175,12 @@ pub fn BirthDataForm(
                                 style=move || {
                                     let selected = generation_tags.get().contains(&tag_str);
                                     if selected {
-                                        // selected = the chrome plate the rest of the app uses for
-                                        // "selected" (see .btn-primary / .quiz-choice:checked). The old
-                                        // violet gradient was the last blue-violet hue on the site, and
-                                        // its darkest stop measured 4.34:1 with ink at 12px (2026-09-17)
-                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--metal-mid);background:linear-gradient(180deg,#f8fafc,#dbe2eb 34%,#aab3c1 50%,#8e97a6 56%,#c4ccd8 82%,#eef2f7 100%);color:var(--ink-on-chrome);cursor:pointer"
+                                        // selected = the violet plate used site-wide for "selected"
+                                        // (.btn-primary / .quiz-choice:checked): white on --primary 5.70,
+                                        // --primary-deep edge (2026-11-19)
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--primary-deep);background:var(--primary);color:var(--ink-on-primary);cursor:pointer"
                                     } else {
-                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--silver-dim);cursor:pointer"
+                                        "padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;border:1px solid var(--metal-lo);background:var(--surface);color:var(--silver-dim);cursor:pointer"
                                     }
                                 }
                                 on:click=move |_| {

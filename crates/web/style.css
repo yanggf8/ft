@@ -1,252 +1,110 @@
-/* ═══ cosmic-silver tokens (spec §1) ═══ */
+/* ═══ kawaii light tokens（2026-11-19 計劃 v3 §2.1；取代 cosmic-silver）═══
+   token 名稱沿用舊時代（--silver-*／--metal-*／--glass-* 仍叫 silver/glass），
+   只改值、語意不變：--heading 標題、--text 內文、--silver-dim 次要字、
+   --silver-faint 最淡字、--metal-* 可互動字與控制項邊框。改名是純 churn，不做。
+
+   AA 基準＝實際合成底（WCAG 相對亮度公式，python3 實算）：
+     白卡 #fff／頁底 --void #fff5fa→--deep-space #f4eeff／tint #f6f1ff／紫板 #7c3aed；
+     頁底兩團光暈疊加最深處（粉 .05＋紫 .03 疊在 --deep-space 上）≈#f0e1fa。
+   一般字 ≥4.5、大字與非文字（框線、焦點框、進度條、捲軸）≥3.0。
+   主要比值（白卡／頁底最深 --deep-space／光暈最深 #f0e1fa）：
+     --heading    15.88 / 14.00          --text         12.32 / 10.86
+     --silver-dim  7.79 /  6.87          --silver-faint  6.16 /  5.44 / 4.95
+     --starlight=--primary 5.70 / 5.03 / 4.57    --rose 6.04 / 5.32 / 4.85
+     --metal-hi 8.98   --metal-mid 7.10   --success 5.48 / 4.84（tint 4.95）
+     --metal-lo（控制項邊框，非文字）3.93 / 3.47 / 3.15（tint 3.55）
+     板上字：白 on --primary 5.70、on --primary-hover 7.10、on --primary-deep 8.98；
+     --ink-on-accent on --accent 5.02；--primary-deep on --primary-soft 7.33；
+     --rose on --rose-soft 5.06；--silver-faint on --surface-tint 5.56。
+   最緊表面：--silver-faint on tint 5.56、input::placeholder（白底 6.16）；
+   --accent 只當非文字（白 3.53），不得配白字。白卡 vs --void 僅 1.07，
+   卡片分界靠 2px --glass-border 框＋陰影（F21）。
+   :root 以外只用 var(--…)；非用不可的寫死色值在旁註明理由。 */
 :root {
-  /* ground = 星空藍 (user direction 2026-09-16): the old midnight-black
-     (#0C0C0C → #10141F) read as 夜空黑; the site now sits in deep blue.
-     Same two-stop 135deg body gradient, only the hue moves — the near
-     stop stays darkest (night zenith), the far stop lifts to starlit blue.
-     AA floor = the GLASS COMPOSITE, not bare ground (spec §1 rule); the
-     star-blue far stop is ~2× the old luminance, so two values moved to
-     keep the floors (2026-09-16): --silver-faint #8a919c → #9aa3b2 and
-     the lg mirror band #6f7787 → #7b8494. Worst real surfaces on the far
-     stop: card glass ≈#202d53 → text 10.4, heading 10.6, silver-dim 6.2,
-     faint 5.3, rose 5.0, mirror band 3.6. card:hover's brightness(1.12)
-     scales the element's whole rendered output — plate and glyph together —
-     so the ratio RISES (band 3.57 → 4.04); it is not a floor case.
-     Real faint floor is input::placeholder (glass .05 over the card plate,
-     ≈#2b385c) at 4.55:1, not ocean-dim's 4.70:1 — both pass, but the
-     tighter one is what to sample next time. */
-  --void: #0a1733;        /* deep 星空藍 — body gradient near stop */
-  --deep-space: #14224a;  /* lighter horizon blue — far stop  */
-  --galaxy-y-offset: clamp(40px, 9vh, 96px); /* keep the Milky-Way band below the hero/nav overlap */
-  --heading: #e5e4e2;
-  --text: #dde2ec;
-  --silver-dim: #a9b0bc;
-  --silver-faint: #9aa3b2;  /* muted — same value as --metal-lo; lifted off #8a919c (3.8:1 worst) for AA on the 星空藍 glass */
-  --starlight: #f5f7fa;
-  --rose: #fb7185;   /* the ONLY hue on the site: transformation stars + errors */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-strong: rgba(10, 23, 51, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.1);
-
-  /* mirror chrome gradients — single source of truth: the base heading rules
-     and the animated glint overlay (@supports block below) MUST be the same
-     two mirrors, so both reference these tokens */
-  --chrome-mirror-lg: linear-gradient(
-    180deg,
-    #ffffff 0%,
-    #eef2f8 16%,
-    #c8d0dc 34%,
-    #8e97a6 45%,
-    #7b8494 49%,  /* lifted off #6f7787 (2.99:1 on 星空藍 card glass) to hold the 3.0 large-text floor */
-    #dfe6ee 53%,
-    #f8fafc 78%,
-    #ffffff 100%
-  );
-  --chrome-mirror-sm: linear-gradient(
-    180deg,
-    #fdfeff 0%,
-    #ccd4df 40%,
-    #939da9 70%,
-    #b9c2cf 100%
-  );
-
-  /* metallic silver sheen — the entire interaction language is chrome now:
-     states are expressed by luminance (edge → brighter edge → inverted
-     chrome plate), never by hue (user direction: no blue-violet) */
-  --metal-hi: #f8fafc;        /* hover/focus highlight          12.9:1 on card glass */
-  --metal-mid: #c8d0dc;       /* interactive text base           8.7:1 on card glass */
-  --metal-lo: #9aa3b2;        /* control edges                    5.3:1 on card glass */
-  --metal-deep: #6f7787;      /* dark edge floor (decor); NOT the mirror band — band lifted to #7b8494; 3.4:1 bare far stop — large text / decor only */
-  --metal-deep-small: #8a93a5; /* small text on dark — AA-safe replacement for #6f7787 */
-  --ink-on-chrome: #10141f;   /* text on a chrome plate          >=6.2:1 */
-  /* WCAG AA contrast tokens (spec § contrast) */
-  --text-muted-on-dark: #9aa3b2;  /* secondary on var(--deep-space) — was #6b7280 (fails) */
-  --text-muted-on-light: #4b5563; /* secondary on white/#fdf2f8 — was #9ca3af (fails) */
-  --error-on-light: #b91c1c;      /* error on #fff — was #ef4444 (fails) */
-  --error-on-dark: #fb7185;       /* error on var(--deep-space) — was #ef4444 */
-  --gen-title: #f5f3ff;           /* generation title on subtle purple — was #6d28d9 (1.62:1) */
-  --metal-line: rgba(200, 208, 220, 0.22);
-  /* moving glint layer for the mirror chrome (user direction 2026-09-13/14):
-     one diagonal light band crossing the glyphs, silver-white, no hue.
-     45deg（使用者指定，最好辨認）；純白核心在已白的鏡面上不可見，故帶一段
-     淡暗前導邊（墨色低透明）造出反光邊界的對比 — 亮區暗區都看得到移動。 */
-  --chrome-glint: linear-gradient(
-    45deg,
-    transparent 0%,
-    transparent 30%,
-    rgba(10, 23, 51, 0.32) 36%,
-    rgba(248, 250, 252, 0.95) 42%,
-    rgba(248, 250, 252, 0.95) 50%,
-    rgba(255, 255, 255, 0.15) 58%,
-    transparent 64%,
-    transparent 100%
-  );
-  --metal-edge: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.55),
-    rgba(154, 163, 178, 0.18) 35%,
-    rgba(240, 244, 250, 0.4) 60%,
-    rgba(154, 163, 178, 0.15)
-  );
+  /* 頁底漸層兩端 */
+  --void: #fff5fa;
+  --deep-space: #f4eeff;
+  /* 字 */
+  --heading: #2a1b3d;
+  --text: #3d2e50;
+  --silver-dim: #5c4b70;
+  --silver-faint: #6b5b7b;
+  --starlight: #7c3aed;       /* 強調：焦點框、重點數字、圖示（= --primary） */
+  --rose: #be185d;            /* 錯誤、四化星 */
+  --rose-soft: #ffe4ee;       /* 四化星藥丸底（--rose 5.06） */
+  --success: #047857;         /* 成功字（白 5.48、tint 4.95） */
+  --success-soft: #e7f6ef;    /* 成功提示板底（--success 4.92、--text 11.04） */
+  /* 面 */
+  --surface: #ffffff;
+  --surface-tint: #f6f1ff;    /* 次級底板：蓋牌區、題卡、宮位 */
+  --glass-bg: #ffffff;        /* 卡片底（不透明，取消毛玻璃） */
+  --glass-bg-strong: #ffffff; /* nav、sticky quiz、塔羅正面（不透明，K01） */
+  --glass-border: #eadcf5;    /* 只做卡片裝飾框（白 1.31，不當控制項邊界） */
+  /* 可互動字與控制項邊框 */
+  --metal-hi: #5b21b6;        /* hover 字               白 8.98 */
+  --metal-mid: #6d28d9;       /* 可互動字（連結）         白 7.10 */
+  --metal-lo: #8b6fd6;        /* 所有控制項邊框（F03）   白 3.93／void 3.69／deep 3.47／tint 3.55 */
+  --metal-line: #f0e4f7;      /* 分隔線（裝飾） */
+  --metal-edge: linear-gradient(135deg, #f9a8d4, #c4b5fd 50%, #a7f3d0); /* 精選卡外框（粉紫綠，裝飾） */
+  /* 主色／強調 */
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-deep: #5b21b6;    /* 立體按鈕底部陰影、選取態框 */
+  --primary-soft: #ede4ff;    /* 淺紫標籤底（--primary-deep 7.33、--silver-dim 6.36） */
+  --ink-on-primary: #ffffff;
+  --accent: #ec4899;          /* 粉色強調（非文字；白 3.53） */
+  --ink-on-accent: #2a0f1e;   /* on --accent 5.02 */
+  /* 十二星座漸層（F01；深端＝起點／藥丸圓點，淺端＝終點／藥丸底；一律配 --ink-on-sign） */
+  --ink-on-sign: #2a1b3d;
+  --sign-aries-deep: #ff6f61;       --sign-aries-light: #ffb199;
+  --sign-taurus-deep: #b5c334;      --sign-taurus-light: #e0ffb3;
+  --sign-gemini-deep: #ffd700;      --sign-gemini-light: #fff7b2;
+  --sign-cancer-deep: #00bcd4;      --sign-cancer-light: #b2f7ff;
+  --sign-leo-deep: #ff9800;         --sign-leo-light: #ffe0b2;
+  --sign-virgo-deep: #8bc34a;       --sign-virgo-light: #e6ffb2;
+  --sign-libra-deep: #f472b6;       --sign-libra-light: #ffd1e8;
+  --sign-scorpio-deep: #a98fe0;     --sign-scorpio-light: #e4d6ff;
+  --sign-sagittarius-deep: #42a5f5; --sign-sagittarius-light: #b2d7ff;
+  --sign-capricorn-deep: #a1887f;   --sign-capricorn-light: #e5d5cb;
+  --sign-aquarius-deep: #26c6b0;    --sign-aquarius-light: #b2fff7;
+  --sign-pisces-deep: #7f8fe6;      --sign-pisces-light: #c9d4ff;
+  /* 陰影與光暈 */
+  --shadow-card: 0 6px 20px rgba(124, 58, 237, 0.08);
+  --shadow-card-hover: 0 12px 28px rgba(124, 58, 237, 0.16);
+  --glow-pink: rgba(236, 72, 153, 0.05);   /* 頁底光暈：α 已計入上方最深合成底 */
+  --glow-violet: rgba(124, 58, 237, 0.03);
+  /* 固定色：底色不可控的表面，不跟主題（F08／F16） */
+  --cam-bg: #1a1226;                       /* 相機底板 */
+  --cam-guide: #ffffff;                    /* 手相導引線（on --cam-bg 18.13） */
+  --cam-guide-edge: rgba(0, 0, 0, 0.85);   /* 導引線深色描邊：疊在不可控的相機畫面上 */
+  --tarot-back-bg: #2a1b3d;                /* 塔羅 CSS 牌背：圖片載入前不閃粉白 */
+  --tarot-back-bg-2: #4c2a85;
+  /* 字型：Latin/數字 Nunito（index.html 載入 600/800），中文走系統字，不載中文 webfont */
+  --font-round: 'Nunito', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
 }
 
-/* ═══ deep-space ground (spec §3 layer 1) ═══ */
+/* ═══ 頁底：奶粉→淡紫漸層＋兩團淡彩光暈（取代舊版星空與銀河粒子層）═══ */
 body {
   background:
-    radial-gradient(120vw 90vh at 15% 8%, rgba(198, 220, 255, 0.07), transparent 60%),
-    radial-gradient(90vw 70vh at 85% 92%, rgba(120, 160, 230, 0.06), transparent 55%),
+    radial-gradient(60vw 50vh at 12% 6%, var(--glow-pink), transparent 70%),
+    radial-gradient(60vw 50vh at 88% 94%, var(--glow-violet), transparent 70%),
     linear-gradient(135deg, var(--void), var(--deep-space));
   background-attachment: fixed;
+  background-color: var(--deep-space); /* 漸層未覆蓋處（iOS 忽略 fixed、長頁）退回淡紫而非純白 */
   color: var(--text);
 }
 
-/* ═══ starfield: fixed decorative layers (spec §3) ═══ */
-.sky-nebula,
-.sky-stars-a,
-.sky-stars-b {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -3;
-}
-.sky-nebula { z-index: -4; }
-
-/* galaxy particle layer (spec §3 layer 4) — above CSS stars, below content */
-#galaxy-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -2;
-  transform: translateY(var(--galaxy-y-offset));
-}
-
-/* band haze — same -18deg axis as the canvas particles (spec §4) */
-.sky-nebula::before {
-  content: '';
-  position: absolute;
-  left: -40%;
-  right: -40%;
-  top: calc(50% + var(--galaxy-y-offset));
-  height: 130vmax;
-  transform: translateY(-50%) rotate(-18deg);
-  background:
-    radial-gradient(42% 10% at 50% 50%, rgba(214, 230, 255, 0.13), transparent 72%),
-    radial-gradient(70% 18% at 50% 50%, rgba(214, 230, 255, 0.075), transparent 78%),
-    radial-gradient(55% 15% at 50% 50%, rgba(126, 165, 232, 0.07), transparent 72%);
-}
-
-/* static star field — generated by scripts/gen-stars.js, do not edit */
-.sky-stars-a,
-.sky-stars-b {
-  border-radius: 50%;
-  animation: twinkleA 3.5s ease-in-out infinite alternate;
-}
-.sky-stars-a { width: 1px; height: 1px; box-shadow:
-  55.19vw 3.32vh 0 0 rgba(229,228,226,0.98),
-  46.89vw 31.78vh 0 0 rgba(229,228,226,0.86),
-  75.65vw 28.64vh 0 0 rgba(229,228,226,0.96),
-  96.80vw 84.94vh 0 0 rgba(229,228,226,0.86),
-  29.60vw 33.54vh 0 0 rgba(229,228,226,0.87),
-  14.68vw 88.25vh 0 0 rgba(229,228,226,0.95),
-  40.94vw 86.19vh 0 0 rgba(229,228,226,0.94),
-  17.79vw 84.05vh 0 0 rgba(229,228,226,0.96),
-  5.17vw 55.80vh 0 0 rgba(229,228,226,0.91),
-  66.08vw 93.42vh 0 0 rgba(229,228,226,0.90),
-  20.59vw 41.67vh 0 0 rgba(229,228,226,0.95),
-  86.61vw 98.40vh 0 0 rgba(229,228,226,0.87),
-  11.32vw 67.12vh 0 0 rgba(229,228,226,0.92),
-  2.22vw 13.68vh 0 0 rgba(229,228,226,0.90); }
-.sky-stars-b {
-  width: 2px; height: 2px;
-  animation-name: twinkleB;
-  animation-duration: 7s;
-  animation-delay: -2.2s;
-  box-shadow: 86.52vw 79.11vh 0 0 rgba(229,228,226,0.83),
-  5.51vw 54.68vh 0 0 rgba(229,228,226,0.92),
-  0.23vw 98.23vh 0 0 rgba(229,228,226,0.79),
-  17.64vw 56.39vh 0 0 rgba(229,228,226,0.94),
-  68.62vw 74.67vh 0 0 rgba(229,228,226,0.78),
-  37.49vw 18.99vh 0 0 rgba(229,228,226,0.92),
-  48.98vw 95.72vh 0 0 rgba(229,228,226,0.72),
-  17.63vw 95.93vh 0 0 rgba(229,228,226,0.92),
-  17.94vw 69.18vh 0 0 rgba(229,228,226,0.86),
-  78.25vw 13.85vh 0 0 rgba(229,228,226,0.95);
-}
-/* 2026-09-17 使用者指示：星星少但亮 — 閃爍暗段地板拉高，最暗相仍清楚可見 */
-@keyframes twinkleA { from { opacity: 1; } to { opacity: 0.55; } }
-@keyframes twinkleB { from { opacity: 0.85; } to { opacity: 0.5; } }
-
-/* serif headings (spec §2) — Latin/digits via Playfair, CJK via Noto Serif TC.
-   Mirror chrome (user-requested): a STATIC vertical reflection gradient —
-   sky highlight, a sharp horizon break, then the ground reflection — like
-   polished chrome plating. No sweeping animation; a mirror does not marquee.
-   Falls back to solid --heading where background-clip: text is unsupported. */
+/* 標題：圓體實色；取消鏡面漸層、background-clip 與 glint 動畫 */
 h1, h2, h3, h4, h5, h6,
 .nav-brand {
-  font-family: 'Playfair Display', 'Noto Serif TC', serif;
+  font-family: var(--font-round);
+  font-weight: 800;
   color: var(--heading);
-  background: var(--chrome-mirror-lg);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(214, 224, 240, 0.28));
+  letter-spacing: 0.01em;
 }
-/* small headings can't carry the full mirror's dark horizon band (it melts
-   into the card glass at 1.25rem) — light silver only, AA-safe throughout.
-   background-image (not the shorthand) so background-clip: text survives. */
-h3, h4, h5, h6 {
-  background-image: var(--chrome-mirror-sm);
-}
+.nav-brand { color: var(--primary-deep); }
 
-/* mirror chrome glint (user direction 2026-09-13, supersedes "no sweeping
-   animation"): a light pass ACROSS the static mirror — the mirror
-   gradient itself never moves; an oversized clipped sheen layer slides
-   over it. The long rest between passes IS the effect: the eye is caught
-   by change and habituates to constant motion. Both levels share the
-   120s period (2026-09-17) and are phase-offset (small headings +60s),
-   so they never pulse together. Sweeping band is fully off-text at both
-   keyframe ends, so the loop seam is invisible. Only inside @supports:
-   without background-clip: text the sheen would paint as a moving block. */
-@supports (-webkit-background-clip: text) or (background-clip: text) {
-  h1, h2, .nav-brand {
-    background-image: var(--chrome-glint), var(--chrome-mirror-lg);
-    background-size: 240% 100%, 100% 100%;
-    background-position: 130% 0, 0 0;
-    background-repeat: no-repeat;
-    animation: chrome-glint 120s ease-in-out infinite;
-  }
-  h3, h4, h5, h6 {
-    background-image: var(--chrome-glint), var(--chrome-mirror-sm);
-    background-size: 240% 100%, 100% 100%;
-    background-position: 130% 0, 0 0;
-    background-repeat: no-repeat;
-    animation: chrome-glint 120s ease-in-out 60s infinite;
-  }
-}
-/* band center at position p: x = 1.2C − 1.4C·p/100 → p=130% fully off the
-   left edge, p=−30% fully off the right; the pass runs left→right（閱讀方向）.
-   2026-09-17 使用者指示（issue#1，取代 09-14 的慢掃回饋）：掃過速度加快
-   （~2s，1.7% of cycle）、每 2 分鐘閃一次；小標延遲 60s 錯相，不齊發。 */
-@keyframes chrome-glint {
-  0%   { background-position: 130% 0, 0 0; }
-  1.7% { background-position: -30% 0, 0 0; }
-  100% { background-position: -30% 0, 0 0; }
-}
-
-/* ═══ reduced motion: freeze to a static sky (spec §4) ═══ */
-@media (prefers-reduced-motion: reduce) {
-  .sky-stars-a,
-  .sky-stars-b {
-    animation: none;
-    opacity: 0.7;
-  }
-  h1, h2, h3, h4, h5, h6, .nav-brand {
-    animation: none;  /* glint off — static mirror */
-  }
-  .tarot-inner { transition: none; }  /* 直開不翻（塔羅 v1a） */
-}
+/* reduced-motion 覆寫一律放在檔尾（K07：必須寫在被覆寫的基本規則之後）。 */
 
 * {
   box-sizing: border-box;
@@ -255,15 +113,15 @@ h3, h4, h5, h6 {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  font-family: var(--font-round);
   line-height: 1.6;
 }
 
-/* links: "clickable" is carried by the underline and luminance, not hue */
+/* links: 紫字＋底線（--metal-mid 白 7.10／deep 6.27；hover --metal-hi 8.98） */
 a {
-  color: #cfd6e0;
+  color: var(--metal-mid);
   text-decoration: underline;
-  text-decoration-color: rgba(200, 208, 220, 0.4);
+  text-decoration-color: var(--metal-lo);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: color 0.18s ease, text-decoration-color 0.18s ease;
@@ -271,7 +129,6 @@ a {
 a:hover {
   color: var(--metal-hi);
   text-decoration-color: var(--metal-hi);
-  text-shadow: 0 0 10px rgba(248, 250, 252, 0.35);
 }
 
 button {
@@ -286,22 +143,23 @@ button:disabled {
 
 input, select {
   font-family: inherit;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--metal-lo);  /* 控制項邊框（F03） */
+  border-radius: 12px;
   color: var(--text);
 }
 
 select option {
-  background: var(--deep-space);
+  background: var(--surface);
   color: var(--text);
 }
 
+/* 紫板 → --ink-on-primary（F04） */
 select option:checked,
 select option:hover,
 select option:focus {
-  background: var(--metal-mid);
-  color: var(--ink-on-chrome);
+  background: var(--primary);
+  color: var(--ink-on-primary);
 }
 
 input::placeholder { color: var(--silver-faint); }
@@ -309,7 +167,7 @@ input::placeholder { color: var(--silver-faint); }
 input:focus, select:focus {
   outline: 2px solid var(--starlight);
   outline-offset: 1px;
-  border-color: var(--metal-lo);
+  border-color: var(--primary);
 }
 
 @media (max-width: 768px) {
@@ -322,52 +180,35 @@ input:focus, select:focus {
 .app { min-height: 100vh; display: flex; flex-direction: column; }
 .nav {
   background: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--metal-line);
+  border-bottom: 2px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
   color: var(--text);
   padding: 1rem 2rem;
   display: flex; justify-content: space-between; align-items: center;
   flex-wrap: wrap; gap: 1rem;
 }
-.nav a { color: var(--silver-dim); }
-.nav a:hover { color: var(--starlight); }
-.nav-brand { color: var(--heading); font-size: 1.25rem; font-weight: bold; text-decoration: none; }
+.nav a { color: var(--silver-dim); text-decoration: none; font-weight: 600; }
+.nav a:hover { color: var(--primary); }
+.nav-brand { font-size: 1.25rem; text-decoration: none; }
+.nav a.nav-brand { color: var(--primary-deep); font-weight: 800; }
 .nav-links { display: flex; gap: 1rem; align-items: center; }
 .nav-logout {
-  background: transparent; border: 1px solid var(--glass-border); color: var(--silver-dim);
-  padding: 0.25rem 0.75rem; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--metal-lo); color: var(--silver-dim);
+  padding: 0.25rem 0.85rem; border-radius: 999px; font-weight: 600;
 }
-.nav-logout:hover { border-color: var(--silver-dim); color: var(--starlight); }
+.nav-logout:hover { border-color: var(--primary); color: var(--primary); background: var(--surface-tint); }
 main { flex: 1; }
 .footer { padding: 1rem; text-align: center; font-size: 0.875rem; color: var(--silver-faint); }
 
 /* ── shared ── */
+/* 卡片＝內容容器：白底、20px 圓角、2px 淡粉紫框、柔和紫陰影；不加 hover（F15） */
 .card {
   position: relative;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--glass-bg), var(--glass-bg)) padding-box,
-    var(--metal-edge) border-box;
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  padding: 1.5rem; border-radius: 18px 6px 18px 6px;  /* tailfin cut */
+  border: 2px solid var(--glass-border);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem; border-radius: 20px;
   margin-bottom: 1.5rem;
-}
-/* one line of skylight along the card's top edge */
-.card::before {
-  content: '';
-  position: absolute; inset: 0 0 auto 0; height: 1px;
-  border-radius: inherit; pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(248, 250, 252, 0.55), transparent);
-}
-.card,
-.feature {
-  transition: filter 0.4s ease;
-}
-.card:hover,
-.feature:hover {
-  filter: brightness(1.12);
 }
 
 .page { padding: 1.5rem; max-width: 800px; margin: 0 auto; }
@@ -376,45 +217,37 @@ main { flex: 1; }
 .error { color: var(--rose); margin-bottom: 1rem; font-size: 0.875rem; }
 .muted { color: var(--silver-faint); }
 
-/* primary CTA = chrome plate: on a dark site a bright plate with dark ink
-   IS the strongest call-to-action signal (no hue needed). Bullet-nose
-   silhouette + top reflection line = Jet Age streamline. */
+/* 主鈕＝紫色立體鈕：紫底白字（5.70；hover 7.10）、全圓角、底部 4px 深紫陰影，
+   按下沉 3px。.cta 是 <a>：:hover 要重設色與底線，否則全域 a:hover (0,1,1) 會蓋過。 */
 .cta,
 .btn-primary {
-  position: relative; overflow: hidden;
-  border: 1px solid transparent;
+  position: relative;
+  display: inline-block;
+  border: none;
   border-radius: 999px;
-  background:
-    linear-gradient(180deg,
-      #f8fafc 0%, #dbe2eb 34%, #aab3c1 50%,
-      #8e97a6 56%, #c4ccd8 82%, #eef2f7 100%) padding-box,
-    linear-gradient(160deg,
-      rgba(255, 255, 255, 0.75), rgba(154, 163, 178, 0.35) 40%,
-      rgba(248, 250, 252, 0.6) 65%, rgba(154, 163, 178, 0.3)) border-box;
-  color: var(--ink-on-chrome);
+  background: var(--primary);
+  color: var(--ink-on-primary);
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 4px 0 var(--primary-deep);
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
 }
 .btn-primary {
   padding: 0.75rem 1.5rem; cursor: pointer; font-size: 1rem;
-  font-weight: 500; text-decoration: none;
 }
-.cta { padding: 0.75rem 2rem; font-weight: 500; }
-.cta::before,
-.btn-primary::before {
-  content: '';
-  position: absolute; left: 6%; right: 6%; top: 2px; height: 42%;
-  border-radius: 999px 999px 50% 50% / 999px 999px 100% 100%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
-  pointer-events: none;
-}
+.cta { padding: 0.75rem 2rem; }
 .btn-primary:hover,
 .cta:hover {
-  filter: brightness(1.06);
-  box-shadow: 0 0 18px rgba(248, 250, 252, 0.32);
+  background: var(--primary-hover);
+  color: var(--ink-on-primary);
+  text-decoration: none;
 }
 .btn-primary:active,
-.cta:active { filter: brightness(0.95); transform: translateY(1px); }
+.cta:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--primary-deep); }
+.btn-primary:focus-visible,
+.cta:focus-visible { outline: 2px solid var(--starlight); outline-offset: 3px; }
 /* disabled = 處理中/已鎖定（Google 登入 debounce、magic-link 送信中） */
-.btn-primary:disabled { opacity: 0.65; cursor: not-allowed; filter: none; }
+.btn-primary:disabled { opacity: 0.65; cursor: not-allowed; transform: none; box-shadow: 0 4px 0 var(--primary-deep); }
 .auth-submit { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
 .button-spinner {
   display: inline-block;
@@ -428,7 +261,8 @@ main { flex: 1; }
 }
 @keyframes button-spin { to { transform: rotate(360deg); } }
 .btn-block { width: 100%; padding: 1rem 1.5rem; border-radius: 8px; border: none; font-size: 1rem; }
-.btn-link, .back-link { background: none; border: none; color: #cfd6e0; cursor: pointer; }
+.btn-link, .back-link { background: none; border: none; color: var(--metal-mid); cursor: pointer; }
+.btn-link:hover, .back-link:hover { color: var(--metal-hi); }
 .back-link { margin-bottom: 1rem; }
 .prose { white-space: pre-wrap; line-height: 1.8; }
 
@@ -440,69 +274,60 @@ main { flex: 1; }
 .hero-head h1 { font-size: 2.5rem; margin-bottom: 1rem; color: var(--heading); }
 .hero-sub { font-size: 1.25rem; color: var(--silver-dim); margin-bottom: 2rem; }
 .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+/* 次鈕：白底紫框紫字（--primary 白 5.70；框 --metal-lo 白 3.93／頁底 ≥3.47） */
 .cta-alt {
-  color: #cfd6e0; padding: 0.75rem 2rem;
-  border-radius: 999px; text-decoration: none; font-weight: 500;
-  border: 1px solid var(--metal-lo);
-  background: rgba(255, 255, 255, 0.04);
+  display: inline-block;
+  color: var(--primary); padding: 0.75rem 2rem;
+  border-radius: 999px; text-decoration: none; font-weight: 800;
+  border: 2px solid var(--metal-lo);
+  background: var(--surface);
 }
 .cta-alt:hover {
-  color: var(--metal-hi);
-  border-color: var(--metal-hi);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--primary-deep);
+  border-color: var(--primary);
+  background: var(--surface-tint);
+  text-decoration: none;
 }
 .feature-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 2rem; margin-top: 3rem;
 }
 .feature {
-  border: 1px solid transparent;
-  /* 2026-09-17 issue#1：方框內漸層加深（deep-space 往 void 壓深），凸顯白字 —
-     銀河玻璃白 0.05 換成深藍縱向漸層；silver-dim 對比 6.2 → 8.4:1 */
-  background:
-    linear-gradient(180deg, rgba(10, 23, 51, 0.32), rgba(5, 13, 31, 0.55)) padding-box,
-    var(--metal-edge) border-box;
-  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  padding: 2rem; border-radius: 18px 6px 18px 6px;  /* tailfin cut */
+  border: 2px solid var(--glass-border);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-card);
+  padding: 2rem; border-radius: 20px;
 }
 .feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--heading); }
 .feature p { color: var(--silver-dim); }
-/* 2026-09-17 issue#1：標題前的圖示脫離鏡面漸層，改白色實體，與鍍鉻標題字跳出色差 */
-.feature-icon {
-  background-image: none;
-  color: var(--starlight);
-  -webkit-text-fill-color: var(--starlight);
-}
-/* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/hover 光暈/改色，
+.feature-icon { color: var(--starlight); }
+/* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/改色，
    讓連結卡與 div 卡視覺一致（全域 a:hover 會穿透子元素，故逐項重設） */
-a.feature { display: block; text-decoration: none; color: inherit; }
-a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
+a.feature { display: block; text-decoration: none; color: inherit; transition: transform 0.18s ease, box-shadow 0.18s ease; }
+a.feature:hover { text-decoration: none; color: inherit; }
+/* 可點的卡才上浮；包在 hover:hover 內，觸控裝置點擊後不會黏住（F15） */
+@media (hover: hover) {
+  a.feature:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+}
 
-/* chrome ring on the ONE featured card — silver-white only (hue-rotate
-   drift removed: it does nothing on a hueless gradient) */
+/* 精選卡：粉紫綠漸層外框（--metal-edge，裝飾） */
 .feature-grid .feature:first-child {
   position: relative;
   isolation: isolate;
+  border-color: transparent;
 }
 .feature-grid .feature:first-child::before {
   content: '';
   position: absolute;
-  inset: 0;
-  padding: 1px;
+  inset: -2px;
+  padding: 2px;
   border-radius: inherit;
   pointer-events: none;
-  background: conic-gradient(
-    from 210deg,
-    #8a93a5,
-    #c8d0dc,
-    #f8fafc,
-    #eef2f7,
-    #9aa3b2,
-    #8a93a5
-  );
+  background: var(--metal-edge);
+  /* mask 的 #000 只取 alpha（遮罩形狀），不是顯示色 */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); /* 標準 mask */
   mask-composite: exclude;
 }
 
@@ -515,8 +340,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .form-col { display: flex; flex-direction: column; gap: 1rem; }
 .form-label { font-size: 0.875rem; color: var(--silver-faint); }
 .form-input {
-  padding: 0.5rem; border: 1px solid var(--glass-border); border-radius: 4px;
-  width: 100%; background: var(--glass-bg); color: var(--text);
+  padding: 0.5rem; border: 1px solid var(--metal-lo); border-radius: 12px;
+  width: 100%; background: var(--surface); color: var(--text);
 }
 .hour-row { display: flex; gap: 0.5rem; align-items: center; }
 .hour-unknown { display: flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; color: var(--silver-dim); }
@@ -524,8 +349,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   margin: 0 0 1rem;
   padding: 0.9rem 1rem 0.85rem;
   border: 1px solid var(--glass-border);
-  border-radius: 12px 4px 12px 4px;
-  background: rgba(10, 23, 51, 0.42);
+  border-radius: 14px;
+  background: var(--surface-tint);
 }
 .prediction-tuner-head {
   display: flex;
@@ -558,10 +383,41 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .strength-slider-label { color: var(--text); }
 .strength-slider-row input[type="range"] {
   width: 100%;
-  accent-color: var(--starlight);
+  accent-color: var(--primary);
   cursor: pointer;
 }
 .strength-slider-row input[type="range"]:disabled { cursor: not-allowed; }
+/* range（非文字 ≥3）：軌道 --metal-lo（tint 3.55）、拇指 --primary 白框 */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  border: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px; background: var(--metal-lo);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px; border-radius: 999px; background: var(--metal-lo);
+}
+input[type="range"]::-moz-range-progress {
+  height: 6px; border-radius: 999px; background: var(--primary);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; margin-top: -6px; border-radius: 50%;
+  background: var(--primary); border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--primary-deep);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--primary); border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--primary-deep);
+}
+input[type="range"]:focus { outline: none; }
+input[type="range"]:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+input[type="range"]:disabled { opacity: 0.6; }
 .strength-slider-value {
   color: var(--starlight);
   font-size: 0.78rem;
@@ -575,57 +431,28 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .chart-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--silver-dim); }
 .palace-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
 .palace {
-  border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.5rem;
-  background: rgba(10, 23, 51, 0.55);
+  border: 1px solid var(--glass-border); border-radius: 12px; padding: 0.5rem;
+  background: var(--surface-tint);
 }
-/* life palace: informational highlight — chrome border + inner glow,
-   distinct from the inverted-plate "selected" state used by quiz */
+/* life palace：資訊性強調 — 白底＋2px 主紫框（非文字 vs tint 5.14），
+   與 quiz 的「紫板＝選取」區隔（life 不反相） */
 .palace.life {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)) padding-box,
-    linear-gradient(180deg, rgba(248, 250, 252, 0.85), rgba(154, 163, 178, 0.25) 45%, rgba(248, 250, 252, 0.5)) border-box;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 14px -4px rgba(248, 250, 252, 0.4);
+  border: 2px solid var(--primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
-.palace-head { font-weight: 600; font-size: 0.85rem; color: var(--heading); }
+.palace-head { font-weight: 700; font-size: 0.85rem; color: var(--heading); }
 .palace-stars { margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.star { font-size: 0.8rem; padding: 0.15rem 0.35rem; border-radius: 4px; background: rgba(255, 255, 255, 0.07); color: var(--silver-dim); }
-.star.main { background: rgba(229, 228, 226, 0.14); color: var(--starlight); }
-.star.transformation { background: rgba(251, 113, 133, 0.12); color: var(--rose); }
-/* The life palace swaps the navy plate for a near-white highlight
-   (rgba(255,255,255,.07) top stop). Star pills are semi-transparent, so
-   they used to resolve against that brighter plate and lost the AA floor
-   the navy palaces hold: silver-dim 4.05:1, rose 3.48:1 (star-blue ground,
-   2026-09-17). Re-lay the navy plate UNDER the role tint inside the life
-   palace only. Result: life-palace pills silver-dim 6.7:1, starlight
-   9.3:1, rose 4.6:1 — i.e. DARKER than an ordinary palace (6.0 / 5.0),
-   not "the same as"; rose there is the tightest passing text on the site.
-   These selectors are 3 and 4 classes so they outrank both `.star*` (1-2)
-   and `.on-light .star` (2). If a life palace is ever nested inside an
-   `.on-light` surface, the background below would still win while the
-   colour came from the light branch — keep the pair together. */
-.palace.life .star {
-  background: rgba(10, 23, 51, 0.55);
-  color: var(--silver-dim);
-}
-.palace.life .star.main {
-  background:
-    linear-gradient(rgba(229, 228, 226, 0.14), rgba(229, 228, 226, 0.14)),
-    rgba(10, 23, 51, 0.55);
-  color: var(--starlight);
-}
-.palace.life .star.transformation {
-  background:
-    linear-gradient(rgba(251, 113, 133, 0.12), rgba(251, 113, 133, 0.12)),
-    rgba(10, 23, 51, 0.55);
-  color: var(--rose);
-}
+/* 星曜藥丸：不透明淺板，宮位底（tint／life 白）不影響字的合成底。
+   --silver-dim on --primary-soft 6.36、--primary-deep on --primary-soft 7.33、
+   --rose on --rose-soft 5.06 */
+.star { font-size: 0.8rem; padding: 0.15rem 0.35rem; border-radius: 6px; background: var(--primary-soft); color: var(--silver-dim); }
+.star.main { background: var(--primary-soft); color: var(--primary-deep); font-weight: 700; }
+.star.transformation { background: var(--rose-soft); color: var(--rose); }
 
 /* ── /personality result: OCEAN score tracks (Grok design review) ── */
 .ocean-dim {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-tint);
   border-radius: 8px;
   padding: 1rem 1.125rem 1.125rem;
   margin-bottom: 0.75rem;
@@ -642,21 +469,21 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
-  background-image: linear-gradient(180deg, #fdfeff 0%, #dbe2eb 55%, #a8b1bf 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary-deep);  /* 實色（取消漸層文字 text-fill；tint 8.10） */
 }
 .ocean-track-wrap { padding: 10px 12px 8px; }
+/* 非文字 ≥3：軌道 = --glass-border 底＋1px --metal-lo 框（tint 3.55）；
+   色帶 --primary→--primary-deep（vs 軌道 4.36／6.87，vs tint 5.14／8.10） */
 .ocean-track {
   position: relative;
   height: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--glass-border);
+  border: 1px solid var(--metal-lo);
   border-radius: 999px;
 }
 .ocean-band {
   position: absolute; top: 0; height: 100%;
-  background: linear-gradient(90deg, #8e97a6, #e2e8f0);  /* value = length, not hue */
+  background: linear-gradient(90deg, var(--primary), var(--primary-deep));  /* value = length */
   border-radius: 999px;
 }
 .ocean-mean {
@@ -669,9 +496,9 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .ocean-marker {
   position: absolute; top: 50%;
   width: 14px; height: 14px;
-  background: var(--starlight);
-  border: 2px solid var(--deep-space);
-  box-shadow: 0 0 0 1px var(--metal-mid), 0 0 8px rgba(248, 250, 252, 0.45);
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--primary-deep);
   border-radius: 50%;
   transform: translate(-50%, -50%);
 }
@@ -700,9 +527,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   border-radius: 2px;
   margin-bottom: 1rem;
   background: linear-gradient(90deg,
-    transparent 0%, #6f7787 10%, #f8fafc 45%,
-    #8e97a6 55%, #3f4756 90%, transparent 100%);
-  opacity: 0.75;
+    transparent 0%, var(--accent) 20%, var(--primary) 60%, transparent 100%);
+  opacity: 0.6;  /* 裝飾分隔線 */
 }
 .ocean-foot strong {
   display: block;
@@ -722,15 +548,16 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .quiz-consent { font-size: 0.8125rem; margin-bottom: 1.25rem; color: var(--silver-dim); }
 .quiz-progress { font-size: 0.8125rem; color: var(--silver-dim); margin: 0; font-variant-numeric: tabular-nums; }
 .quiz-progress strong { color: var(--text); font-weight: 700; }
-.quiz-progress-bar { height: 3px; background: rgba(255, 255, 255, 0.12); border-radius: 999px; margin: 0.5rem 0 1.25rem; overflow: hidden; }
-.quiz-progress-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #8e97a6, #f8fafc); border-radius: inherit; }
+/* 進度條（非文字）：填色 --primary→--accent（白 5.70／3.53）、軌道 --glass-border 裝飾 */
+.quiz-progress-bar { height: 6px; background: var(--glass-border); border-radius: 999px; margin: 0.5rem 0 1.25rem; overflow: hidden; }
+.quiz-progress-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: inherit; }
 .quiz-key {
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.375rem;
   padding: 0 1rem 0.75rem; font-size: 0.6875rem; line-height: 1.3;
   color: var(--silver-dim); text-align: center;
 }
 .quiz-item {
-  border: 0; min-width: 0; background: rgba(255, 255, 255, 0.04); border-radius: 8px;
+  border: 0; min-width: 0; background: var(--surface-tint); border-radius: 14px;
   margin: 0 0 0.5rem; padding: 0.75rem 1rem 0.875rem;
 }
 .quiz-item:last-of-type { margin-bottom: 0; }
@@ -741,21 +568,21 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .quiz-no {
   display: inline-block; min-width: 1.5rem; text-align: center; margin-right: 0.5rem;
   font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--ink-on-chrome); background: linear-gradient(180deg, #e8edf4, #b6bfcc); border-radius: 4px; padding: 0.1rem 0.35rem;
+  color: var(--primary-deep); background: var(--primary-soft); border-radius: 6px; padding: 0.1rem 0.35rem;  /* 淺板（F04）7.33 */
 }
 .quiz-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.375rem; }
 .quiz-choice {
   position: relative; display: flex; align-items: center; justify-content: center;
-  min-height: 44px; border: 1px solid var(--glass-border); border-radius: 8px;
-  background: rgba(10, 23, 51, 0.55);
-  cursor: pointer; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--silver-dim);
+  min-height: 44px; border: 1px solid var(--metal-lo); border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--silver-dim);
 }
-.quiz-choice:hover { border-color: var(--metal-mid); background: rgba(255, 255, 255, 0.07); }
-/* selected = inverted chrome plate — inversion is reserved for selection only */
+@media (hover: hover) { .quiz-choice:hover { border-color: var(--primary); color: var(--primary-deep); } }
+/* 選取＝紫板白字（F04；白 on --primary 5.70） */
 .quiz-choice:has(input:checked) {
-  background: linear-gradient(180deg, #f8fafc, #c8d0dc);
-  border-color: var(--metal-hi);
-  color: var(--ink-on-chrome);
+  background: var(--primary);
+  border-color: var(--primary-deep);
+  color: var(--ink-on-primary);
 }
 .quiz-choice:has(input:focus-visible) { outline: 2px solid var(--starlight); outline-offset: 2px; }
 .quiz-choice input {
@@ -766,11 +593,11 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   margin: 1.25rem -1.5rem -1.5rem;
   padding: 0.75rem 1.5rem calc(0.75rem + env(safe-area-inset-bottom));
   background: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  border-top: 1px solid var(--metal-line);
+  border-top: 2px solid var(--glass-border);
+  border-radius: 0 0 18px 18px;
 }
 .quiz-submit .btn-primary { width: 100%; }
-.quiz-submit .btn-primary:disabled { opacity: 1; background: rgba(255, 255, 255, 0.08); color: var(--silver-faint); cursor: not-allowed; }
+.quiz-submit .btn-primary:disabled { opacity: 1; background: var(--surface-tint); color: var(--silver-faint); box-shadow: 0 4px 0 var(--glass-border); cursor: not-allowed; }  /* faint on tint 5.56 */
 @media (max-width: 639px) {
   .quiz-key { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0 0.25rem 0.75rem; }
   .quiz-key { counter-reset: k; }
@@ -778,71 +605,17 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   .quiz-key span::before { content: counter(k) " "; font-weight: 600; color: var(--metal-mid); }
 }
 
-/* dark scrollbar polish */
+/* scrollbar：thumb --metal-lo（vs 軌道 --void 3.69，非文字 ≥3） */
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: var(--void); }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+::-webkit-scrollbar-thumb { background: var(--metal-lo); border-radius: 999px; border: 2px solid var(--void); }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
-/* coarse-pointer fallback (spec §8): drop blur (which would recompute
-   over the animating canvas every frame) and raise the strong-glass
-   alpha so nav/sticky bars stay legible */
-@media (pointer: coarse) {
-  .nav,
-  .card,
-  .feature,
-  .quiz-submit {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-  .card,
-  .feature {
-    background: rgba(10, 23, 51, 0.82);  /* solid ground: no blur to rely on */
-  }
-  :root { --glass-bg-strong: rgba(8, 18, 42, 0.9); }
-  /* glint off on touch devices too: every pass repaints the heading over
-     the animating galaxy canvas — same reason blur is dropped above */
-  h1, h2, h3, h4, h5, h6, .nav-brand {
-    animation: none;
-  }
-}
+/* coarse-pointer 分支（spec §8 舊版）已移除：亮底改為不透明白卡、無 backdrop blur、
+   無 glint／粒子動畫，觸控裝置不再需要另一套實底或 :root 覆寫（F07）。 */
 
-/* ── light-surface safety (contrast fix) ──
-   任何白/淺底面板內的文字必須用深墨色，否則會繼承 var(--text)/var(--starlight)
-   的淡色而隱形（如 divination 西洋行星白卡）。掛上 .on-light 即自動翻正，
-   並把鏡面標題的漸層關掉改實色，避免白字在白底上消失。
-   另外提供 .text-frame 給疊在不確定背景上的淡字（加描邊/陰影）備用。 */
-.on-light { color: var(--ink-on-chrome); }
-.on-light h1, .on-light h2, .on-light h3, .on-light h4, .on-light h5, .on-light h6,
-.on-light .palace-head {
-  background: none;
-  -webkit-background-clip: border-box;
-  background-clip: border-box;
-  -webkit-text-fill-color: var(--ink-on-chrome);
-  filter: none;
-  color: var(--ink-on-chrome);
-  animation: none;  /* glint layer is clipped-text only; keep light surfaces fully static */
-}
-.on-light .muted { color: var(--text-muted-on-light); }
-.on-light a { color: #1e3a8a; text-decoration-color: rgba(30, 58, 138, 0.35); }
-.on-light a:hover { color: #1e40af; text-decoration-color: #1e40af; }
-/* 淺底上的 star 標籤：覆蓋深色玻璃版的淡字設定 */
-.on-light .star { background: #fff; color: var(--text-muted-on-light); border-color: #e5e7eb; }
-.on-light .star.main { background: #fff; color: #374151; border-color: #e5e7eb; }
 
-/* 字框備用：淡字疊在照片/漸層等不確定底色上時，描邊保底線可讀性 */
-.text-frame {
-  text-shadow:
-    0 1px 2px rgba(16, 20, 31, 0.75),
-    0 0 1px rgba(16, 20, 31, 0.9),
-    0 0 8px rgba(16, 20, 31, 0.45);
-}
-.text-frame--light {
-  -webkit-text-stroke: 0.45px rgba(16, 20, 31, 0.55);
-  paint-order: stroke fill;
-}
-
-/* ═══ 塔羅 今日抽牌（v1a）— cosmic-silver 卡面 ═══ */
+/* ═══ 塔羅 今日抽牌（v1a）— 卡面仍是舊風格圖，亮底上以白色相框收邊（F16）═══ */
 .tarot-card {
   display: block;
   width: min(220px, 60vw);
@@ -863,7 +636,7 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .tarot-card:focus-visible .tarot-inner {
-  outline: 2px solid var(--silver-faint);
+  outline: 2px solid var(--starlight);
   outline-offset: 4px;
   border-radius: 16px;
 }
@@ -876,7 +649,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: 16px;
-  border: 1px solid var(--glass-border);
+  border: 4px solid var(--surface);   /* 白色相框邊 */
+  box-shadow: var(--shadow-card-hover);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -906,47 +680,28 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
-  padding: 1.75rem 0.5rem 0.75rem;
-  background: linear-gradient(transparent, rgba(10, 23, 51, 0.88));
+  padding: 0.5rem 0.5rem 0.6rem;
+  /* 不透明淺色板（F16）：卡名不依賴卡面圖片的明暗；heading 15.88／silver-dim 7.79 */
+  background: var(--surface);
+  border-top: 2px solid var(--glass-border);
 }
+/* CSS 牌背固定深色（不跟主題）：back.webp 載入前不先閃粉白（F16） */
 .tarot-back {
-  background:
-    radial-gradient(1.2px 1.2px at 25% 20%, var(--silver-faint) 45%, transparent 55%),
-    radial-gradient(1px 1px at 70% 30%, var(--silver-dim) 45%, transparent 55%),
-    radial-gradient(1.4px 1.4px at 40% 75%, var(--silver-faint) 45%, transparent 55%),
-    radial-gradient(1px 1px at 80% 82%, var(--silver-dim) 45%, transparent 55%),
-    linear-gradient(135deg, var(--void), var(--deep-space));
-}
-.tarot-back-mark {
-  font-size: 2rem;
-  color: var(--starlight);
-}
-.tarot-back-brand {
-  font-size: 0.8rem;
-  letter-spacing: 0.25em;
-  color: var(--silver-faint);
+  background: linear-gradient(135deg, var(--tarot-back-bg), var(--tarot-back-bg-2));
 }
 .tarot-front {
   transform: rotateY(180deg);
   background: var(--glass-bg-strong);
 }
-.tarot-symbol {
-  font-size: 2.4rem;
-  line-height: 1.2;
-  color: var(--starlight);
-  letter-spacing: 0.1em;
-}
-.tarot-symbol.reversed {
-  transform: rotate(180deg);
-}
 .tarot-name {
   font-size: 1.2rem;
+  font-weight: 800;
   color: var(--heading);
 }
 .tarot-badge {
   font-size: 0.8rem;
   color: var(--silver-dim);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--metal-lo);
   border-radius: 999px;
   padding: 0.15rem 0.8rem;
 }
@@ -979,13 +734,13 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   vertical-align: 0.35em;
   margin-left: 0.5rem;
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: 0.12em;
-  color: var(--starlight);
-  border: 1px solid var(--glass-border);
+  color: var(--ink-on-accent);   /* on --accent 5.02（F18） */
+  border: none;
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
-  background: var(--glass-bg);
+  background: var(--accent);
 }
 
 /* ═══ 塔羅直向/手機（2026-10-27 RWD）═══ */
@@ -1000,10 +755,10 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
     gap: 0.5rem;
   }
   .tarot-caption {
-    padding: 1.1rem 0.4rem 0.5rem;
+    padding: 0.4rem 0.4rem 0.5rem;
   }
   .tarot-card--sm .tarot-caption {
-    padding: 0.9rem 0.3rem 0.4rem;
+    padding: 0.3rem 0.25rem 0.35rem;
   }
   .tarot-name {
     font-size: 1rem;
@@ -1020,7 +775,7 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   }
 }
 
-/* ── palm v1（/palm 教學＋/palm/capture 拍攝；色彩一律既有 token）── */
+/* ── palm v1（/palm 教學＋/palm/capture 拍攝；相機區用 --cam-* 固定色，F08）── */
 .palm-figure {
   color: var(--silver-dim);
 }
@@ -1062,24 +817,27 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   margin-bottom: 1rem;
 }
 .palm-hand-btn {
-  border: 1px solid var(--glass-border);
-  background: transparent;
-  color: var(--silver-faint);
+  border: 1px solid var(--metal-lo);
+  background: var(--surface);
+  color: var(--silver-dim);
+  font-weight: 700;
   border-radius: 999px;
   padding: 0.35rem 1.1rem;
   cursor: pointer;
   font-size: 0.95rem;
 }
 .palm-hand-btn.active {
-  color: var(--heading);
-  border-color: var(--silver-dim);
+  color: var(--ink-on-primary);
+  background: var(--primary);
+  border-color: var(--primary-deep);
 }
+/* 相機底板：底色不可控（相機畫面），固定深色、不跟主題（F08） */
 .palm-video-wrap {
   position: relative;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid var(--glass-border);
-  background: var(--void);
+  border: 2px solid var(--glass-border);
+  background: var(--cam-bg);
 }
 .palm-video {
   display: block;
@@ -1094,12 +852,15 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  color: var(--heading);
-  opacity: 0.55;
+  /* 導引線：白線＋深色描邊，疊在任何相機畫面上都看得到（固定色，F08） */
+  color: var(--cam-guide);
+  opacity: 0.85;
 }
 .palm-overlay .palm-figure {
   width: min(52vw, 240px);
+  filter: drop-shadow(0 0 1.5px var(--cam-guide-edge)) drop-shadow(0 0 1px var(--cam-guide-edge));
 }
+.palm-overlay .palm-figure text { fill: var(--cam-guide); }
 .palm-overlay .palm-figure line,
 .palm-overlay .palm-figure path {
   stroke-width: 3;
@@ -1116,7 +877,7 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   max-height: 60vh;
   object-fit: contain;
   border-radius: 14px;
-  border: 1px solid var(--glass-border);
+  border: 2px solid var(--glass-border);
 }
 .palm-preview-actions {
   display: flex;
@@ -1154,10 +915,10 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   }
 }
 
-/* ── 空間風水 v1（/fengshui；色彩一律既有 token 與既有 rgba 板，不新增色值）──
-   底板對照（AA 基準＝玻璃合成底）：.fs-opt／.fs-guess 用 quiz-choice 同款 navy .55 板、
-   選取態用 quiz-choice 同款反相鉻板＋ink；.fs-col-research 蓋牌用 ocean-dim 同款 white .04；
-   文字色只用 --text／--heading／--silver-dim／--silver-faint／--ink-on-chrome。 */
+/* ── 空間風水 v1（/fengshui；色彩一律 token）──
+   底板對照：.fs-room／.fs-opt／.fs-guess 用 quiz-choice 同款白板＋--metal-lo 控制項框、
+   選取態用 quiz-choice 同款紫板＋--ink-on-primary（F04）；.fs-col-research 蓋牌用
+   --surface-tint；文字色只用 --text／--heading／--silver-dim／--silver-faint／--ink-on-primary。 */
 .fs-page { max-width: 960px; }
 .fs-h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
 .fs-opening { color: var(--text); line-height: 1.8; margin: 0 0 0.5rem; }
@@ -1168,10 +929,11 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .fs-room {
   display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem;
   min-height: 88px; padding: 1.1rem 1.25rem; cursor: pointer; text-align: left;
-  border: 1px solid var(--metal-lo); border-radius: 18px 6px 18px 6px;
-  background: rgba(10, 23, 51, 0.55); color: var(--text);
+  border: 2px solid var(--metal-lo); border-radius: 20px;
+  background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow-card);
 }
-.fs-room:hover { border-color: var(--metal-hi); background: rgba(255, 255, 255, 0.07); }
+@media (hover: hover) { .fs-room:hover { border-color: var(--primary); background: var(--surface-tint); } }
 .fs-room:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
 .fs-room-name { font-size: 1.15rem; font-weight: 600; color: var(--heading); }
 .fs-room-note { font-size: 0.85rem; color: var(--silver-dim); }
@@ -1185,23 +947,24 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .fs-opt {
   display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
   padding: 0.6rem 0.5rem 0.7rem; min-height: 44px; cursor: pointer;
-  border: 1px solid var(--glass-border); border-radius: 10px;
-  background: rgba(10, 23, 51, 0.55); color: var(--silver-dim);
-  font-weight: 600; font-size: 0.9rem; line-height: 1.4;
+  border: 1px solid var(--metal-lo); border-radius: 14px;
+  background: var(--surface); color: var(--silver-dim);
+  font-weight: 700; font-size: 0.9rem; line-height: 1.4;
 }
-/* hover 只換框線、底板維持 navy（淺底會吃掉 silver 字；手機點擊後 hover 會黏在下一題同位置） */
-@media (hover: hover) { .fs-opt:not(.selected):hover { border-color: var(--metal-mid); background: rgba(10, 23, 51, 0.7); } }
+/* hover 只在可懸停裝置（手機點擊後 hover 會黏在下一題同位置） */
+@media (hover: hover) { .fs-opt:not(.selected):hover { border-color: var(--primary); background: var(--surface-tint); } }
 .fs-opt:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
 .fs-opt.selected {
-  background: linear-gradient(180deg, #f8fafc, #c8d0dc);
-  border-color: var(--metal-hi);
-  color: var(--ink-on-chrome);
+  background: var(--primary);
+  border-color: var(--primary-deep);
+  color: var(--ink-on-primary);
 }
 .fs-opt-label { text-align: center; }
 .fs-quiz-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
 .fs-quiz-nav .btn-link { padding: 0.5rem 0; min-height: 44px; }
 
-/* 俯視示意圖：線條吃 currentColor；強調件用 --starlight（選取態改 ink） */
+/* 俯視示意圖：線條吃 currentColor（--silver-faint 白 6.16）；強調件用 --starlight（白 5.70）；
+   選取態在紫板上，線條與強調件一律 --ink-on-primary（F04：--starlight 在紫板上 1.00） */
 .fs-fig { width: 100%; max-width: 168px; height: auto; display: block; color: var(--silver-faint); }
 .fs-fig rect, .fs-fig line, .fs-fig path, .fs-fig circle, .fs-fig polygon, .fs-fig polyline {
   fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
@@ -1219,12 +982,12 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .fs-fig .fs-hl rect { stroke: var(--starlight); }
 .fs-fig .fs-box.fs-hl { fill: var(--starlight); }
 .fs-fig .fs-qmark { fill: currentColor; stroke: none; font-size: 30px; font-weight: 700; }
-.fs-opt.selected .fs-fig { color: var(--ink-on-chrome); }
+.fs-opt.selected .fs-fig { color: var(--ink-on-primary); }
 .fs-opt.selected .fs-fig .fs-hl,
 .fs-opt.selected .fs-fig .fs-hl line,
 .fs-opt.selected .fs-fig .fs-hl path,
-.fs-opt.selected .fs-fig .fs-hl rect { stroke: var(--ink-on-chrome); }
-.fs-opt.selected .fs-fig .fs-box.fs-hl { fill: var(--ink-on-chrome); }
+.fs-opt.selected .fs-fig .fs-hl rect { stroke: var(--ink-on-primary); }
+.fs-opt.selected .fs-fig .fs-box.fs-hl { fill: var(--ink-on-primary); }
 
 /* 結果 */
 .fs-result-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; margin: 0.5rem 0 0.5rem; }
@@ -1246,8 +1009,8 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   .fs-col-research { border-top: 0; padding-top: 0; border-left: 1px solid var(--metal-line); padding-left: 1rem; }
 }
 .fs-col-research.fs-covered {
-  border: 1px dashed var(--glass-border); border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04); padding: 0.875rem 1rem;
+  border: 2px dashed var(--metal-lo); border-radius: 14px;
+  background: var(--surface-tint); padding: 0.875rem 1rem;
 }
 /* 翻牌：蓋牌移除時研究欄以 3D 翻入（取法 zodiac1 card-container rotateY），猜對字樣彈一下 */
 .fs-col-research:not(.fs-covered) {
@@ -1267,22 +1030,19 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
   70% { transform: scale(1.08); opacity: 1; }
   100% { transform: scale(1); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .fs-col-research:not(.fs-covered), .fs-verdict { animation: none; }
-}
 .fs-guess-prompt { color: var(--text); margin: 0 0 0.6rem; }
 .fs-guess-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.75rem; }
 .fs-guess {
   min-height: 44px; padding: 0.5rem 0.75rem; cursor: pointer; text-align: center;
-  border: 1px solid var(--glass-border); border-radius: 8px;
-  background: rgba(10, 23, 51, 0.55); color: var(--silver-dim); font-weight: 600;
+  border: 1px solid var(--metal-lo); border-radius: 12px;
+  background: var(--surface); color: var(--silver-dim); font-weight: 700;
 }
-.fs-guess:hover { border-color: var(--metal-mid); background: rgba(255, 255, 255, 0.07); }
+@media (hover: hover) { .fs-guess:not(.selected):hover { border-color: var(--primary); background: var(--surface-tint); } }
 .fs-guess:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
 .fs-guess.selected {
-  background: linear-gradient(180deg, #f8fafc, #c8d0dc);
-  border-color: var(--metal-hi);
-  color: var(--ink-on-chrome);
+  background: var(--primary);
+  border-color: var(--primary-deep);
+  color: var(--ink-on-primary);
 }
 .fs-flip { width: 100%; }
 .fs-verdict { color: var(--heading); font-weight: 600; margin: 0 0 0.6rem; line-height: 1.6; }
@@ -1290,7 +1050,7 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .fs-badge {
   display: inline-block; font-size: 0.85rem; font-weight: 600; color: var(--heading);
   border: 1px solid var(--metal-lo); border-radius: 999px; padding: 0.15rem 0.7rem;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--surface-tint);
 }
 .fs-badge-reach { font-weight: 400; color: var(--silver-dim); margin-left: 0.4rem; }
 .fs-ok-tag {
@@ -1313,3 +1073,237 @@ a.feature:hover { text-decoration: none; color: inherit; text-shadow: none; }
 .fs-mini { border-top: 1px solid var(--metal-line); margin-top: 1rem; padding-top: 1rem; }
 .fs-inline-title { color: var(--silver-dim); font-weight: 600; }
 .fs-version { font-size: 0.8rem; margin: 0.5rem 0 0; }
+
+/* ═══ reduced motion（K07：放在檔尾，晚於所有被覆寫的基本規則；同權重後者勝）═══
+   舊版寫在檔頭、早於 .tarot-inner 基本規則，塔羅的 transition:none 其實無效 — 已修正。 */
+@media (prefers-reduced-motion: reduce) {
+  .tarot-inner { transition: none; }  /* 直開不翻（塔羅 v1a） */
+  .fs-col-research:not(.fs-covered), .fs-verdict { animation: none; }
+  a.feature,
+  .cta,
+  .btn-primary { transition: none; }
+  a.feature:hover { transform: none; }
+}
+
+/* ═══ 西洋星盤三張星座翻牌（B4；reduced-motion 規則須留在本段檔尾） ═══ */
+/* ═══ 西洋星盤：太陽／月亮／上升 三張星座翻牌＋彩色行星藥丸（B4）═══
+ * 待合入 style.css（放在 tarot 段落之後）。只引用 :root token，不寫死色值。
+ * 依賴 token：--primary --heading --text --silver-dim --silver-faint --metal-lo
+ *   --glass-border --surface --surface-tint --shadow-card --ink-on-sign
+ *   --sign-<key>-deep／--sign-<key>-light（牌背漸層由兩端自組；藥丸圓點＝deep、底＝light）
+ * reduced-motion 規則刻意放在檔尾（同權重後者勝，見計劃 K07）。 */
+
+/* ── 星座色對應：每個 sign class 只設兩個區域變數 ── */
+.zc-sign-aries       { --zc-deep: var(--sign-aries-deep);       --zc-light: var(--sign-aries-light); }
+.zc-sign-taurus      { --zc-deep: var(--sign-taurus-deep);      --zc-light: var(--sign-taurus-light); }
+.zc-sign-gemini      { --zc-deep: var(--sign-gemini-deep);      --zc-light: var(--sign-gemini-light); }
+.zc-sign-cancer      { --zc-deep: var(--sign-cancer-deep);      --zc-light: var(--sign-cancer-light); }
+.zc-sign-leo         { --zc-deep: var(--sign-leo-deep);         --zc-light: var(--sign-leo-light); }
+.zc-sign-virgo       { --zc-deep: var(--sign-virgo-deep);       --zc-light: var(--sign-virgo-light); }
+.zc-sign-libra       { --zc-deep: var(--sign-libra-deep);       --zc-light: var(--sign-libra-light); }
+.zc-sign-scorpio     { --zc-deep: var(--sign-scorpio-deep);     --zc-light: var(--sign-scorpio-light); }
+.zc-sign-sagittarius { --zc-deep: var(--sign-sagittarius-deep); --zc-light: var(--sign-sagittarius-light); }
+.zc-sign-capricorn   { --zc-deep: var(--sign-capricorn-deep);   --zc-light: var(--sign-capricorn-light); }
+.zc-sign-aquarius    { --zc-deep: var(--sign-aquarius-deep);    --zc-light: var(--sign-aquarius-light); }
+.zc-sign-pisces      { --zc-deep: var(--sign-pisces-deep);      --zc-light: var(--sign-pisces-light); }
+/* 未知星座：中性白卡＋一般字色 */
+.zc-sign-none {
+  --zc-deep: var(--silver-faint);
+  --zc-light: var(--surface);
+}
+
+/* ── 版面 ── */
+.zc-wrap {
+  display: grid;
+  gap: 1rem;
+}
+.zc-banner {
+  text-align: center;
+  padding: 0.75rem 1rem;
+  background: var(--surface-tint);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+.zc-banner-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.zc-banner-sub {
+  font-size: 0.75rem;
+  color: var(--silver-dim);
+  margin-top: 2px;
+}
+.zc-hint {
+  margin: -0.4rem 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--silver-faint);
+}
+.zc-section-title {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--heading);
+}
+
+/* ── 三張翻牌：固定三欄（390 寬不會排成 2+1，F12）── */
+.zc-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.zc-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  perspective: 800px;
+  border-radius: 20px;
+  -webkit-tap-highlight-color: transparent;
+}
+.zc-card:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+/* 視覺隱藏、報讀器可讀的固定無障礙名稱 */
+.zc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.zc-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.zc-card.zc-flipped .zc-inner {
+  transform: rotateY(180deg);
+}
+.zc-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.3rem;
+  border-radius: 20px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+  line-height: 1.2;
+}
+.zc-front {
+  background: var(--surface);
+  border: 2px solid var(--glass-border);
+  color: var(--heading);
+}
+.zc-back {
+  transform: rotateY(180deg);
+  background: linear-gradient(135deg, var(--zc-deep), var(--zc-light));
+  border: 2px solid var(--zc-light);
+  color: var(--ink-on-sign);
+}
+.zc-sign-none .zc-back {
+  border-color: var(--glass-border);
+  color: var(--heading);
+}
+.zc-body-icon,
+.zc-glyph {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.zc-body-icon {
+  width: 46%;
+  height: auto;
+  color: var(--primary);
+}
+.zc-front-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 0.3rem;
+}
+.zc-kind {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.zc-glyph {
+  width: 32%;
+  height: auto;
+  margin: 0.15rem 0;
+}
+.zc-name {
+  font-size: clamp(0.85rem, 3.6vw, 1.05rem);
+  font-weight: 800;
+}
+.zc-deg {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.zc-traits {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* ── 行星藥丸：圓點＝深端、底＝淺端、--metal-lo 框線（白卡上淺端必加框，F01）── */
+.zc-planets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.4rem;
+}
+.zc-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--metal-lo);
+  background: var(--zc-light);
+  color: var(--ink-on-sign);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.zc-sign-none.zc-pill {
+  color: var(--text);
+}
+.zc-dot {
+  flex: none;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--zc-deep);
+}
+
+/* ── reduced-motion：放在基本規則之後才會生效（K07）；翻牌直接換面 ── */
+@media (prefers-reduced-motion: reduce) {
+  .zc-inner {
+    transition: none;
+  }
+}

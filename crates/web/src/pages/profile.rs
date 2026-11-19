@@ -115,10 +115,10 @@ fn BirthCard(
                         };
                         view! {
                             <div style="display:grid;gap:0.75rem">
-                                <p style="color:var(--text);background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p>
+                                <p style="color:var(--text);background:var(--surface-tint);border:1px solid var(--glass-border);border-radius:8px;padding:0.75rem 1rem;font-weight:500">{text}</p>
                                 {gen.map(|(title, desc)| view! {
-                                    <div style="background:linear-gradient(135deg,rgba(167,139,250,0.12),rgba(244,114,182,0.10));border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:0.85rem 1rem">
-                                        <div style="font-weight:700;font-size:0.9rem;color:var(--gen-title);margin-bottom:0.25rem">{title}</div>
+                                    <div style="background:linear-gradient(135deg,var(--primary-soft),var(--rose-soft));border:1px solid var(--glass-border);border-radius:10px;padding:0.85rem 1rem">
+                                        <div style="font-weight:700;font-size:0.9rem;color:var(--primary-deep);margin-bottom:0.25rem">{title}</div>
                                         <p style="font-size:0.85rem;line-height:1.6;color:var(--silver-dim);margin:0">{desc}</p>
                                     </div>
                                 }.into_any()).unwrap_or_else(|| view! { <span></span> }.into_any())}
@@ -683,7 +683,7 @@ fn PredictionsCard() -> impl IntoView {
                                             c
                                         };
                                         view! {
-                                            <div style="border:1px solid var(--glass-border);border-radius:8px;padding:0.6rem 0.8rem;background:rgba(255,255,255,0.04)">
+                                            <div style="border:1px solid var(--glass-border);border-radius:8px;padding:0.6rem 0.8rem;background:var(--surface-tint)">
                                                 <div style="font-size:0.9rem;font-weight:600;margin-bottom:0.4rem">{q.clone()}</div>
                                                 {if is_answered {
                                                     view! {
@@ -786,8 +786,8 @@ fn PredictionsCard() -> impl IntoView {
                                         let pid_d3 = pid.clone();
                                         let pid_c3 = pid.clone();
                                         view! {
-                                            <div style="border:1px solid var(--glass-border);border-radius:8px;padding:0.6rem 0.8rem;background:rgba(255,255,255,0.04)">
-                                                <div style="font-size:0.85rem;font-weight:700;color:var(--gen-title);margin-bottom:0.2rem">
+                                            <div style="border:1px solid var(--glass-border);border-radius:8px;padding:0.6rem 0.8rem;background:var(--surface-tint)">
+                                                <div style="font-size:0.85rem;font-weight:700;color:var(--primary-deep);margin-bottom:0.2rem">
                                                     {format!("{} · {}", domain_label(p.domain), tc.label())}
                                                 </div>
                                                 <div style="font-size:0.8rem;color:var(--silver-dim);margin-bottom:0.5rem">

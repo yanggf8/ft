@@ -12,7 +12,12 @@ use leptos::task::spawn_local;
 use leptos_router::components::Redirect;
 use leptos_router::hooks::use_params_map;
 
-use ft_schema::{WesternChartV3, ZiWeiChartV3};
+use std::time::Duration;
+
+use ft_schema::{
+    element_zh, planet_zh, quality_zh, sign_class, sign_traits, sign_zh, WesternChartV3,
+    ZiWeiChartV3,
+};
 
 use crate::api;
 use crate::auth::use_auth;
@@ -208,7 +213,7 @@ fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
                     <strong>"大限:"</strong>
                     {move || chart.major_limits.iter().map(|m| format!("{}-{} {}{}", m.start_age, m.end_age, m.stem, m.branch)).collect::<Vec<_>>().join(" · ")}
                 </span>
-                <span style="color:#9aa3b2;font-size:0.75rem">
+                <span style="color:var(--silver-faint);font-size:0.75rem">
                     {move || format!("#{} · {}", meta.chart_schema_version, meta.engine_version_ziwei)}
                 </span>
             </div>
@@ -217,42 +222,233 @@ fn ZiWeiView(chart: ZiWeiChartV3) -> impl IntoView {
     }
 }
 
+/// Which of the three headline cards this is.
+#[derive(Clone, Copy, PartialEq)]
+enum Body {
+    Sun,
+    Moon,
+    Ascendant,
+}
+
+impl Body {
+    fn label(self) -> &'static str {
+        match self {
+            Body::Sun => "太陽",
+            Body::Moon => "月亮",
+            Body::Ascendant => "上升",
+        }
+    }
+
+    /// Inline-SVG path for the card front (24×24 viewBox, stroked).
+    fn icon_path(self) -> &'static str {
+        match self {
+            Body::Sun => {
+                "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2.5v2.5 M12 19v2.5 M2.5 12h2.5 M19 12h2.5 \
+                 M5.3 5.3l1.8 1.8 M16.9 16.9l1.8 1.8 M5.3 18.7l1.8-1.8 M16.9 7.1l1.8-1.8"
+            }
+            Body::Moon => "M19.5 14.5A8 8 0 1 1 9.5 4.5a6.3 6.3 0 0 0 10 10z",
+            Body::Ascendant => "M12 18V5 M6.5 10.5L12 5l5.5 5.5 M3.5 21h17",
+        }
+    }
+}
+
+/// One headline card's data, resolved from the wire chart.
+struct SignCard {
+    body: Body,
+    sign: String,
+    degree: Option<f64>,
+    element: String,
+    quality: String,
+}
+
+impl SignCard {
+    fn new(body: Body, sign: &str, degree: Option<f64>, element: &str, quality: &str) -> Self {
+        // The wire carries element/quality for sun/moon only; the ascendant (or an
+        // empty wire value) falls back to the sign's static traits.
+        let traits = sign_traits(sign);
+        let pick = |wire: &str, fallback: Option<&'static str>| {
+            if wire.trim().is_empty() {
+                fallback.unwrap_or_default().to_string()
+            } else {
+                wire.to_string()
+            }
+        };
+        SignCard {
+            body,
+            sign: sign.to_string(),
+            degree,
+            element: pick(element, traits.map(|t| t.0)),
+            quality: pick(quality, traits.map(|t| t.1)),
+        }
+    }
+
+    fn degree_text(&self) -> Option<String> {
+        self.degree.map(|d| format!("{d:.1}°"))
+    }
+
+    /// Fixed accessible name, e.g. 「太陽星座：獅子座 23.4°」.
+    fn a11y_name(&self) -> String {
+        let mut name = format!("{}星座：{}", self.body.label(), sign_zh(&self.sign));
+        if let Some(d) = self.degree_text() {
+            name.push(' ');
+            name.push_str(&d);
+        }
+        name
+    }
+
+    fn traits_text(&self) -> String {
+        [element_zh(&self.element), quality_zh(&self.quality)]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("・")
+    }
+}
+
+/// Delay before the first card turns (lets the front paint so the turn is seen),
+/// then the gap between consecutive cards.
+const FLIP_START_MS: u64 = 350;
+const FLIP_STEP_MS: u64 = 150;
+
+fn prefers_reduced_motion() -> bool {
+    web_sys::window()
+        .and_then(|w| {
+            w.match_media("(prefers-reduced-motion: reduce)")
+                .ok()
+                .flatten()
+        })
+        .map(|m| m.matches())
+        .unwrap_or(false)
+}
+
+fn planet_degree(chart: &WesternChartV3, name: &str) -> Option<f64> {
+    chart
+        .planets
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(name))
+        .map(|p| p.degree)
+}
+
 #[component]
 fn WesternView(chart: WesternChartV3) -> impl IntoView {
-    let sun = chart.sun_sign.clone();
-    let moon = chart.moon_sign.clone();
-    let asc = chart.ascendant.clone();
+    let cards = vec![
+        SignCard::new(
+            Body::Sun,
+            &chart.sun_sign.name,
+            planet_degree(&chart, "Sun"),
+            &chart.sun_sign.element,
+            &chart.sun_sign.quality,
+        ),
+        SignCard::new(
+            Body::Moon,
+            &chart.moon_sign.name,
+            planet_degree(&chart, "Moon"),
+            &chart.moon_sign.element,
+            &chart.moon_sign.quality,
+        ),
+        SignCard::new(
+            Body::Ascendant,
+            &chart.ascendant.sign,
+            Some(chart.ascendant.degree),
+            "",
+            "",
+        ),
+    ];
+
+    // Cards open themselves in sequence on entry (站長裁示 §2.5-1); reduced-motion
+    // users get the back side immediately. A click before a card's timer fires
+    // marks it `touched` so the timer won't override the user's choice.
+    let reduced = prefers_reduced_motion();
+    let flipped: Vec<RwSignal<bool>> = cards.iter().map(|_| RwSignal::new(reduced)).collect();
+    let touched: Vec<RwSignal<bool>> = cards.iter().map(|_| RwSignal::new(false)).collect();
+    if !reduced {
+        let handles: Vec<TimeoutHandle> = flipped
+            .iter()
+            .zip(touched.iter())
+            .enumerate()
+            .filter_map(|(i, (&f, &t))| {
+                set_timeout_with_handle(
+                    move || {
+                        if !t.get_untracked() {
+                            f.set(true);
+                        }
+                    },
+                    Duration::from_millis(FLIP_START_MS + FLIP_STEP_MS * i as u64),
+                )
+                .ok()
+            })
+            .collect();
+        on_cleanup(move || handles.iter().for_each(TimeoutHandle::clear));
+    }
+
+    let card_views = cards
+        .into_iter()
+        .zip(flipped.into_iter().zip(touched))
+        .map(|(card, (flipped, touched))| {
+            let sign_cls = sign_class(&card.sign);
+            let class = format!("zc-card zc-sign-{}", sign_cls.unwrap_or("none"));
+            let a11y = card.a11y_name();
+            let traits = card.traits_text();
+            let degree = card.degree_text();
+            let glyph = sign_cls.and_then(sign_glyph_path);
+            let name = sign_zh(&card.sign);
+            let body = card.body;
+            view! {
+                <button
+                    type="button"
+                    class=class
+                    class:zc-flipped=move || flipped.get()
+                    aria-pressed=move || flipped.get().to_string()
+                    on:click=move |_| {
+                        touched.set(true);
+                        flipped.update(|f| *f = !*f);
+                    }
+                >
+                    <span class="zc-sr">{a11y}</span>
+                    <span class="zc-inner" aria-hidden="true">
+                        <span class="zc-face zc-front">
+                            <svg class="zc-body-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=body.icon_path() />
+                            </svg>
+                            <span class="zc-front-label">{body.label()}</span>
+                        </span>
+                        <span class="zc-face zc-back">
+                            <span class="zc-kind">{format!("{}星座", body.label())}</span>
+                            {glyph.map(|d| view! {
+                                <svg class="zc-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d=d />
+                                </svg>
+                            })}
+                            <span class="zc-name">{name}</span>
+                            {degree.map(|d| view! { <span class="zc-deg">{d}</span> })}
+                            {(!traits.is_empty()).then(|| view! { <span class="zc-traits">{traits}</span> })}
+                        </span>
+                    </span>
+                </button>
+            }
+        })
+        .collect_view();
+
     view! {
-        <div style="display:grid;gap:1rem">
-            <div style="text-align:center;padding:0.75rem 1rem;background:linear-gradient(135deg,#fdf2f8,#f0f9ff);border-radius:12px;border:1px solid #fce7f3">
-                <div style="font-size:1.1rem;font-weight:700;color:#be185d">"‧₊˚✧ 西洋星盤 ✧˚₊‧"</div>
-                <div style="font-size:0.75rem;color:#4b5563;margin-top:2px">"太陽 · 月亮 · 上升 · 行星"</div>
+        <div class="zc-wrap">
+            <div class="zc-banner">
+                <div class="zc-banner-title">"‧₊˚✧ 西洋星盤 ✧˚₊‧"</div>
+                <div class="zc-banner-sub">"太陽 · 月亮 · 上升 · 行星"</div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.5rem">
-                <div style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:0.6rem;text-align:center">
-                    <div style="font-size:0.7rem;color:#a16207;letter-spacing:0.05em">"太陽星座"</div>
-                    <div style="font-size:1.3rem;margin:2px 0">{sun.symbol.clone()}</div>
-                    <div style="font-size:0.85rem;font-weight:600;color:#92400e">{format!("{} {}", sun.name, sun.symbol)}</div>
-                </div>
-                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:0.6rem;text-align:center">
-                    <div style="font-size:0.7rem;color:#1e40af;letter-spacing:0.05em">"月亮星座 (真實)"</div>
-                    <div style="font-size:1.3rem;margin:2px 0">{moon.symbol.clone()}</div>
-                    <div style="font-size:0.85rem;font-weight:600;color:#1e3a8a">{format!("{} {}", moon.name, moon.symbol)}</div>
-                </div>
-                <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:0.6rem;text-align:center">
-                    <div style="font-size:0.7rem;color:#6d28d9;letter-spacing:0.05em">"上升星座"</div>
-                    <div style="font-size:1.3rem;margin:2px 0">{asc_sign_symbol(&asc.sign)}</div>
-                    <div style="font-size:0.85rem;font-weight:600;color:#4c1d95">{format!("{} {:.1}°", asc.sign, asc.degree)}</div>
-                </div>
-            </div>
+            <div class="zc-cards">{card_views}</div>
+            <p class="zc-hint">"點牌可翻面"</p>
             <div>
-                <div style="font-weight:600;margin-bottom:0.5rem;color:#374151">"行星落座 ♡"</div>
-                <div class="palace-stars" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.4rem">
+                <div class="zc-section-title">"行星落座"</div>
+                <div class="zc-planets">
                     {chart.planets.into_iter().map(|p| {
-                        let sym = planet_symbol(&p.name);
-                        let sign_sym = sign_symbol(&p.sign);
-                        let label = format!("{} {} {} {:.1}°", sym, p.name, sign_sym, p.degree);
-                        view! { <span class="star main on-light" style="background:#fff;border:1px solid #fce7f3;border-radius:8px;padding:0.4rem 0.6rem;font-size:0.8rem;display:flex;align-items:center;gap:0.3rem;justify-content:center;color:#374151"><span style="font-size:1rem">{sym}</span>{format!("{} {} {:.1}°", p.name, sign_sym, p.degree)}</span> }
+                        let class = format!("zc-pill zc-sign-{}", sign_class(&p.sign).unwrap_or("none"));
+                        let label = format!("{} {} {:.1}°", planet_zh(&p.name), sign_zh(&p.sign), p.degree);
+                        view! {
+                            <span class=class>
+                                <span class="zc-dot" aria-hidden="true"></span>
+                                {label}
+                            </span>
+                        }
                     }).collect_view()}
                 </div>
             </div>
@@ -260,40 +456,43 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
     }
 }
 
-fn planet_symbol(name: &str) -> &'static str {
-    match name.to_lowercase().as_str() {
-        "sun" => "☉",
-        "moon" => "☽",
-        "mercury" => "☿",
-        "venus" => "♀",
-        "mars" => "♂",
-        "jupiter" => "♃",
-        "saturn" => "♄",
-        "uranus" => "♅",
-        "neptune" => "♆",
-        "pluto" => "♇",
-        _ => "‧",
-    }
-}
-
-fn sign_symbol(sign: &str) -> &'static str {
-    match sign.to_lowercase().as_str() {
-        "aries" => "♈",
-        "taurus" => "♉",
-        "gemini" => "♊",
-        "cancer" => "♋",
-        "leo" => "♌",
-        "virgo" => "♍",
-        "libra" => "♎",
-        "scorpio" => "♏",
-        "sagittarius" => "♐",
-        "capricorn" => "♑",
-        "aquarius" => "♒",
-        "pisces" => "♓",
-        _ => "",
-    }
-}
-
-fn asc_sign_symbol(sign: &str) -> String {
-    sign_symbol(sign).to_string()
+/// Inline-SVG glyph for a zodiac sign key (from `sign_class`); 24×24 viewBox,
+/// stroked. Drawn as paths rather than U+2648.. so Android never swaps in colour
+/// emoji (U+FE0E is not reliably honoured there).
+fn sign_glyph_path(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "aries" => {
+            "M12 21V9 M12 9c0-3.5-2-6-4.75-6S3 5 3 7.5 4.5 11 6 11 \
+             M12 9c0-3.5 2-6 4.75-6S21 5 21 7.5 19.5 11 18 11"
+        }
+        "taurus" => "M7 15a5 5 0 1 0 10 0a5 5 0 1 0 -10 0 M4 3.5c1 4 4.5 6.5 8 6.5s7-2.5 8-6.5",
+        "gemini" => {
+            "M4.5 4c4.5 1.6 10.5 1.6 15 0 M4.5 20c4.5-1.6 10.5-1.6 15 0 M9 5.1v13.8 M15 5.1v13.8"
+        }
+        "cancer" => {
+            "M4 9a2.75 2.75 0 1 0 5.5 0a2.75 2.75 0 1 0 -5.5 0 M6.75 6.25C10 3.5 16.5 3.8 20.5 7.5 \
+             M14.5 15a2.75 2.75 0 1 0 5.5 0a2.75 2.75 0 1 0 -5.5 0 M17.25 17.75C14 20.5 7.5 20.2 3.5 16.5"
+        }
+        "leo" => {
+            "M3.5 16.5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M9.5 16.5C9.5 12 7.5 10 7.5 7.5a4.25 4.25 0 0 1 8.5 0 \
+             c0 4-3 6.5-3 10.5a2.75 2.75 0 0 0 5.5 0"
+        }
+        "virgo" => {
+            "M3 5.5c1.5 0 2.5 1 2.5 2.5v11 M5.5 9c0-2 1.2-3.5 2.75-3.5S11 7 11 9v10 \
+             M11 9c0-2 1.2-3.5 2.75-3.5S16.5 7 16.5 9v6.5c0 3 1.5 5 4.5 5 M16.5 15.5c1.5-2 4.5-2 4.5 .5"
+        }
+        "libra" => "M3 20h18 M3 16h5.2A4.5 4.5 0 1 1 15.8 16H21",
+        "scorpio" => {
+            "M2.5 5.5c1.5 0 2.5 1 2.5 2.5v11 M5 9c0-2 1.2-3.5 2.75-3.5S10.5 7 10.5 9v10 \
+             M10.5 9c0-2 1.2-3.5 2.75-3.5S16 7 16 9v8c0 1.5 1 2.5 2.5 2.5H21.5 M19 17l2.5 2.5L19 22"
+        }
+        "sagittarius" => "M4 20L20 4 M12.5 4H20v7.5 M7 11.5l5.5 5.5",
+        "capricorn" => {
+            "M3 5.5c1.5 0 2.5 1 2.5 3V19 M5.5 9c0-2.5 1.5-4 3.5-4s3.5 1.5 3.5 4v7.5 \
+             c0 2 1.5 3.5 3.5 3.5s3.5-1.5 3.5-3.25-1.5-3.25-3.5-3.25-3.5 1.5-3.5 3"
+        }
+        "aquarius" => "M3 10.5l3-3 3 3 3-3 3 3 3-3 3 3 M3 17l3-3 3 3 3-3 3 3 3-3 3 3",
+        "pisces" => "M6 3c3.5 3.5 3.5 14.5 0 18 M18 3c-3.5 3.5-3.5 14.5 0 18 M4 12h16",
+        _ => return None,
+    })
 }

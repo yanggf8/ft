@@ -42,7 +42,7 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                 <img
                                                     src=url.to_string()
                                                     alt="avatar"
-                                                    style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1.5px solid #e5e7eb"
+                                                    style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1.5px solid var(--glass-border)"
                                                 />
                                             }.into_any()
                                         } else {
@@ -57,17 +57,16 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                 .unwrap_or('?')
                                                 .to_string();
                                             view! {
-                                                // ink on the violet/pink chip, not white: #fff measures 2.7:1
-                                                // against this gradient (14px bold is below the large-text
-                                                // threshold), while #10141f holds 6.7:1 (2026-09-17)
-                                                <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#10141f;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">
+                                                // white ink on a --primary → --rose gradient: 5.70 at the violet
+                                                // end, 6.04 at the rose end, ≥6.15 in between (2026-11-19)
+                                                <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--rose));color:var(--ink-on-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">
                                                     {initial}
                                                 </span>
                                             }.into_any()
                                         }
                                     } else {
                                         view! {
-                                            <span style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center"> "?" </span>
+                                            <span style="width:32px;height:32px;border-radius:50%;background:var(--primary-soft);color:var(--primary-deep);display:flex;align-items:center;justify-content:center"> "?" </span>
                                         }.into_any()
                                     }
                                 }}
@@ -75,11 +74,11 @@ pub fn Layout(children: Children) -> impl IntoView {
                             <Show when=move || menu_open.get()>
                                 <div
                                     class="nav-dropdown"
-                                    style="position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);padding:8px;z-index:50"
+                                    style="position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:var(--surface);border:1px solid var(--glass-border);border-radius:12px;box-shadow:var(--shadow-card-hover);padding:8px;z-index:50"
                                     on:click=move |_| close_menu()
                                 >
                                     // User header
-                                    <div style="padding:10px 12px;border-bottom:1px solid #f3f4f6;margin-bottom:6px">
+                                    <div style="padding:10px 12px;border-bottom:1px solid var(--metal-line);margin-bottom:6px">
                                         {move || {
                                             let u = auth.user.get();
                                             if let Some(user) = u {
@@ -89,16 +88,16 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                     .unwrap_or_else(|| user.email.clone());
                                                 let email = user.email.clone();
                                                 view! {
-                                                    <div style="font-weight:600;font-size:14px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                                    <div style="font-weight:600;font-size:14px;color:var(--heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                                                         {name}
                                                     </div>
-                                                    <div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                                    <div style="font-size:12px;color:var(--silver-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                                                         {email}
                                                     </div>
                                                     <Show when=move || {
                                                         auth.user.get().as_ref().map(|u| u.is_admin).unwrap_or(false)
                                                     }>
-                                                        <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:#fef3c7;color:#92400e">
+                                                        <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:var(--rose-soft);color:var(--rose)">
                                                             "管理員"
                                                         </span>
                                                     </Show>
@@ -107,7 +106,7 @@ pub fn Layout(children: Children) -> impl IntoView {
                                                             && (auth.user.get().as_ref().map(|u| u.billing.tier.clone()).unwrap_or_default() != "free"
                                                             || auth.user.get().as_ref().map(|u| u.billing.isTrialing).unwrap_or(false))
                                                     }>
-                                                        <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:#eef2ff;color:#4f46e5">
+                                                        <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 6px;border-radius:999px;background:var(--primary-soft);color:var(--primary-deep)">
                                                             {move || {
                                                                 let tier = auth
                                                                     .user
@@ -127,14 +126,14 @@ pub fn Layout(children: Children) -> impl IntoView {
                                     </div>
                                     <A
                                         href="/profile"
-                                        attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:#374151;text-decoration:none"
+                                        attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:var(--text);text-decoration:none"
                                         on:click=move |_| close_menu()
                                     >
                                         "基本資料"
                                     </A>
                                     <A
                                         href="/personality"
-                                        attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:#374151;text-decoration:none"
+                                        attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:var(--text);text-decoration:none"
                                         on:click=move |_| close_menu()
                                     >
                                         "人格測驗"
@@ -144,15 +143,15 @@ pub fn Layout(children: Children) -> impl IntoView {
                                     }>
                                         <A
                                             href="/admin"
-                                            attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:#374151;text-decoration:none"
+                                            attr:style="display:block;padding:8px 12px;border-radius:8px;font-size:14px;color:var(--text);text-decoration:none"
                                             on:click=move |_| close_menu()
                                         >
                                             "邀請管理"
                                         </A>
                                     </Show>
-                                    <div style="height:1px;background:#f3f4f6;margin:6px 0"></div>
+                                    <div style="height:1px;background:var(--metal-line);margin:6px 0"></div>
                                     <button
-                                        style="width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:14px;color:#b91c1c;background:none;border:none;cursor:pointer"
+                                        style="width:100%;text-align:left;padding:8px 12px;border-radius:8px;font-size:14px;color:var(--rose);background:none;border:none;cursor:pointer"
                                         on:click=move |_| {
                                             close_menu();
                                             auth.logout();

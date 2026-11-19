@@ -1,6 +1,7 @@
 # Cosmic Silver Theme — Design Spec
 
 Date: 2026-08-30
+**Superseded 2026-11-19** by `docs/superpowers/plans/2026-11-19-kawaii-light-redesign.md` (kawaii light theme); retained for history.
 Status: Reviewed — adversarial review (Kimi K3) findings verified and incorporated same day. Key deltas from first draft: explicit z-index scheme, band sampling/wrap/resize defined, particle floor 60→24, `--silver-faint` brightened for glass-ground AA, per-class reskin traps enumerated, mandatory `build-web.sh` copy, phased delivery.
 
 ## Summary

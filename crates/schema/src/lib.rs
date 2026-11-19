@@ -13,6 +13,9 @@ pub mod predict;
 pub mod storage;
 pub mod symbolic;
 pub mod tarot;
+pub mod zodiac;
+
+pub use zodiac::{element_zh, planet_zh, quality_zh, sign_class, sign_traits, sign_zh};
 
 use serde::{Deserialize, Serialize};
 

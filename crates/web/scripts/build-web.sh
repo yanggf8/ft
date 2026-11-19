@@ -3,6 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # crates/web
 ROOT="$(cd ../.. && pwd)"   # repo root (workspace target 在此)
 
+# 每次從乾淨的 dist/ 開始：已從原始碼移除的舊檔不得殘留在 dist/ 被一起部署（K12）。
+# wasm-bindgen 產物在下方重新產生，不受影響。
+rm -rf dist
+
 echo "🔧 wasm32-unknown-unknown release build ..."
 cargo build --locked -p ft-web --target wasm32-unknown-unknown --release
 
@@ -69,10 +73,9 @@ print(f"  stripped name section: {stripped:,} bytes")
 PYEOF
 ls -lh dist/wasm/ft_web_bg.wasm | awk '{print "  wasm now:", $5}'
 
-echo "🔧 copy index.html + style.css + galaxy.js + boot.js + _headers ..."
+echo "🔧 copy index.html + style.css + boot.js + _headers ..."
 cp index.html dist/index.html   # (already references ./wasm/ft_web.js)
 cp style.css dist/style.css
-cp galaxy.js dist/galaxy.js
 cp boot.js dist/boot.js         # wasm 啟動器(外部檔;CSP script-src 'self' 擋 inline)
 cp _headers dist/_headers       # Pages 安全標頭(CSP/HSTS/框架防護;P3)
 mkdir -p dist/assets && cp -r assets/* dist/assets/  # 靜態資產(塔羅卡面)

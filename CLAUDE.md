@@ -115,8 +115,6 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   f8_assignments；星曜 type 的 wire 值是 `main`（非 iztro 的 `major`）；AI 路徑
   限流一律 `rate_limit_strict`（fail-closed）、AIMutexDO 走專屬實例
   `id_from_name("tarot")`；卡面在 `crates/web/assets/tarot/`（build-web.sh 複製）。
-- `galaxy.js` 的拒絕迴圈用 `for(;;)`，**不要**用 `do-while` + `continue`（`g` 未定義
-  時會退出迴圈回傳 undefined → NaN → 動畫迴圈死亡；見 gauss() 註解與 commit 324bb73）。
 - `predict::GATE_ORDER`（work→money→love→family→health）同時決定 F4 `gated_domains()`
   槽位順序與 predictions list 的 SQL ORDER BY — 三處耦合，改動前先讀
   `crates/schema/src/predict.rs` 頂部 doc；generate **必帶** body
@@ -127,12 +125,15 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   部署順序 **web 先**：新 API 會拒絕舊 web 無 strengths 的 generate（400）；
   細節見 docs/ARCHITECTURE.md §F5。
 
-- **色彩/對比紅線（2026-09-17）**：AA 基準是**玻璃合成底**，不是裸漸層。換任何
-  `style.css` 色彩 token 都要重採；採錯基準會高估比值（星空藍換色時就發生過）。
-  最容易漏的表面是 `.palace.life`（近白高光底，半透明 `.star` 藥丸會疊上去）
-  與 `input::placeholder`（兩層白疊卡面，全站 faint 最緊）。`card:hover` 的
-  `brightness()` 是整塊元素縮放，比值會**上升**，不是地板。細節見
-  docs/ARCHITECTURE.md §Cosmic-silver theme 與 spec §1。
+- **色彩/對比紅線（2026-11-19 kawaii 亮底，取代 cosmic-silver）**：色值只能寫在
+  `style.css` 的 `:root`（Rust 行內樣式與其餘 CSS 一律 `var(--token)`），改色後必跑
+  `python3 scripts/css-guard.py --allow-local-vars`（寫死色值白名單制＋`var()` 存在性）
+  與 `python3 scripts/contrast-check.py`（token 配對；新配對加進檔頭 `PAIRS`）。
+  AA 基準＝實際底（白卡、`--void`/`--deep-space` 頁底、`--surface-tint`、紫板）；
+  最緊：摩羯深端配深字 4.80、`--success` 在頁底光暈最深處 4.40（只准放卡內）。
+  控制項邊框用 `--metal-lo`（≥3:1），`--glass-border` 只做裝飾。實畫面稽核：
+  `node scripts/contrast-audit.mjs --base <本機 pages dev>`。細節見
+  docs/ARCHITECTURE.md §Kawaii light theme。
 
 ## Testing
 

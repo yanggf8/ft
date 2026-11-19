@@ -157,7 +157,7 @@ pub fn AdminPage() -> impl IntoView {
                         </button>
                     </form>
                     <Show when=move || new_url.get().is_some()>
-                        <div style="margin-top:1rem;padding:0.75rem;background:rgba(16,185,129,0.1);border-radius:8px">
+                        <div style="margin-top:1rem;padding:0.75rem;background:var(--success-soft);border-radius:8px">
                             <p style="font-size:0.85rem;margin-bottom:0.5rem">"連結已建立,複製後貼到 Messenger:"</p>
                             <code style="word-break:break-all;font-size:0.8rem">
                                 {move || new_url.get().unwrap_or_default()}
@@ -180,7 +180,7 @@ pub fn AdminPage() -> impl IntoView {
                         <div style="overflow-x:auto">
                             <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums">
                                 <thead>
-                                    <tr style="text-align:left;border-bottom:1px solid rgba(128,128,128,0.3)">
+                                    <tr style="text-align:left;border-bottom:1px solid var(--glass-border)">
                                         <th style="padding:0.5rem">"碼"</th>
                                         <th style="padding:0.5rem">"備註"</th>
                                         <th style="padding:0.5rem">"用量"</th>
@@ -197,7 +197,7 @@ pub fn AdminPage() -> impl IntoView {
                                             let code = r.code.clone();
                                             let row_revoked = r.revoked_at.is_some();
                                             view! {
-                                                <tr style="border-bottom:1px solid rgba(128,128,128,0.15)">
+                                                <tr style="border-bottom:1px solid var(--metal-line)">
                                                     <td style="padding:0.5rem;font-family:monospace">{r.code.clone()}</td>
                                                     <td style="padding:0.5rem">{r.label.clone()}</td>
                                                     <td style="padding:0.5rem">{status_line(&r)}</td>

@@ -97,7 +97,7 @@
 
 - 兩層守門：
   1. `scripts/contrast-check.py`（快速、離線）：token 配對＋每個星座漸層**淺端與深端**；一般字 < 4.5、大字 < 3.0、非文字（焦點框、輸入框、按鈕邊界）< 3.0 即失敗。
-  2. `scripts/contrast-audit.js`（Playwright，真畫面）：在 390×844（`hasTouch`、`isMobile`＝觸控分支）與 1280×800 兩種情境，逐頁走訪，對每個可見文字節點取 computed `color` 與**往上合成的實際背景**（含半透明層），列出 < 門檻者；並強制進入狀態：hover／focus／selected／checked、下拉選單展開、登入註冊成功／錯誤訊息、塔羅已翻、星座已翻、風水蓋牌與翻開。
+  2. `scripts/contrast-audit.mjs`（Playwright，真畫面）：在 390×844（`hasTouch`、`isMobile`＝觸控分支）與 1280×800 兩種情境，逐頁走訪，對每個可見文字節點取 computed `color` 與**往上合成的實際背景**（含半透明層），列出 < 門檻者；並強制進入狀態：hover／focus／selected／checked、下拉選單展開、登入註冊成功／錯誤訊息、塔羅已翻、星座已翻、風水蓋牌與翻開。
 - 稽核腳本必須：讀 `-webkit-text-fill-color`／`background-clip:text`（`.ocean-score` `style.css:645-648` 換值後 1.01–2.16，但 `color` 是深色會誤判通過）、SVG `fill`／`stroke`（`personality.rs:576`、`style.css:1037-1040`、`:1221`）、偽元素與 placeholder（`:778`、`:307`）、沿祖先鏈乘 `opacity`（`:1098`、`:283`、`:549`）（F02）。
 - 非文字必檢清單（≥3.0）：`.ocean-track`（`:654`，白 .08 疊白卡＝隱形）、`.ocean-band` 淡端（`:659`）、進度條（`:725-726`）、range slider、捲軸 thumb（`:784-785`）、雷達圖格線（`personality.rs:550` `#e5e7eb` 1.24）、`.palm-figure`、`.fs-fig`、輸入框邊界（F02）。
 - literal 守門改**白名單制**：`:root` 以外的 `style.css` 與 `crates/web/src` 出現任何 hex／rgb／rgba 即失敗，除非列在 allowlist（每條附理由）；另檢查每個 `var(--x)` 都存在於 `:root`（F05、F06：v2 的四字串 grep 漏掉 `rgba(5,13,31`、`rgba(8,18,42`、`rgba(16,20,31`、`#cfd6e0` 1.46、`login.rs:189 #fb7185` 2.69、`#9aa3b2` 2.54 等）。

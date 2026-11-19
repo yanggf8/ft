@@ -95,7 +95,7 @@ pub fn ZiWeiPalaceGrid(palaces: Vec<ZiWeiPalaceV3>) -> impl IntoView {
                 })
                 .collect_view()}
             // Center block for overall info (could show birth summary)
-            <div style="grid-row:2/4;grid-column:2/4;background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--silver-dim);font-size:0.75rem">
+            <div style="grid-row:2/4;grid-column:2/4;background:var(--surface-tint);border:1px solid var(--glass-border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--silver-dim);font-size:0.75rem">
                 "命盤中心"
             </div>
         </div>

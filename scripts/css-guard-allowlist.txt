@@ -1,0 +1,21 @@
+# css-guard 白名單（scripts/css-guard.py 讀取）
+#
+# 用途：style.css 的 :root 以外、以及 crates/web/src/**/*.rs 中，寫死的色值
+# （#rgb / #rgba / #rrggbb / #rrggbbaa、rgb( / rgba( / hsl( / hsla(）一律報錯，
+# 除非該行列在這裡。每條必須附理由。
+#
+# 格式（一行一條）：
+#   <repo 相對路徑>:<該檔內唯一的行內子字串> # <理由>
+#
+#   - 路徑以 repo 根目錄為基準，例：crates/web/style.css、crates/web/src/pages/palm.rs
+#   - 子字串照原文（區分大小寫），必須只命中該檔的「一行」；命中 0 行 → 警告（過期條目），
+#     命中多行 → 錯誤（請改用更長、唯一的子字串）
+#   - 子字串與理由以「 # 」（前後各一空白）分隔，取第一個「 # 」；子字串本身可含 #fff 等色值（# 後不接空白即可）
+#   - 命中的那一行上所有色值 literal 都放行
+#   - 以 # 開頭的行與空行忽略
+#
+# 範例（未啟用）：
+#   crates/web/style.css:stroke: rgba(255, 255, 255, 0.9); # 手相拍攝導引線疊在相機畫面上，底色不可控，固定白線（F08）
+
+crates/web/style.css:-webkit-mask: linear-gradient(#000 0 0) content-box # .feature 精選卡外框 mask：#000 只取 alpha 定義遮罩形狀，不會顯示成顏色
+crates/web/style.css:linear-gradient(#000 0 0); /* 標準 mask */ # 同上（標準 mask 屬性），只取 alpha，不顯示

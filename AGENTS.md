@@ -168,8 +168,6 @@ ft/
 │       │   ├── pages/          # Home, Login, Profile, Divination, Story
 │       │   ├── components/     # BirthDataForm, PalaceGrid, etc.
 │       │   └── generation.rs   # 1930s-2020s stories (synced)
-│       ├── scripts/gen-stars.js
-│       ├── galaxy.js
 │       └── dist/               # build output
 └── docs/
     ├── audit/ / phase0/        # Historical
@@ -178,7 +176,7 @@ ft/
     └── rollback-procedures.md
 ```
 
-No `backend/` / `frontend/` — removed in `98d3521 chore: Phase D cleanup`. `crates/*/build/` and `crates/web/dist/` are ignored build outputs; `galaxy.js` / `gen-stars.js` are current (not legacy).
+No `backend/` / `frontend/` — removed in `98d3521 chore: Phase D cleanup`. `crates/*/build/` and `crates/web/dist/` are ignored build outputs; the starfield (`galaxy.js` / `gen-stars.js`) was removed in the 2026-11-19 kawaii light redesign.
 
 ---
 
@@ -198,6 +196,7 @@ Phase 7:  Storytelling        Week 26-33  ← P0/P1 generation chain live (2026-
 
 Recent: 2026-09 rename `我的命盤→我的命格`, Wuxing+BaZi, personality merged, 4×4 palace, generation tags as selectable birth attribute, story prompt thickened.
 2026-09-16/17 星空藍 ground (`--void #0A1733` / `--deep-space #14224A`) replacing the midnight-black pair; AA floors re-derived on the glass composite, `--silver-faint` `#8A919C→#9AA3B2`, mirror band `#6F7787→#7B8494`, `.palace.life` pill contrast fixed, last two blue-violet inline hues removed (avatar + generation tag chips). K3 adversarial review closed 2026-09-17.
+2026-11-19 kawaii 亮底全站換色（cosmic-silver 與星空退役）＋西洋星盤三張星座翻牌；見 docs/ARCHITECTURE.md §Kawaii light theme。
 
 ---
 
