@@ -231,11 +231,11 @@ async fn run_with_timeout(
     timeout_ms: u64,
 ) -> Result<serde_json::Value, String> {
     use futures_util::future::{select, Either};
-    let run_fut = Box::pin(ai.run::<_, serde_json::Value>(model, input));
+    let run_fut = Box::pin(run_plain_json(ai, model, &input));
     let timeout_fut = Box::pin(Delay::from(Duration::from_millis(timeout_ms)));
     match select(run_fut, timeout_fut).await {
         Either::Left((res, _)) => res.map_err(|e| {
-            let summary: String = e.to_string().chars().take(200).collect();
+            let summary: String = e.chars().take(200).collect();
             format!("{}: {}", model, summary)
         }),
         Either::Right((_, _)) => Err(format!(
@@ -243,6 +243,33 @@ async fn run_with_timeout(
             model, timeout_ms
         )),
     }
+}
+
+/// 以「一般 JS 物件」送進 Workers AI binding。
+///
+/// **不可用 `Ai::run`**：workers-rs 0.8.5 以預設 `serde_wasm_bindgen::to_value`
+/// 序列化，`serde_json::Value` 的物件會變成 JS `Map`，binding 看不到任何欄位
+/// （2026-11-20 正式站 `AiError: 5006 … required properties at '/' are 'messages'`，
+/// 文字兩環全滅回 stub）。改走 JSON 字串 → `JSON.parse` → 底層 `run`，回應同樣經
+/// `JSON.stringify` 轉回 `serde_json::Value`。
+async fn run_plain_json(
+    ai: &Ai,
+    model: &str,
+    input: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    use worker::wasm_bindgen::{JsCast, JsValue};
+    let js_in = worker::js_sys::JSON::parse(&input.to_string())
+        .map_err(|_| "input encode failed".to_string())?;
+    let raw: &JsValue = ai.as_ref();
+    let sys: &worker::worker_sys::Ai = raw.unchecked_ref();
+    let out = worker::wasm_bindgen_futures::JsFuture::from(sys.run(model, js_in))
+        .await
+        .map_err(|e| worker::Error::from(e).to_string())?;
+    let text = worker::js_sys::JSON::stringify(&out)
+        .ok()
+        .and_then(|s| s.as_string())
+        .ok_or_else(|| "output decode failed".to_string())?;
+    serde_json::from_str(&text).map_err(|_| "output decode failed".to_string())
 }
 
 #[cfg(test)]
