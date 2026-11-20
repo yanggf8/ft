@@ -167,7 +167,14 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 - 規則層：星座距離 d → 七相位（台灣術語，前端白話成「隔 N 個星座（X相）」）→ 6 類質性標籤（不給分數）＋元素 10 句＋模式 6 句；同星座的星體合併成一列（`match_rows`）。版本常數 `ZODIAC_MATCH_CORPUS_VERSION`，文案改動必 bump。
 - 紅線由測試守門：12×12 全組合、對稱、d=0..6 表格、禁用字（注定／不合／速配／分手／%，含 `zodiac.rs`／`home.rs` 字面文案）。
 - 前端：載入三態（Idle／Loading／Loaded／Failed）；await 後比對 uid 防登出殘留，且不得讀已卸載元件的 signal；結果變動即重播翻牌並捲入視窗；`aria-live` 只放一句 sr-only 摘要。
-- 階段 B（AI 解讀 API＋`zodiac_match_readings` 表）待做。
+- **階段 B AI 解讀**（2026-11-20）：`POST /api/zodiac/match/interpret`（`routes/zodiac.rs`），body `{"target":"Leo"}`。順序：auth → 64KiB → 每分鐘 20 次 → 驗 target（400 `INVALID_SIGN`）→ **伺服器自讀西洋盤** `chart_resolver::resolve_western_chart`（不用 `resolve_chart`——紫微成功時它的 western 為 None；未填生辰 400 `NO_BIRTH_DATA`／DB 500／引擎 502，皆在計次前）→ 查快取（命中不計次）→ `rate_limit_strict_refundable` IP 10／user 3 per 24h（user 上限 429 `AI_DAILY_LIMIT`，其餘限流 429 `RATE_LIMIT`）→ AIMutexDO 專屬實例 `id_from_name("zodiac-match")`。
+  - **失敗不落庫、一律退次**：AI 呼叫任何失敗（binding／stub 取得失敗、DO 例外、DO 非 200、stub、空內容、輸出檢查不過）都退 IP＋user 兩把票根（各退一次）；`AI_QUOTA`／`AI_QUEUE_FULL`／`AI_QUEUE_TIMEOUT` 回 503 原碼，其餘 503 `AI_UNAVAILABLE`。**與 tarot 不同**（tarot 的 stub／空內容計次）。
+  - 落庫前輸出檢查 `output_ok`（純函式）：必含 `## 核心價值`；無 rising 不得出現「上升」；無 moon 不得有 `## 情感需求`；不得出現 你們的月亮／你們的上升／對方的月亮／對方的上升／%／％。
+  - 只有成功才寫 `zodiac_match_readings`（除 `id` PRIMARY KEY 外無任何 constraint、無 NOT NULL，值由程式保證；讀取端容忍 NULL）；寫入失敗仍回結果並 `console_error!`（無細節）。**部署順序：migration `scripts/migrations/2026-11-19-zodiac-match.sql` 必須先於 API 部署**。生辰變更時刪除快取為 best-effort（失敗只記 log；sign_key 本就不會被新星座命中）。
+  - 快取鍵＝`(user_id, target_sign, sign_key, corpus_version, prompt_version)`；`sign_key`＝`"Taurus|Aquarius|Virgo"`（無上升／不明為 `-`），target 先正規化。生辰變更（`PUT /api/users/me/birth`）一併刪除（best-effort）。
+  - chartData 只含星座與規則層判讀（`rules[].pair` 明寫「你的月亮（水瓶座）× 對方的太陽（獅子座）」），不含生日／出生地／時辰；未填時辰不送 rising。prompt（`prompts.rs` `zodiac_match`）預設中文＋`GUARDRAIL_ZH`；有上升輸出四節（核心價值／情感需求／第一印象／小提醒）、無上升去第一印象、無月亮去情感需求；各節「本節談什麼」只供模型理解、明令不得抄進內文；禁「你們的月亮／上升」、禁斷言成敗與建議交往分手。**關係中立**（v2）：對方可能是伴侶／朋友／同事／家人，不預設戀愛／曖昧與性別，不用吸引力／來電／感情升溫等戀愛詞。`ZODIAC_MATCH_PROMPT_VERSION`（現為 "2"）改 prompt 必 bump。
+  - 前端：只對「登入＋星盤 Loaded＋已選對方」顯示「產生 AI 解讀」，按鈕前揭露「星座組合會傳送至第三方 AI 服務生成，僅供娛樂與自我反思」；在途請求以 `ai_gen` 世代綁定——換對方／星盤即世代 +1、清結果、`ai_loading=false`（按鈕立即可用），舊回應世代不符整包丟棄（不碰 loading）；只有 `AI_DAILY_LIMIT` 顯示 3 次上限文案，其他 429 走通用「請求太頻繁」；AI 區不進 live region。
+  - 實測（2026-11-20，gemma-4 不思考）：3 組 prompt 3–7 秒、約 17–21 neurons／次。
 
 ## Kawaii light theme (2026-11-19)
 

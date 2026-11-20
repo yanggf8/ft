@@ -1508,3 +1508,8 @@ input[type="range"]:disabled { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
   .mascot-hero, .mascot-joy:not(.mascot-hidden) { animation: none; }
 }
+
+/* 星座配對 階段 B：AI 解讀區（不放 live region；內文 .ai-reading 共用） */
+.zm-ai { margin-top: 1.25rem; }
+.zm-ai .zm-note { margin-bottom: 0.75rem; }
+.zm-ai-btn { margin-top: 0.25rem; }

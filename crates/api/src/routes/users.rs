@@ -221,6 +221,11 @@ pub fn register(router: R<'static>) -> R<'static> {
             if let Err(e) = db::exec(&db, "DELETE FROM interpretations WHERE user_id = ?1", &[&du_t]).await {
                 return Ok(error::error("db error", 500));
             }
+            // 星座配對 AI 快取依出生資料算出的星座組合——生辰變更一併清掉。best-effort：
+            // 快取鍵含 sign_key，舊列本來就不會被新星座命中，刪除失敗只記 log、不擋回應。
+            if db::exec(&db, "DELETE FROM zodiac_match_readings WHERE user_id = ?1", &[&du_t]).await.is_err() {
+                console_error!("zodiac match cache cleanup failed");
+            }
             let mut res = ok_json(&serde_json::json!({ "success": true, "birth_data_hash": hash }), 200);
             apply_cache_headers(&mut res, 0, false);
             Ok(res)

@@ -378,7 +378,7 @@ pub async fn refund_strict(ctx: &RouteContext<()>, key: &str, reset_at: f64) {
     };
     match stub.fetch_with_request(req).await {
         Ok(r) if r.status_code() == 200 => {}
-        _ => console_error!("palm refund failed for {}", key),
+        _ => console_error!("rate limit refund failed for {}", key),
     }
 }
 

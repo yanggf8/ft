@@ -205,6 +205,17 @@ else
   FAILED=1
 fi
 
+# Test 8d: zodiac match AI endpoint is routed and auth-guarded (401 without a session).
+# (auth fires before any rate limit — 401 probe consumes no quota)
+echo -n "8d. Zodiac match AI endpoint (401 without auth)... "
+CODE=$(hcurl -X POST "$API_URL/api/zodiac/match/interpret" -H "Content-Type: application/json" -d '{"target":"Leo"}' -w "%{http_code}" -o /dev/null) || true
+if [ "$CODE" = "401" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} POST /api/zodiac/match/interpret -> $CODE (expected 401)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"

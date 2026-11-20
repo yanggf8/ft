@@ -5,7 +5,9 @@
 //!   未填時辰（`auth.user.birth_hour` 為空）不顯示上升列、月亮列加註。
 //! - 未登入／無出生資料／星盤載入失敗 → 12 宮格手選「我的太陽星座」。
 //! - 對方只點選太陽星座（不收對方生日，站長裁示 2026-11-19）。
-//! - 階段 B 的 AI 解讀區塊若加入，內文一律用 `super::story::render_markdown`。
+//! - 階段 B AI 解讀：只對「登入＋有出生資料＋星盤 Loaded」且已選對方者顯示按鈕；
+//!   `POST /api/zodiac/match/interpret`（伺服器自讀西洋盤，只送對方星座）；內文用
+//!   `super::story::render_markdown`；換對方／換星盤即清掉舊結果；AI 區塊不進 live region。
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -18,7 +20,7 @@ use ft_schema::zodiac_match::{
     MOON_HOUR_NOTE, NO_RISING_NOTE,
 };
 
-use crate::api;
+use crate::api::{self, ApiErr};
 use crate::auth::use_auth;
 use crate::components::sign_glyph_path;
 
@@ -144,6 +146,51 @@ pub fn ZodiacMatchPage() -> impl IntoView {
 
     let loaded = move || matches!(chart.get(), ChartState::Loaded(_));
 
+    // ── 階段 B：AI 解讀（登入＋星盤 Loaded＋已選對方）──
+    let ai_text = RwSignal::new(None::<String>);
+    let ai_error = RwSignal::new(String::new());
+    let ai_loading = RwSignal::new(false);
+    // 在途請求世代：換對方／星盤變動即 +1，舊請求回來時世代不符整包丟棄
+    let ai_gen = RwSignal::new(0u32);
+    // 換對方或星盤變動 → 清掉舊結果（結果只對應當下組合），按鈕立即可用
+    Effect::new(move |_| {
+        target.track();
+        chart.track();
+        ai_gen.update(|g| *g = g.wrapping_add(1));
+        ai_loading.set(false);
+        ai_text.set(None);
+        ai_error.set(String::new());
+    });
+    let can_ai = move || loaded() && target.get().is_some() && !results.get().is_empty();
+    let run_ai = move |_| {
+        let Some(t) = target.get_untracked() else {
+            return;
+        };
+        if ai_loading.get_untracked() {
+            return;
+        }
+        ai_loading.set(true);
+        ai_error.set(String::new());
+        let my_gen = ai_gen.get_untracked();
+        spawn_local(async move {
+            let res = api::zodiac_match_interpret(t).await;
+            // 元件可能已卸載（離開頁面）→ try_* 不 panic；期間換了對方／星盤 → 世代不符，
+            // 整包丟棄（連 loading 都不碰，新世代的請求可能正在跑）
+            if ai_gen.try_get_untracked() != Some(my_gen) {
+                return;
+            }
+            let _ = ai_loading.try_set(false);
+            match res {
+                Ok(r) => {
+                    let _ = ai_text.try_set(Some(r.interpretation));
+                }
+                Err(e) => {
+                    let _ = ai_error.try_set(ai_error_text(&e));
+                }
+            }
+        });
+    };
+
     view! {
       <div class="page zm-page">
         <h1 style="margin-bottom:0.5rem">"星座配對"</h1>
@@ -252,8 +299,47 @@ pub fn ZodiacMatchPage() -> impl IntoView {
             .into_any()
           }}
         </section>
+
+        <Show when=can_ai>
+          <section class="card zm-ai" aria-labelledby="zm-ai-title">
+            <h2 id="zm-ai-title" class="zm-title">"AI 配對解讀"</h2>
+            {move || match ai_text.get() {
+              Some(text) => view! {
+                <div class="ai-reading">{super::story::render_markdown(&text)}</div>
+                <p class="zm-foot">"AI 生成・娛樂與自我反思用途，非專業建議"</p>
+              }.into_any(),
+              None => view! {
+                <p class="zm-note">"星座組合會傳送至第三方 AI 服務生成，僅供娛樂與自我反思。"</p>
+                <p class="zm-note">
+                  {move || format!(
+                    "AI 會依你的{}與對方的太陽星座寫一段相處提示（只傳送星座，不含出生資料）。24 小時內最多 3 次，同一組合重看不計次。",
+                    if has_hour.get() { "太陽、月亮、上升" } else { "太陽、月亮" }
+                  )}
+                </p>
+                {move || (!ai_error.get().is_empty()).then(|| view! {
+                  <p class="error" style="margin:0.5rem 0">{move || ai_error.get()}</p>
+                })}
+                <button type="button" class="btn-primary zm-ai-btn" disabled=move || ai_loading.get() on:click=run_ai>
+                  {move || if ai_loading.get() { "AI 解讀中…（約需半分鐘）" } else { "產生 AI 解讀" }}
+                </button>
+              }.into_any(),
+            }}
+          </section>
+        </Show>
       </div>
     }
+}
+
+/// AI 錯誤的友善中文：`AI_DAILY_LIMIT`＝本功能 24h 3 次上限；其餘（含一般 429
+/// 「請求太頻繁」）沿用 `ai_message()`。
+fn ai_error_text(e: &ApiErr) -> String {
+    if e.code() == Some("AI_DAILY_LIMIT") {
+        return "今天的配對 AI 解讀次數已用完（24 小時內最多 3 次），明天再試。".to_string();
+    }
+    if e.needs_birth_data() {
+        return "需要先填寫出生資料，才能產生 AI 解讀。".to_string();
+    }
+    e.ai_message()
 }
 
 /// 報讀摘要：「對方天蠍座：太陽 正對面（對分相）互補也拉鋸；月亮 隔 3 個星座（四分相）拉扯」。

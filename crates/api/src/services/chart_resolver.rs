@@ -264,6 +264,66 @@ pub(crate) async fn resolve_chart(
     })
 }
 
+/// 星座配對（plan 2026-11-19 §2.4、§6.2）專用：只解析西洋盤。**不可**用
+/// [`resolve_chart`]——它在紫微成功時 `western: None`。
+pub(crate) struct ResolvedWestern {
+    pub chart: WesternChartV3,
+    /// 使用者是否填了出生時辰；`false` 時引擎以正午算出的上升不可用。
+    pub has_birth_hour: bool,
+}
+
+/// 錯誤分類（route 對映：NoBirthData 400／Db 500／Engine 502，皆在扣 AI 額度之前）。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum WesternResolveError {
+    NoBirthData,
+    Db,
+    Engine,
+}
+
+pub(crate) async fn resolve_western_chart(
+    ctx: &RouteContext<()>,
+    user_id: &str,
+) -> Result<ResolvedWestern, WesternResolveError> {
+    let db = db::Turso::from_env(&ctx.env).map_err(|_| WesternResolveError::Db)?;
+    let birth: Option<BirthRow> = db::first(
+        &db,
+        "SELECT birth_year, birth_month, birth_day, birth_hour, gender, timezone, \
+         latitude, longitude, birth_data_hash FROM users WHERE id = ?1",
+        &[&db::text(user_id)],
+    )
+    .await
+    .map_err(|_| WesternResolveError::Db)?;
+    let Some(birth) = birth else {
+        return Err(WesternResolveError::NoBirthData);
+    };
+    if birth.birth_year.is_none() || birth.birth_month.is_none() || birth.birth_day.is_none() {
+        return Err(WesternResolveError::NoBirthData);
+    }
+    let birth_hash = birth.birth_data_hash.clone().unwrap_or_default();
+    let fetcher = ctx
+        .env
+        .service("FT_ENGINE")
+        .map_err(|_| WesternResolveError::Engine)?;
+    let chart = resolve_one::<WesternChartV3>(
+        &db,
+        &fetcher,
+        user_id,
+        "western",
+        "engineVersionWestern",
+        engine_version::ENGINE_VERSION_WESTERN,
+        &birth_hash,
+        &birth,
+        western_chart_structurally_valid,
+    )
+    .await
+    .map_err(|_| WesternResolveError::Db)?
+    .ok_or(WesternResolveError::Engine)?;
+    Ok(ResolvedWestern {
+        chart,
+        has_birth_hour: birth.birth_hour.is_some(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

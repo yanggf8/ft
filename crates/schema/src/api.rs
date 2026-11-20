@@ -187,6 +187,28 @@ pub struct StoryResponse {
     pub stub: bool,
 }
 
+/// `POST /api/zodiac/match/interpret` body（星座配對 AI 解讀，plan 2026-11-19 §2.4–2.5）。
+/// `target`＝對方太陽星座標準英文名（伺服端以 `zodiac_match::normalize_sign` 正規化）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZodiacMatchInterpretRequest {
+    pub target: String,
+}
+
+/// `POST /api/zodiac/match/interpret` (200)。失敗不落庫——成功才有此回應，
+/// `interpretation` 恆有值；`cached`＝同組合已產生過（不計額度）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZodiacMatchInterpretResponse {
+    pub interpretation: String,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub cached: bool,
+}
+
 /// `GET /api/charts` (200).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterpretationsResponse {

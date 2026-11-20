@@ -21,7 +21,8 @@ pub fn get_system_prompt(chart_type: &str, language: Option<&str>) -> String {
 
     // 與 base_system_prompt 的語言分支一致：西洋盤預設英文，其餘預設中文
     let english = match chart_type {
-        "ziwei" | "story" => language == Some("en"),
+        // zodiac_match 一律中文（前端只送 zh；未帶 language 也不得落入英文分支）
+        "ziwei" | "story" | "zodiac_match" => language == Some("en"),
         _ => language != Some("zh"),
     };
     let base = base_system_prompt(chart_type, language);
@@ -43,6 +44,10 @@ fn base_system_prompt(chart_type: &str, language: Option<&str>) -> String {
         return PALM_EXTRACTION_PROMPT.to_string();
     }
 
+    if chart_type == "zodiac_match" {
+        // plan 2026-11-19 §2.4／§6.4：對方只知太陽星座；不斷言關係成敗、不建議交往／分手
+        return "你是溫和的西洋占星配對解讀者。你根據「以星座為單位」的簡化相位，描述兩個人互動時可能出現的傾向與相處提示，作為娛樂與自我反思的素材。對方可能是伴侶、朋友、同事或家人：不得預設是戀愛或曖昧關係，不得預設任何一方的性別，不使用「吸引力」「來電」「感情升溫」「心動」等戀愛用語，改用「相處」「互動」「合作」等中性說法。你不得斷言關係的成敗、未來或結局，不得建議交往、分手或任何關係決定，不得打分數或給百分比，不得說兩人「合」或「不合」。對方只提供太陽星座：不得推測或描述對方太陽以外的任何星盤資訊。全程使用台灣繁體中文。".to_string();
+    }
     if chart_type == "ziwei" {
         return if language == Some("en") {
             "You are an expert in 紫微斗數 (Zi Wei Dou Shu). Provide insightful interpretations in English.".to_string()
@@ -77,6 +82,9 @@ pub fn build_prompt(
     }
     if chart_type == "palm" {
         return build_palm_prompt(chart);
+    }
+    if chart_type == "zodiac_match" {
+        return build_zodiac_match_prompt(chart);
     }
 
     if chart_type == "ziwei" {
@@ -685,9 +693,190 @@ fn build_tarot_prompt(chart: &serde_json::Value) -> String {
     out
 }
 
+/// 星座配對 AI prompt（plan 2026-11-19 §2.4、§6.4）。chartData 由 route 組裝：
+/// `{ mySigns:{sun,moon,rising?}, target, rules:[{pair,theme,aspect,label,line,elementLine,modalityLine}], corpusVersion }`；
+/// 不含生日、出生地、時辰。`rising` 缺＝未填時辰 → 只輸出三節。
+fn build_zodiac_match_prompt(chart: &serde_json::Value) -> String {
+    let zh = |key: &str| {
+        chart
+            .pointer(key)
+            .and_then(|v| v.as_str())
+            .map(ft_schema::sign_zh)
+    };
+    let target = zh("/target").unwrap_or_else(|| "？".to_string());
+    let sun = zh("/mySigns/sun").unwrap_or_else(|| "？".to_string());
+    let moon = zh("/mySigns/moon");
+    let rising = zh("/mySigns/rising");
+
+    let mut out = String::from("【配對組合】\n");
+    out.push_str(&format!("使用者（「你」）的太陽星座：{sun}\n"));
+    // 缺的星體整行不提，避免把「月亮／上升」字樣餵給模型（輸出檢查會擋）
+    if let Some(m) = &moon {
+        out.push_str(&format!("使用者的月亮星座：{m}\n"));
+    }
+    if let Some(r) = &rising {
+        out.push_str(&format!("使用者的上升星座：{r}\n"));
+    }
+    out.push_str(&format!(
+        "對方：只知道太陽星座＝{target}（沒有對方的其他星盤資料；兩人可能是伴侶、朋友、同事或家人）\n"
+    ));
+
+    out.push_str(
+        "\n【規則層判讀（依兩個星座在黃道上相隔幾個星座估算的簡化相位，不是行星度數相位）】\n",
+    );
+    if let Some(rules) = chart.get("rules").and_then(|v| v.as_array()) {
+        for (i, r) in rules.iter().enumerate() {
+            let g = |k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or("");
+            out.push_str(&format!(
+                "{}. {}（主題：{}）：{}；傾向「{}」。{} 元素：{} 步調：{}\n",
+                i + 1,
+                g("pair"),
+                g("theme"),
+                g("aspect"),
+                g("label"),
+                g("line"),
+                g("elementLine"),
+                g("modalityLine"),
+            ));
+        }
+    }
+
+    // 節：(標題, 本節談什麼——只供模型理解，不得抄進內文)
+    let mut sections: Vec<(&str, &str)> = vec![("核心價值", "你的太陽與對方太陽的互動")];
+    if moon.is_some() {
+        sections.push(("情感需求", "你的月亮（你的情緒需求）與對方太陽的互動"));
+    }
+    if rising.is_some() {
+        sections.push((
+            "第一印象",
+            "你的上升（你給人的第一印象）與對方太陽在相處初期的互動",
+        ));
+    }
+    sections.push(("小提醒", "提醒這是簡化看法"));
+    let heads: Vec<String> = sections.iter().map(|(h, _)| format!("## {h}")).collect();
+
+    out.push_str("\n【寫作要求】\n");
+    out.push_str(&format!(
+        "1. 用 Markdown 二級標題，依序且只輸出這幾節：{}。不要加開場白或其他標題。\n",
+        heads.join("、")
+    ));
+    out.push_str("2. 各節談的內容如下（這些說明只供你理解，不要把說明文字或「你的X × 對方的太陽（Y座）」這類標示行抄進內文，直接寫內容）：\n");
+    for (h, what) in &sections {
+        out.push_str(&format!("   - {h}：{what}\n"));
+    }
+    // 只列實際有的「你的」星體；對方永遠只有太陽
+    let mine: Vec<&str> = [(moon.is_some(), "月亮"), (rising.is_some(), "上升")]
+        .iter()
+        .filter(|(has, _)| *has)
+        .map(|(_, p)| *p)
+        .collect();
+    if mine.is_empty() {
+        out.push_str("3. 只依兩人的太陽星座寫，不要推測或描述太陽以外的其他星體。\n");
+    } else {
+        let only: String = mine.iter().map(|p| format!("「你的{p}」")).collect();
+        let banned: String = mine
+            .iter()
+            .flat_map(|p| [format!("「你們的{p}」"), format!("「對方的{p}」")])
+            .collect();
+        out.push_str(&format!(
+            "3. {}只屬於「你」：只能寫{only}，絕對不可寫{banned}或「兩人的{}」。若某兩個星體在同一星座，各節仍從各自主題切入，不要整段重複。\n",
+            mine.join("、"),
+            mine[0],
+        ));
+    }
+    let mut n = 4;
+    if rising.is_none() {
+        out.push_str(&format!(
+            "{n}. 全文只談{}，不要提其他星體。\n",
+            if moon.is_some() {
+                "你的太陽、你的月亮與對方的太陽"
+            } else {
+                "兩人的太陽"
+            }
+        ));
+    } else {
+        out.push_str(&format!(
+            "{n}. 「第一印象」只談相處初期的感覺與互動節奏，不延伸成長期關係的判斷。\n"
+        ));
+    }
+    n += 1;
+    out.push_str(&format!("{n}. 對方可能是伴侶、朋友、同事或家人：用「相處」「互動」「合作」等中性說法，不預設戀愛或曖昧，不預設性別，不用「吸引力」「來電」「感情升溫」「心動」等戀愛用語。\n"));
+    n += 1;
+    out.push_str(&format!("{n}. 每節 2–4 句，全文約 350–550 字；用「可能」「傾向」語氣，給具體可行的相處提示。不得打分數、寫百分比、說「合／不合」或「速配」，不得預言關係結局，不得建議交往或分手。\n"));
+    n += 1;
+    out.push_str(&format!(
+        "{n}. 「小提醒」只寫一兩句：這是以星座為單位的簡化看法，真實關係取決於雙方的溝通與選擇。\n"
+    ));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn zm_chart(rising: bool) -> serde_json::Value {
+        zm_chart_full(true, rising)
+    }
+
+    fn zm_chart_full(moon: bool, rising: bool) -> serde_json::Value {
+        let mut my = serde_json::json!({ "sun": "Taurus" });
+        if moon {
+            my["moon"] = serde_json::json!("Aquarius");
+        }
+        if rising {
+            my["rising"] = serde_json::json!("Virgo");
+        }
+        serde_json::json!({
+            "mySigns": my,
+            "target": "Scorpio",
+            "rules": [{ "pair": "你的太陽（金牛座）× 對方的太陽（天蠍座）", "theme": "核心價值",
+                        "aspect": "正對面（對分相）", "label": "互補也拉鋸", "line": "L",
+                        "elementLine": "E", "modalityLine": "M" }],
+            "corpusVersion": "1",
+        })
+    }
+
+    #[test]
+    fn zodiac_match_prompt_sections_follow_rising() {
+        let with = build_prompt("zodiac_match", &zm_chart(true), Some("zh"), None);
+        assert!(with.contains("## 第一印象") && with.contains("處女座"));
+        assert!(
+            with.contains("天蠍座") && with.contains("你的太陽（金牛座）× 對方的太陽（天蠍座）")
+        );
+        let without = build_prompt("zodiac_match", &zm_chart(false), Some("zh"), None);
+        assert!(!without.contains("## 第一印象"), "無上升只輸出三節");
+        assert!(without.contains("## 核心價值、## 情感需求、## 小提醒"));
+        assert!(!without.contains("上升"), "無上升：prompt 不提上升字樣");
+        let no_moon = build_prompt(
+            "zodiac_match",
+            &zm_chart_full(false, false),
+            Some("zh"),
+            None,
+        );
+        assert!(
+            no_moon.contains("只輸出這幾節：## 核心價值、## 小提醒"),
+            "無月亮去掉情感需求節"
+        );
+        assert!(!no_moon.contains("月亮") && !no_moon.contains("上升"));
+        assert!(with.contains("絕對不可寫「你們的月亮」「對方的月亮」「你們的上升」「對方的上升」"));
+        assert!(without.contains("絕對不可寫「你們的月亮」「對方的月亮」"));
+        for p in [&with, &without, &no_moon] {
+            assert!(p.contains("不要把說明文字"), "標示行不得抄進內文");
+            assert!(p.contains("不預設戀愛或曖昧"));
+            for banned in ["出生年", "生日", "出生地", "經度", "緯度"] {
+                assert!(!p.contains(banned), "prompt 不得含 {banned}");
+            }
+        }
+    }
+
+    #[test]
+    fn zodiac_match_system_prompt_rules() {
+        let p = get_system_prompt("zodiac_match", None);
+        assert!(p.contains("不得斷言關係的成敗"));
+        assert!(p.contains("不得建議交往、分手"));
+        assert!(p.contains("對方只提供太陽星座"));
+        assert!(p.contains("不得預設是戀愛或曖昧關係") && p.contains("不得預設任何一方的性別"));
+    }
 
     #[test]
     fn guardrail_matches_prompt_language() {
@@ -696,6 +885,8 @@ mod tests {
             ("ziwei", Some("zh")),
             ("story", None),
             ("western", Some("zh")),
+            ("zodiac_match", None),
+            ("zodiac_match", Some("zh")),
         ] {
             let p = get_system_prompt(ct, lang);
             assert!(p.ends_with(GUARDRAIL_ZH), "{ct} {lang:?}");

@@ -59,7 +59,7 @@ impl ApiErr {
         )
     }
 
-    fn code(&self) -> Option<&str> {
+    pub fn code(&self) -> Option<&str> {
         match self {
             ApiErr::Api { body, .. } => body.code.as_deref(),
             _ => None,
@@ -483,6 +483,19 @@ pub async fn tarot_interpret(id: &str, include_chart: bool) -> Result<TarotReadi
         format!("/api/tarot/readings/{id}/interpret?chart=0")
     };
     post_ai::<(), _>(Request::post(&url(&path)), None).await
+}
+
+/// `POST /api/zodiac/match/interpret` — 星座配對 AI 解讀（登入＋有出生資料）。
+/// 伺服器自讀西洋盤，前端只送對方太陽星座標準英文名。
+pub async fn zodiac_match_interpret(target: &str) -> Result<ZodiacMatchInterpretResponse, ApiErr> {
+    let body = ZodiacMatchInterpretRequest {
+        target: target.to_string(),
+    };
+    post_ai(
+        Request::post(&url("/api/zodiac/match/interpret")),
+        Some(&body),
+    )
+    .await
 }
 
 /// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。

@@ -7,7 +7,18 @@
 //! - 文案改動必 bump `ZODIAC_MATCH_CORPUS_VERSION`（階段 B 的 AI 快取鍵含此版本）。
 
 /// 配對語料版本；改任何文案或規則必 bump。
-pub const ZODIAC_MATCH_CORPUS_VERSION: &str = "1";
+pub const ZODIAC_MATCH_CORPUS_VERSION: &str = "2";
+
+/// 配對 AI prompt 版本（階段 B）；改 prompt 必 bump（AI 快取鍵含此版本）。
+pub const ZODIAC_MATCH_PROMPT_VERSION: &str = "2";
+
+/// AI 快取用的星座組合鍵：`"Taurus|Aquarius|Virgo"`；無上升（未填時辰）或
+/// 無法辨識的星體以 `-` 表示。輸入先正規化。
+pub fn sign_key(sun: &str, moon: Option<&str>, rising: Option<&str>) -> Option<String> {
+    let sun = normalize_sign(sun)?;
+    let part = |x: Option<&str>| x.and_then(normalize_sign).unwrap_or("-");
+    Some(format!("{}|{}|{}", sun, part(moon), part(rising)))
+}
 
 /// 結果區底部固定聲明。
 pub const MATCH_DISCLAIMER: &str = "以星座為單位的簡化看法，描述互動傾向，不是關係結局。";
@@ -165,7 +176,7 @@ impl MatchLabel {
         "元素彼此相生，一方的特質常能帶動另一方，適合一起嘗試新事物。"
       }
       MatchLabel::PolarPull => {
-        "站在黃道的兩端，彼此身上常有自己較少展現的部分，吸引與拉鋸往往同時出現。"
+        "站在黃道的兩端，彼此身上常有自己較少展現的部分，互相欣賞與拉鋸往往同時出現。"
       }
       MatchLabel::Friction => {
         "做事的出發點不同，容易在節奏或優先順序上碰撞；說清楚各自需要什麼，摩擦也可能變成推進力。"
@@ -361,6 +372,23 @@ mod tests {
             }
         }
         v
+    }
+
+    #[test]
+    fn sign_key_normalizes_and_marks_missing() {
+        assert_eq!(
+            sign_key(" taurus", Some("AQUARIUS"), Some("Virgo")).as_deref(),
+            Some("Taurus|Aquarius|Virgo")
+        );
+        assert_eq!(
+            sign_key("Taurus", Some("Aquarius"), None).as_deref(),
+            Some("Taurus|Aquarius|-")
+        );
+        assert_eq!(
+            sign_key("Taurus", Some("bogus"), None).as_deref(),
+            Some("Taurus|-|-")
+        );
+        assert_eq!(sign_key("bogus", None, None), None);
     }
 
     #[test]

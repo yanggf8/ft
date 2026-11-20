@@ -125,6 +125,15 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   部署順序 **web 先**：新 API 會拒絕舊 web 無 strengths 的 generate（400）；
   細節見 docs/ARCHITECTURE.md §F5。
 
+- **星座配對（2026-11-20）**：規則層 `ft_schema::zodiac_match`（`ZODIAC_MATCH_CORPUS_VERSION`
+  改文案必 bump）；AI 解讀 `POST /api/zodiac/match/interpret` 伺服器自讀西洋盤
+  （`resolve_western_chart`，**不可**用 `resolve_chart`），`ZODIAC_MATCH_PROMPT_VERSION` 改 prompt
+  必 bump；快取鍵＝(user, target, sign_key, corpus_version, prompt_version)；**失敗不落庫、
+  任何 AI 失敗（含輸出檢查不過）都退兩把次數**（與 tarot 不同）；migration 先於 API 部署；AIMutexDO 專屬實例 `id_from_name("zodiac-match")`；配對資料永不寫入
+  predictions/prediction_feedback/f8_assignments。
+- **Workers AI 呼叫一律走 `providers.rs run_plain_json`**：workers-rs `Ai::run` 會把
+  `serde_json::Value` 物件序列化成 JS `Map`，binding 讀不到欄位（2026-11-20 正式站 AI 全滅事故）。
+
 - **色彩/對比紅線（2026-11-19 kawaii 亮底，取代 cosmic-silver）**：色值只能寫在
   `style.css` 的 `:root`（Rust 行內樣式與其餘 CSS 一律 `var(--token)`），改色後必跑
   `python3 scripts/css-guard.py --allow-local-vars`（寫死色值白名單制＋`var()` 存在性）
