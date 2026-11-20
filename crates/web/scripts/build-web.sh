@@ -80,5 +80,19 @@ cp boot.js dist/boot.js         # wasm 啟動器(外部檔;CSP script-src 'self'
 cp _headers dist/_headers       # Pages 安全標頭(CSP/HSTS/框架防護;P3)
 mkdir -p dist/assets && cp -r assets/* dist/assets/  # 靜態資產(塔羅卡面)
 
+# 快取破壞(2026-11-20 白屏事故):ahexagram.com zone 的 Browser Cache TTL=4h 會蓋掉
+# _headers 對 .js/.css 的 no-cache,舊 ft_web.js 配新 wasm → init 失敗 → app 不 mount。
+# 以內容 hash 當 ?v=,index.html(max-age=0)→ boot.js → ft_web.js 整條鏈每次部署都換網址。
+echo "🔧 cache-bust ?v= ..."
+V_JS=$(sha256sum dist/wasm/ft_web.js dist/wasm/ft_web_bg.wasm | sha256sum | cut -c1-12)
+sed -i "s#'/wasm/ft_web.js'#'/wasm/ft_web.js?v=$V_JS'#" dist/boot.js
+grep -q "ft_web.js?v=$V_JS" dist/boot.js || { echo "❌ boot.js cache-bust failed"; exit 1; }
+V_BOOT=$(sha256sum dist/boot.js | cut -c1-12)
+V_CSS=$(sha256sum dist/style.css | cut -c1-12)
+sed -i -e "s#src=\"/boot.js\"#src=\"/boot.js?v=$V_BOOT\"#" \
+       -e "s#href=\"/style.css\"#href=\"/style.css?v=$V_CSS\"#" dist/index.html
+grep -q "boot.js?v=$V_BOOT" dist/index.html && grep -q "style.css?v=$V_CSS" dist/index.html \
+  || { echo "❌ index.html cache-bust failed"; exit 1; }
+
 echo "✅ dist/ ready"
 ls -lh dist
