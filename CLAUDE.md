@@ -109,6 +109,11 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   `<script type="module" src="/boot.js">` 引用，`build-web.sh` 負責複製）。
   把啟動器改回 inline 會重演「app 不 mount」的全站停擺。改 `index.html`/`_headers`
   後必須在瀏覽器載入 `dist/`（套用同款 header）驗證再部署。
+- **快取紅線（2026-11-20 白屏事故）**：ahexagram.com zone 的 Browser Cache TTL=4h 會覆寫
+  `_headers` 對 `.js/.css` 的 `Cache-Control`（pages.dev 不受影響）。`build-web.sh` 對
+  `boot.js`／`ft_web.js`／`style.css` 加內容 hash `?v=` 是唯一防線——拿掉就會在部署後讓
+  舊 `ft_web.js` 配新 wasm、app 不 mount。驗證白屏要用**有舊快取**的瀏覽器，全新
+  Playwright 測不出來。
 - **塔羅（2026-10-27 全案）**：三版本常數（`TAROT_CORPUS_VERSION`／
   `DRAW_ALGO_VERSION`／`PROMPT_VERSION`）在 `crates/schema/src/tarot`，改語料／
   演算法／prompt 必 bump；塔羅資料永不寫入 predictions/prediction_feedback/
