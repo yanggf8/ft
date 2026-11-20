@@ -6,4 +6,4 @@ mod sign_glyph;
 pub use birth_form::BirthDataForm;
 pub use layout::Layout;
 pub use palace_grid::ZiWeiPalaceGrid;
-pub use sign_glyph::sign_glyph_path;
+pub use sign_glyph::{hide_broken_img, sign_art_src, sign_glyph_path};

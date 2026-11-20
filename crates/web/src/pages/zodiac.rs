@@ -22,7 +22,7 @@ use ft_schema::zodiac_match::{
 
 use crate::api::{self, ApiErr};
 use crate::auth::use_auth;
-use crate::components::sign_glyph_path;
+use crate::components::{hide_broken_img, sign_art_src, sign_glyph_path};
 
 /// 自動帶入的使用者星座（標準英文名）。
 #[derive(Clone, PartialEq)]
@@ -283,9 +283,16 @@ pub fn ZodiacMatchPage() -> impl IntoView {
             view! {
               <div class=their_cls class:zm-anim-b=move || flip_b.get() id="zm-reveal">
                 <div class="zm-reveal-head">
-                  {sign_class(their).and_then(sign_glyph_path).map(|d| view! {
-                    <svg class="zm-reveal-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d=d /></svg>
-                  })}
+                  {match sign_class(their).and_then(sign_art_src) {
+                    Some(src) => view! {
+                      <img class="zm-reveal-art" src=src alt="" aria-hidden="true"
+                        on:error=hide_broken_img
+                        width="72" height="72" decoding="async" />
+                    }.into_any(),
+                    None => sign_class(their).and_then(sign_glyph_path).map(|d| view! {
+                      <svg class="zm-reveal-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d=d /></svg>
+                    }).into_any(),
+                  }}
                   <h2 class="zm-reveal-name">{format!("對方：{}", sign_zh(their))}</h2>
                 </div>
                 {rows.into_iter().map(|r| {
@@ -408,7 +415,17 @@ fn MineChip(body: MatchBody, sign: Option<&'static str>) -> impl IntoView {
         body.zh(),
         sign.map(sign_zh).unwrap_or_else(|| "—".to_string())
     );
-    view! { <span class=cls>{text}</span> }
+    let art = sign.and_then(sign_class).and_then(sign_art_src);
+    view! {
+      <span class=cls>
+        {art.map(|src| view! {
+          <img class="zm-mine-art" src=src alt="" aria-hidden="true"
+                        on:error=hide_broken_img
+            width="22" height="22" decoding="async" />
+        })}
+        {text}
+      </span>
+    }
 }
 
 /// 12 宮格：button＋aria-pressed；再點一次已選的不取消（保持結果可讀）。
@@ -420,6 +437,7 @@ fn SignGrid(selected: RwSignal<Option<&'static str>>, label: &'static str) -> im
           let key = sign_class(s).unwrap_or("none");
           let cls = format!("zm-sign zc-sign-{key}");
           let glyph = sign_glyph_path(key);
+          let art = sign_art_src(key);
           let name = sign_zh(s);
           view! {
             <button
@@ -429,9 +447,16 @@ fn SignGrid(selected: RwSignal<Option<&'static str>>, label: &'static str) -> im
               aria-pressed=move || (selected.get() == Some(s)).to_string()
               on:click=move |_| selected.set(Some(s))
             >
-              {glyph.map(|d| view! {
-                <svg class="zm-sign-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d=d /></svg>
-              })}
+              {match art {
+                Some(src) => view! {
+                  <img class="zm-sign-art" src=src alt="" aria-hidden="true"
+                        on:error=hide_broken_img
+                    width="48" height="48" decoding="async" />
+                }.into_any(),
+                None => glyph.map(|d| view! {
+                  <svg class="zm-sign-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d=d /></svg>
+                }).into_any(),
+              }}
               <span class="zm-sign-name">{name}</span>
             </button>
           }

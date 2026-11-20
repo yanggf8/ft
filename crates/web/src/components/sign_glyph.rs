@@ -1,4 +1,11 @@
-//! 星座符號 inline SVG（西洋星盤翻牌與星座配對共用）。
+//! 星座符號 inline SVG＋kawaii 插畫路徑（西洋星盤翻牌與星座配對共用）。
+
+/// 星座 kawaii 插畫（m4m imgen 產；384×384 WebP，prompt 見
+/// `docs/superpowers/zodiac-art-prompts-2026-11-20.txt`）。`key` 為 `sign_class`
+/// 小寫鍵；未知星座回 `None`，呼叫端退回 [`sign_glyph_path`] SVG。
+pub fn sign_art_src(key: &str) -> Option<String> {
+    sign_glyph_path(key).map(|_| format!("/assets/zodiac/{key}.webp"))
+}
 
 /// Inline-SVG glyph for a zodiac sign key (from `sign_class`); 24×24 viewBox,
 /// stroked. Drawn as paths rather than U+2648.. so Android never swaps in colour
@@ -39,4 +46,15 @@ pub fn sign_glyph_path(key: &str) -> Option<&'static str> {
         "pisces" => "M6 3c3.5 3.5 3.5 14.5 0 18 M18 3c-3.5 3.5-3.5 14.5 0 18 M4 12h16",
         _ => return None,
     })
+}
+
+/// 插畫載入失敗（漏部署、斷網）→ 隱藏該 img，避免破圖示；星座名文字仍在。
+pub fn hide_broken_img(ev: leptos::ev::ErrorEvent) {
+    use wasm_bindgen::JsCast;
+    if let Some(el) = ev
+        .target()
+        .and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        el.set_hidden(true);
+    }
 }

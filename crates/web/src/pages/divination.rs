@@ -21,7 +21,7 @@ use ft_schema::{
 
 use crate::api;
 use crate::auth::use_auth;
-use crate::components::{sign_glyph_path, ZiWeiPalaceGrid};
+use crate::components::{hide_broken_img, sign_art_src, sign_glyph_path, ZiWeiPalaceGrid};
 
 #[component]
 pub fn DivinationPage() -> impl IntoView {
@@ -395,6 +395,7 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
             let traits = card.traits_text();
             let degree = card.degree_text();
             let glyph = sign_cls.and_then(sign_glyph_path);
+            let art = sign_cls.and_then(sign_art_src);
             let name = sign_zh(&card.sign);
             let body = card.body;
             view! {
@@ -418,11 +419,18 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
                         </span>
                         <span class="zc-face zc-back">
                             <span class="zc-kind">{format!("{}星座", body.label())}</span>
-                            {glyph.map(|d| view! {
-                                <svg class="zc-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d=d />
-                                </svg>
-                            })}
+                            {match art {
+                                Some(src) => view! {
+                                    <img class="zc-art" src=src alt="" aria-hidden="true"
+                        on:error=hide_broken_img
+                                        width="104" height="104" decoding="async" />
+                                }.into_any(),
+                                None => glyph.map(|d| view! {
+                                    <svg class="zc-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d=d />
+                                    </svg>
+                                }).into_any(),
+                            }}
                             <span class="zc-name">{name}</span>
                             {degree.map(|d| view! { <span class="zc-deg">{d}</span> })}
                             {(!traits.is_empty()).then(|| view! { <span class="zc-traits">{traits}</span> })}

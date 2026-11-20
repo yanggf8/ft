@@ -1297,6 +1297,26 @@ input[type="range"]:disabled { opacity: 0.6; }
   height: auto;
   margin: 0.15rem 0;
 }
+/* 星座 kawaii 插畫（翻牌背面）：卡片寬的 62%，上限 120px；白框隔開漸層底 */
+.zc-art {
+  background: var(--surface);
+  display: block;
+  width: 62%;
+  max-width: 120px;
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0.15rem 0;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-card);
+  object-fit: cover;
+  flex: none;
+}
+/* 手機三張牌很窄（約 90px）：拉高卡片讓插畫＋名稱＋度數＋特質完整顯示 */
+@media (max-width: 639px) {
+  .zc-card { aspect-ratio: 3 / 5; }
+  .zc-art { width: 60%; }
+}
 .zc-name {
   font-size: clamp(0.85rem, 3.6vw, 1.05rem);
   font-weight: 800;
@@ -1310,6 +1330,11 @@ input[type="range"]:disabled { opacity: 0.6; }
   font-size: 0.7rem;
   font-weight: 600;
 }
+@media (max-width: 639px) {
+  .zc-traits { font-size: 0.62rem; white-space: nowrap; }
+}
+/* 插畫載入失敗由 on:error 設 hidden；class 的 display 會蓋過 [hidden]，這裡補回 */
+.zc-art[hidden], .zm-sign-art[hidden], .zm-reveal-art[hidden], .zm-mine-art[hidden] { display: none; }
 
 /* ── 行星藥丸：圓點＝深端、底＝淺端、--metal-lo 框線（白卡上淺端必加框，F01）── */
 .zc-planets {
@@ -1398,6 +1423,17 @@ input[type="range"]:disabled { opacity: 0.6; }
   fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+.zm-sign-art {
+  background: var(--surface);
+  display: block;
+  width: 100%;
+  max-width: 48px;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  object-fit: cover;
+}
 .zm-sign-name { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
 
 /* 我的星座（自動帶入）*/
@@ -1444,6 +1480,24 @@ input[type="range"]:disabled { opacity: 0.6; }
   width: 2rem; height: 2rem;
   fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
+}
+.zm-reveal-art {
+  background: var(--surface);
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  border: 3px solid var(--surface);
+  box-shadow: var(--shadow-card);
+  object-fit: cover;
+  flex: none;
+}
+.zm-mine-art {
+  background: var(--surface);
+  width: 22px; height: 22px;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  border: 1px solid var(--surface);
+  object-fit: cover;
+  flex: none;
 }
 .zm-reveal-name { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--ink-on-sign); }
 .zm-row {
