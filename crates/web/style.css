@@ -71,6 +71,16 @@
   /* 陰影與光暈 */
   --shadow-card: 0 6px 20px rgba(124, 58, 237, 0.08);
   --shadow-card-hover: 0 12px 28px rgba(124, 58, 237, 0.16);
+  /* 金邊（站長 2026-11-20）：卡片框拋光金，暗金／亮金交替帶出金屬光澤；
+     純裝飾框（同 --glass-border 定位，非控制項邊界，不入 AA 配對） */
+  --gold-edge: linear-gradient(135deg,
+    #fff3c4 0%, #d4a943 18%, #8a6420 34%, #e8c766 50%,
+    #fffbe6 58%, #b8862b 74%, #7a5517 88%, #e6c25e 100%);
+  /* 沿金邊掃過的反光帶（45deg 暖白斜帶，疊在 --gold-edge 上） */
+  --gold-glint: linear-gradient(45deg,
+    transparent 0%, transparent 38%, rgba(255, 246, 214, 0.9) 46%,
+    #ffffff 50%, rgba(255, 246, 214, 0.9) 54%, transparent 62%, transparent 100%);
+  --gold-glow: 0 0 10px -3px rgba(212, 169, 67, 0.45);
   --glow-pink: rgba(236, 72, 153, 0.05);   /* 頁底光暈：α 已計入上方最深合成底 */
   --glow-violet: rgba(124, 58, 237, 0.03);
   /* 固定色：底色不可控的表面，不跟主題（F08／F16） */
@@ -204,11 +214,31 @@ main { flex: 1; }
 /* 卡片＝內容容器：白底、20px 圓角、2px 淡粉紫框、柔和紫陰影；不加 hover（F15） */
 .card {
   position: relative;
-  border: 2px solid var(--glass-border);
-  background: var(--glass-bg);
-  box-shadow: var(--shadow-card);
   padding: 1.5rem; border-radius: 20px;
   margin-bottom: 1.5rem;
+}
+/* 金邊卡框（站長 2026-11-20）：白底畫在 padding-box 蓋住內部，金漸層＋反光帶
+   只露出 2px 邊框那圈；反光帶每 120s 掃過一次（~2s），由左往右 */
+.card,
+.feature {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--glass-bg), var(--glass-bg)) padding-box,
+    var(--gold-glint) border-box,
+    var(--gold-edge) border-box;
+  background-size: 100% 100%, 240% 100%, 100% 100%;
+  background-position: 0 0, 130% 0, 0 0;
+  background-repeat: no-repeat;
+  box-shadow: var(--shadow-card), var(--gold-glow);
+  animation: gold-rim-glint 120s ease-in-out 30s infinite;
+}
+@keyframes gold-rim-glint {
+  0%   { background-position: 0 0, 130% 0, 0 0; }
+  1.7% { background-position: 0 0, -30% 0, 0 0; }
+  100% { background-position: 0 0, -30% 0, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .feature { animation: none; }
 }
 
 .page { padding: 1.5rem; max-width: 800px; margin: 0 auto; }
@@ -295,9 +325,6 @@ main { flex: 1; }
   gap: 2rem; margin-top: 3rem;
 }
 .feature {
-  border: 2px solid var(--glass-border);
-  background: var(--glass-bg);
-  box-shadow: var(--shadow-card);
   padding: 2rem; border-radius: 20px;
 }
 .feature h3 {
@@ -335,7 +362,7 @@ a.feature { display: block; text-decoration: none; color: inherit; transition: t
 a.feature:hover { text-decoration: none; color: inherit; }
 /* 可點的卡才上浮；包在 hover:hover 內，觸控裝置點擊後不會黏住（F15） */
 @media (hover: hover) {
-  a.feature:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+  a.feature:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover), var(--gold-glow); }
 }
 
 /* 精選卡：粉紫綠漸層外框（--metal-edge，裝飾） */

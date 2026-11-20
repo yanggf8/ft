@@ -190,6 +190,12 @@ Plan + review record: `docs/superpowers/plans/2026-11-19-kawaii-light-redesign.m
 - **Ground**: `--void #fff5fa → --deep-space #f4eeff` + two faint glows; white
   opaque cards (no glass/blur), 20px radius, purple 3D primary buttons. Starfield
   (`galaxy.js`, sky divs, `gen-stars.js`) removed; `build-web.sh` wipes `dist/`.
+- **Gold card rim (2026-11-20)**: `.card`/`.feature` border = 2px polished gold
+  (`--gold-edge`, layered under a `padding-box` white fill so only the rim shows)
+  + `--gold-glow`; a warm-white `--gold-glint` band sweeps the rim every 120s
+  (~2s, `@keyframes gold-rim-glint`, 30s delay), off under reduced-motion. Decor
+  only (not a control edge, not in contrast pairs). The first home feature card
+  keeps its rainbow featured ring on top.
 - **Guards**: `scripts/css-guard.py` (no literal colours outside `:root`, allowlist
   `scripts/css-guard-allowlist.txt` with reasons; every `var()` defined),
   `scripts/contrast-check.py` (token pairs incl. each sign stop),
