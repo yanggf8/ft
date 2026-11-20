@@ -159,6 +159,16 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 - 紅線由 `corpus.rs` 測試守門：分段禁用詞（背書／恐嚇／化煞商品／理氣）、「煞」只在風水欄、長度上限。
 - 閘門 A：站長自用後決定是否做 Batch 3（先猜後試，純前端）；API＋DB 版待閘門 B。
 
+## 星座配對 v1 規則版（2026-11-20，階段 A）
+
+點選對方太陽星座，看「你的太陽／月亮／上升 × 對方的太陽」互動傾向；plan：`docs/superpowers/plans/2026-11-19-zodiac-match.md`（§2.2–2.3、§6）。
+
+- **規則版純前端**：`/zodiac` 公開頁，規則在 wasm 內算（`ft_schema::zodiac_match`），免登入零 API。登入且 `hasBirthData` → `GET /api/charts/western`（no-cache 走 ETag）帶入三星座；`birth_hour` 為空則不列上升、月亮列加註。
+- 規則層：星座距離 d → 七相位（台灣術語，前端白話成「隔 N 個星座（X相）」）→ 6 類質性標籤（不給分數）＋元素 10 句＋模式 6 句；同星座的星體合併成一列（`match_rows`）。版本常數 `ZODIAC_MATCH_CORPUS_VERSION`，文案改動必 bump。
+- 紅線由測試守門：12×12 全組合、對稱、d=0..6 表格、禁用字（注定／不合／速配／分手／%，含 `zodiac.rs`／`home.rs` 字面文案）。
+- 前端：載入三態（Idle／Loading／Loaded／Failed）；await 後比對 uid 防登出殘留，且不得讀已卸載元件的 signal；結果變動即重播翻牌並捲入視窗；`aria-live` 只放一句 sr-only 摘要。
+- 階段 B（AI 解讀 API＋`zodiac_match_readings` 表）待做。
+
 ## Kawaii light theme (2026-11-19)
 
 Plan + review record: `docs/superpowers/plans/2026-11-19-kawaii-light-redesign.md`

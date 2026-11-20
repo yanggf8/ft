@@ -10,6 +10,7 @@ mod personality;
 mod profile;
 mod story;
 mod tarot;
+mod zodiac;
 
 pub use admin::AdminPage;
 pub use divination::DivinationPage;
@@ -25,3 +26,4 @@ pub use profile::ProfilePage;
 pub use story::StoryPage;
 pub use tarot::TarotPage;
 pub use tarot::TarotSpreadPage;
+pub use zodiac::ZodiacMatchPage;

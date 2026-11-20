@@ -71,6 +71,12 @@ PAIRS = [
    "admin invite-created panel (admin.rs)"),
   (["--primary", "--silver-faint"], ["#fff"], "nontext",
    "personality radar data / prior lines on white card"),
+  # 星座配對 /zodiac（zodiac.rs；宮格鈕／結果卡字 --ink-on-sign 已由 @signs 涵蓋）
+  (["--primary-deep"], ["#fff", "--primary-soft"], "text",
+   "zodiac match row theme / label badge / western-page CTA"),
+  (["--text", "--primary-deep"], ["--surface-tint"], "text",
+   "zodiac match aspect badge / line key chip"),
+  (["--primary-deep"], ["--sign-pisces-light"], "nontext", "home fi-match icon stroke"),
 ]
 # ==========================================================================
 

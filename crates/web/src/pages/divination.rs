@@ -9,7 +9,7 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::components::Redirect;
+use leptos_router::components::{Redirect, A};
 use leptos_router::hooks::use_params_map;
 
 use std::time::Duration;
@@ -21,7 +21,7 @@ use ft_schema::{
 
 use crate::api;
 use crate::auth::use_auth;
-use crate::components::ZiWeiPalaceGrid;
+use crate::components::{sign_glyph_path, ZiWeiPalaceGrid};
 
 #[component]
 pub fn DivinationPage() -> impl IntoView {
@@ -456,47 +456,9 @@ fn WesternView(chart: WesternChartV3) -> impl IntoView {
                     }).collect_view()}
                 </div>
             </div>
+            <p class="zm-cta-row">
+                <A href="/zodiac" attr:class="zm-cta">"拿你的星座去配對 →"</A>
+            </p>
         </div>
     }
-}
-
-/// Inline-SVG glyph for a zodiac sign key (from `sign_class`); 24×24 viewBox,
-/// stroked. Drawn as paths rather than U+2648.. so Android never swaps in colour
-/// emoji (U+FE0E is not reliably honoured there).
-fn sign_glyph_path(key: &str) -> Option<&'static str> {
-    Some(match key {
-        "aries" => {
-            "M12 21V9 M12 9c0-3.5-2-6-4.75-6S3 5 3 7.5 4.5 11 6 11 \
-             M12 9c0-3.5 2-6 4.75-6S21 5 21 7.5 19.5 11 18 11"
-        }
-        "taurus" => "M7 15a5 5 0 1 0 10 0a5 5 0 1 0 -10 0 M4 3.5c1 4 4.5 6.5 8 6.5s7-2.5 8-6.5",
-        "gemini" => {
-            "M4.5 4c4.5 1.6 10.5 1.6 15 0 M4.5 20c4.5-1.6 10.5-1.6 15 0 M9 5.1v13.8 M15 5.1v13.8"
-        }
-        "cancer" => {
-            "M4 9a2.75 2.75 0 1 0 5.5 0a2.75 2.75 0 1 0 -5.5 0 M6.75 6.25C10 3.5 16.5 3.8 20.5 7.5 \
-             M14.5 15a2.75 2.75 0 1 0 5.5 0a2.75 2.75 0 1 0 -5.5 0 M17.25 17.75C14 20.5 7.5 20.2 3.5 16.5"
-        }
-        "leo" => {
-            "M3.5 16.5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M9.5 16.5C9.5 12 7.5 10 7.5 7.5a4.25 4.25 0 0 1 8.5 0 \
-             c0 4-3 6.5-3 10.5a2.75 2.75 0 0 0 5.5 0"
-        }
-        "virgo" => {
-            "M3 5.5c1.5 0 2.5 1 2.5 2.5v11 M5.5 9c0-2 1.2-3.5 2.75-3.5S11 7 11 9v10 \
-             M11 9c0-2 1.2-3.5 2.75-3.5S16.5 7 16.5 9v6.5c0 3 1.5 5 4.5 5 M16.5 15.5c1.5-2 4.5-2 4.5 .5"
-        }
-        "libra" => "M3 20h18 M3 16h5.2A4.5 4.5 0 1 1 15.8 16H21",
-        "scorpio" => {
-            "M2.5 5.5c1.5 0 2.5 1 2.5 2.5v11 M5 9c0-2 1.2-3.5 2.75-3.5S10.5 7 10.5 9v10 \
-             M10.5 9c0-2 1.2-3.5 2.75-3.5S16 7 16 9v8c0 1.5 1 2.5 2.5 2.5H21.5 M19 17l2.5 2.5L19 22"
-        }
-        "sagittarius" => "M4 20L20 4 M12.5 4H20v7.5 M7 11.5l5.5 5.5",
-        "capricorn" => {
-            "M3 5.5c1.5 0 2.5 1 2.5 3V19 M5.5 9c0-2.5 1.5-4 3.5-4s3.5 1.5 3.5 4v7.5 \
-             c0 2 1.5 3.5 3.5 3.5s3.5-1.5 3.5-3.25-1.5-3.25-3.5-3.25-3.5 1.5-3.5 3"
-        }
-        "aquarius" => "M3 10.5l3-3 3 3 3-3 3 3 3-3 3 3 M3 17l3-3 3 3 3-3 3 3 3-3 3 3",
-        "pisces" => "M6 3c3.5 3.5 3.5 14.5 0 18 M18 3c-3.5 3.5-3.5 14.5 0 18 M4 12h16",
-        _ => return None,
-    })
 }

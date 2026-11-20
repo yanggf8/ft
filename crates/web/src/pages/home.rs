@@ -55,6 +55,13 @@ pub fn HomePage() -> impl IntoView {
                     </h3>
                     <p>"臥室或書房的擺設，並列風水的說法與相關研究；先猜研究做到哪了再翻卡（免登入）"</p>
                 </A>
+                <A href="/zodiac" attr:class="feature">
+                    <h3>
+                        <FeatureIcon kind="match"/>" 星座配對"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>"點選對方的太陽星座，看你們的互動傾向（免登入）；登入後再加入你的月亮、上升"</p>
+                </A>
                 <div class="feature">
                     <h3><FeatureIcon kind="ziwei"/>" 紫微斗數"</h3>
                     <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
@@ -117,6 +124,11 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
     "fengshui" => (
       "M5.5 10.5L12 5.5l6.5 5V19.5h-13z",
       "M3.5 12L12 5.5 20.5 12M5.5 10.5V19.5h13v-9M10 19.5v-4.5h4v4.5M15.5 8.2V5h2v4.7",
+    ),
+    // 星座配對：兩個交疊的圓＋上方小閃光
+    "match" => (
+      "M9 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z",
+      "M9 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zM15 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zM12 2.5v2.5M10.75 3.75h2.5",
     ),
     // 紫微：大星＋小閃光
     "ziwei" => (

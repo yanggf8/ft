@@ -19,7 +19,7 @@ use crate::components::Layout;
 use crate::pages::{
     AdminPage, DivinationPage, FengshuiPage, GlossaryPage, HomePage, LoginPage, NamingPage,
     PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, StoryPage, TarotPage,
-    TarotSpreadPage,
+    TarotSpreadPage, ZodiacMatchPage,
 };
 
 #[component]
@@ -46,6 +46,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/palm/capture") view=|| view! { <Protected><PalmCapturePage/></Protected> }/>
                     // 空間風水 v1（公開、純前端；答案只存 localStorage）
                     <Route path=path!("/fengshui") view=FengshuiPage/>
+                    <Route path=path!("/zodiac") view=ZodiacMatchPage/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>

@@ -328,6 +328,7 @@ main { flex: 1; }
 .fi-ai { background: var(--sign-aquarius-light); }
 .fi-personality { background: var(--sign-libra-light); }
 .fi-glossary { background: var(--surface-tint); }
+.fi-match { background: var(--sign-pisces-light); }
 /* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/改色，
    讓連結卡與 div 卡視覺一致（全域 a:hover 會穿透子元素，故逐項重設） */
 a.feature { display: block; text-decoration: none; color: inherit; transition: transform 0.18s ease, box-shadow 0.18s ease; }
@@ -1346,6 +1347,141 @@ input[type="range"]:disabled { opacity: 0.6; }
   .zc-inner {
     transition: none;
   }
+}
+
+/* ═══ 星座配對 /zodiac（階段 A 規則版；plan 2026-11-19-zodiac-match §2.3）═══
+ * 只引用 :root token。宮格鈕／結果卡沿用 .zc-sign-<key> 的 --zc-deep／--zc-light，
+ * 字色 --ink-on-sign（contrast-check 的 @signs 配對已涵蓋每個漸層色標）。
+ * reduced-motion 規則放在本段 zm 基本規則之後（K07）。 */
+.zm-section { margin-bottom: 1rem; }
+.zm-title { font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--heading); }
+.zm-sub { margin: 0 0 0.6rem; font-weight: 600; color: var(--text); }
+.zm-note { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--silver-dim); }
+.zm-hint { text-align: center; color: var(--silver-dim); font-size: 0.9rem; margin: 0.5rem 0 1.5rem; }
+.zm-foot { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--silver-dim); text-align: center; }
+
+/* 12 宮格：手機 4 欄、寬螢幕 6 欄 */
+.zm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+@media (min-width: 640px) {
+  .zm-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.zm-sign {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.2rem;
+  min-height: 64px;
+  padding: 0.5rem 0.25rem;
+  border-radius: 16px;
+  border: 1.5px solid var(--metal-lo);
+  background: var(--zc-light);
+  color: var(--ink-on-sign);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.zm-sign:focus-visible { outline: 3px solid var(--heading); outline-offset: 4px; }
+@media (hover: hover) {
+  .zm-sign:hover { box-shadow: var(--shadow-card-hover); border-color: var(--primary); }
+}
+.zm-sign.zm-selected {
+  background: linear-gradient(135deg, var(--zc-deep), var(--zc-light));
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow-card);
+  transform: translateY(-2px);
+}
+.zm-sign-glyph {
+  width: 1.4rem; height: 1.4rem;
+  fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.zm-sign-name { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+
+/* 我的星座（自動帶入）*/
+.zm-mine { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.zm-mine-chip {
+  display: inline-flex; align-items: center;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--metal-lo);
+  background: var(--zc-light);
+  color: var(--ink-on-sign);
+  font-size: 0.85rem; font-weight: 700;
+}
+.zm-mine-none { background: var(--surface); color: var(--silver-dim); }
+
+/* 結果：翻牌揭曉。Leptos 會就地更新同一節點，所以結果每次改變時在 a/b 兩個同內容
+   keyframes 間切換（.zm-anim-b），換 animation-name 即可重播。 */
+.zm-results { margin-top: 0.5rem; }
+#zm-reveal { scroll-margin-top: 1rem; scroll-margin-bottom: 1rem; }
+.zm-reveal {
+  display: grid; gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 1rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--zc-deep), var(--zc-light));
+  box-shadow: var(--shadow-card);
+  transform-origin: center top;
+  animation: zm-flip-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.zm-reveal.zm-anim-b { animation-name: zm-flip-in-b; }
+@keyframes zm-flip-in {
+  from { transform: perspective(900px) rotateY(90deg); opacity: 0.4; }
+  to { transform: perspective(900px) rotateY(0deg); opacity: 1; }
+}
+@keyframes zm-flip-in-b {
+  from { transform: perspective(900px) rotateY(90deg); opacity: 0.4; }
+  to { transform: perspective(900px) rotateY(0deg); opacity: 1; }
+}
+.zm-reveal-head {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  color: var(--ink-on-sign);
+}
+.zm-reveal-glyph {
+  width: 2rem; height: 2rem;
+  fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.zm-reveal-name { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--ink-on-sign); }
+.zm-row {
+  min-width: 0;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--glass-border);
+}
+.zm-row-theme { margin: 0; font-size: 0.75rem; font-weight: 700; color: var(--primary-deep); letter-spacing: 0.05em; }
+.zm-row-frame { margin: 0.2rem 0 0.5rem; font-size: 1rem; color: var(--heading); line-height: 1.4; }
+.zm-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; }
+.zm-aspect, .zm-label {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem; font-weight: 700;
+}
+.zm-aspect { background: var(--surface-tint); color: var(--text); border: 1px solid var(--metal-lo); }
+.zm-label { background: var(--primary-soft); color: var(--primary-deep); }
+.zm-line { margin: 0.3rem 0 0; color: var(--text); font-size: 0.9rem; line-height: 1.65; }
+.zm-line-k {
+  display: inline-block; margin-right: 0.4rem;
+  padding: 0 0.4rem; border-radius: 6px;
+  background: var(--surface-tint); color: var(--primary-deep);
+  font-size: 0.75rem; font-weight: 700;
+}
+.zm-nw { white-space: nowrap; }
+@media (max-width: 360px) { .zm-nw { white-space: normal; } }
+
+/* 西洋星盤頁底連結 */
+.zm-cta-row { margin: 0.25rem 0 0; text-align: right; }
+.zm-cta { display: inline-block; padding: 0.3rem 0.25rem; min-height: 24px; font-weight: 700; color: var(--primary-deep); }
+
+/* reduced-motion：放在 zm 基本規則之後（K07）；結果直接出現、選取不上浮 */
+@media (prefers-reduced-motion: reduce) {
+  .zm-reveal, .zm-reveal.zm-anim-b { animation: none; }
+  .zm-sign, .zm-sign.zm-selected { transition: none; transform: none; }
 }
 
 /* ═══ 吉祥物月亮貓（2026-11-19；m4m recraft 產圖、去背 WebP，assets/mascot/）═══
