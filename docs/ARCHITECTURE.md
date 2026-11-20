@@ -28,10 +28,14 @@
 - **Durable Objects** (`durable_objects/`):
   - `SessionDO` — key `"session"`, 7-day TTL. `get` deletes expired; `refresh` extends.
   - `AIMutexDO` — true serialization (1 concurrent via `queue`+`oneshot`), `MAX_QUEUE_DEPTH=8`,
-    `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource metrics, 2-provider failover
-    (Groq → Cerebras；前任 primary 於 2026-10-27 免費服務終止後移除、未替代) with a 45s
-    provider timeout, and an offline stub when all
-    providers fail.
+    `MAX_QUEUE_WAIT_MS=25000`, exresource metrics. **文字解讀全走 Cloudflare Workers AI**
+    （`[ai]` binding，2026-11-20 起；取代 Groq→Cerebras——Cerebras 已 402 失效）：
+    `TEXT_CHAIN` 主環 `@cf/google/gemma-4-26b-a4b-it`（`enable_thinking:false`）→ 備環
+    `@cf/meta/llama-3.3-70b-instruct-fp8-fast`；整筆請求自入列起 88s 預算（避開 Cloudflare
+    100s 524），主環上限 55s、剩不到 15s 不進備環；`length`／`incomplete` 截斷換環；
+    每日免費額度錯誤（3036／4006）立即回 503 `AI_QUOTA`、不走 stub；全環失敗才回離線 stub
+    （`charts.rs` 不把 stub 寫進快取，舊 stub 視同未命中）。手相走同一 binding 的 vision 兩環
+    （契約不變）。選型實測與 neurons 估算見 `docs/superpowers/plans/2026-11-19-zodiac-match.md` §1。
   - `RateLimitDO` — cross-isolate persistent rate limiting, 8 shards (`rl:0..rl:7`).
 - **Services** (`services/`): `billing` (30-day trial), `birth_hash` (bit-for-bit JS-compatible),
   `engine` (service-binding client + `jd_from_birth` tz conversion), `ai` (prompts + providers；紫微／西洋／人生故事

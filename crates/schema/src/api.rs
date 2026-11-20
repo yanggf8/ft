@@ -171,6 +171,9 @@ pub struct InterpretResponse {
     pub model: Option<String>,
     #[serde(default)]
     pub fromCache: bool,
+    /// DO 全環失敗時回的離線範本（wire `stub`）——前端不得當成功解讀顯示。
+    #[serde(default)]
+    pub stub: bool,
 }
 
 /// `GET /api/charts/story` and `POST /api/charts/story/generate` (200).
@@ -179,6 +182,9 @@ pub struct StoryResponse {
     pub story: String,
     #[serde(default)]
     pub fromCache: bool,
+    /// 同 `InterpretResponse::stub`。
+    #[serde(default)]
+    pub stub: bool,
 }
 
 /// `GET /api/charts` (200).

@@ -103,6 +103,8 @@ fn image_sha256(b64: &str) -> String {
 enum AiFailure {
     /// 佇列滿/逾時（未進 provider）——退，**不占** refund 額度（基礎設施非使用者責任）。
     Queue,
+    /// 全站 Workers AI 每日 neurons 用盡（2026-11-20）——非使用者責任，同 Queue 退且不占 bucket。
+    Quota,
     /// provider 全敗（含 DO rpm 觸頂，見批次B log 註記）——不退。
     AllFailed,
     /// finish_reason=length 截斷（DO 判定回 500）——已花不退。
@@ -114,6 +116,7 @@ enum AiFailure {
 fn classify_ai_failure(status: u16, code: &str) -> AiFailure {
     match (status, code) {
         (503, "AI_QUEUE_FULL") | (503, "AI_QUEUE_TIMEOUT") => AiFailure::Queue,
+        (503, "AI_QUOTA") => AiFailure::Quota,
         (503, "AI_ALL_FAILED") => AiFailure::AllFailed,
         (500, "AI_TRUNCATED") => AiFailure::Truncated,
         _ => AiFailure::Unknown,
@@ -123,17 +126,18 @@ fn classify_ai_failure(status: u16, code: &str) -> AiFailure {
 /// P8a：只有 Queue 結局「退款且不占 refund bucket」（品質閘 422 的退款另在
 /// route 內占 `palm:refund:{uid}` 額度，不經此函式）。
 fn refunds_without_bucket(f: AiFailure) -> bool {
-    f == AiFailure::Queue
+    matches!(f, AiFailure::Queue | AiFailure::Quota)
 }
 
 /// P8a：outcome code 轉發封閉集（Muse 審 Important：集合不封閉會讓未來 DO
-/// 內部碼洩漏給前端）——僅四個契約碼原樣轉發（前端重試語意有別），其餘
+/// 內部碼洩漏給前端）——僅五個契約碼原樣轉發（前端重試語意有別），其餘
 /// （未知碼/空碼/狀態不符）一律收斂 503 AI_UNAVAILABLE。
 fn forward_ai_error(status: u16, code: &str) -> (u16, &'static str) {
     match (status, code) {
         (503, "AI_QUEUE_FULL") => (503, "AI_QUEUE_FULL"),
         (503, "AI_QUEUE_TIMEOUT") => (503, "AI_QUEUE_TIMEOUT"),
         (503, "AI_ALL_FAILED") => (503, "AI_ALL_FAILED"),
+        (503, "AI_QUOTA") => (503, "AI_QUOTA"),
         (500, "AI_TRUNCATED") => (500, "AI_TRUNCATED"),
         _ => (503, "AI_UNAVAILABLE"),
     }
@@ -438,6 +442,7 @@ mod tests {
             classify_ai_failure(503, "AI_ALL_FAILED"),
             AiFailure::AllFailed
         );
+        assert_eq!(classify_ai_failure(503, "AI_QUOTA"), AiFailure::Quota);
         assert_eq!(
             classify_ai_failure(500, "AI_TRUNCATED"),
             AiFailure::Truncated
@@ -458,7 +463,7 @@ mod tests {
         );
     }
 
-    /// P8a 轉發封閉集：僅四個契約碼原樣轉發；未知/空碼收斂 503 AI_UNAVAILABLE。
+    /// P8a 轉發封閉集：僅五個契約碼原樣轉發；未知/空碼收斂 503 AI_UNAVAILABLE。
     #[test]
     fn forward_ai_error_closed_set() {
         assert_eq!(
@@ -474,6 +479,7 @@ mod tests {
             (503, "AI_ALL_FAILED")
         );
         assert_eq!(forward_ai_error(500, "AI_TRUNCATED"), (500, "AI_TRUNCATED"));
+        assert_eq!(forward_ai_error(503, "AI_QUOTA"), (503, "AI_QUOTA"));
         assert_eq!(
             forward_ai_error(500, "SOMETHING_NEW"),
             (503, "AI_UNAVAILABLE"),
@@ -495,6 +501,10 @@ mod tests {
     #[test]
     fn only_queue_refunds_without_bucket() {
         assert!(refunds_without_bucket(AiFailure::Queue));
+        assert!(
+            refunds_without_bucket(AiFailure::Quota),
+            "全站額度用盡非使用者責任"
+        );
         for f in [
             AiFailure::AllFailed,
             AiFailure::Truncated,

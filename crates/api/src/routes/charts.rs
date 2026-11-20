@@ -115,6 +115,10 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Some(r) => r,
                 None => return Ok(error::error_code("No story yet. POST /story/generate first", "NO_STORY", 404)),
             };
+            // 舊的離線範本故事視同尚未產生（前端會走 generate 重跑）
+            if row.ai_interpretation.as_deref().is_some_and(is_stub_text) {
+                return Ok(error::error_code("No story yet. POST /story/generate first", "NO_STORY", 404));
+            }
             if let Some(ai) = &row.ai_interpretation {
                 if !is_story_chart_current(row.chart_data.as_deref()) {
                     return Ok(error::error_code("Chart version stale, regeneration required", "RECALC_REQUIRED", 409));
@@ -224,7 +228,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                         Err(_) => return Ok(error::error("db error", 500)),
                     };
                     if let Some(ex) = existing {
-                        if let Some(ai) = &ex.ai_interpretation {
+                        if let Some(ai) = ex.ai_interpretation.as_ref().filter(|a| !is_stub_text(a)) {
                             if is_story_chart_current(ex.chart_data.as_deref()) {
                                 let mut res = ok_json(&serde_json::json!({ "story": ai, "fromCache": true }), 200);
                                 apply_cache_headers(&mut res, 86400, true);
@@ -328,14 +332,22 @@ pub fn register(router: R<'static>) -> R<'static> {
                         return Ok(error::error("AI service not configured", 503));
                     }
                     let ai_resp = match call_ai_mutex(&ctx, "story", &merged).await {
-                        Ok(Some(r)) => r,
-                        Ok(None) => return Ok(error::error("AI service temporarily unavailable, please try again", 503)),
+                        Ok(r) => r,
                         Err(r) => return Ok(r),
                     };
                     // TS returns 502 EMPTY_STORY when the AI returns an empty string
-                    if ai_resp.interpretation.trim().is_empty() {
+                    if ai_resp.result.interpretation.trim().is_empty() {
                         return Ok(error::error_code("AI returned an empty story, please try again", "EMPTY_STORY", 502));
                     }
+                    // 離線範本（全環失敗的 stub）不寫快取，照常回給前端
+                    if ai_resp.stub {
+                        let mut res = ok_json(&serde_json::json!({
+                            "story": ai_resp.result.interpretation, "provider": "stub", "model": "offline-template", "fromCache": false, "stub": true,
+                        }), 200);
+                        apply_cache_headers(&mut res, 0, true);
+                        return Ok(res);
+                    }
+                    let ai_resp = ai_resp.result;
                     let id = uuid::random_uuid();
                     let id_t = db::text(&id);
                     let uid_t = db::text(&user);
@@ -414,15 +426,27 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(r) => r,
                 Err(_) => return Ok(error::error("db error", 500)),
             };
+            // 舊離線 stub 不回給前端（視同未解讀 → 前端顯示「產生 AI 解讀」按鈕，
+            // 走 interpret 路由自癒）；ETag 帶標記，讓先前拿到 stub 的瀏覽器不會 304。
+            let cached_is_stub = cached
+                .as_ref()
+                .and_then(|c| c.ai_interpretation.as_deref())
+                .is_some_and(is_stub_text);
             let etag = create_etag(
-                format!("{}-{}-{}", hash, expected_version, CHART_SCHEMA_VERSION),
+                format!(
+                    "{}-{}-{}{}",
+                    hash,
+                    expected_version,
+                    CHART_SCHEMA_VERSION,
+                    if cached_is_stub { "-nostub" } else { "" }
+                ),
                 cached.as_ref().and_then(|c| c.updated_at.as_deref()),
             );
             if let Some(inm) = req.headers().get("if-none-match").ok().flatten() {
                 if inm == etag {
                     let mut res = Response::empty()?.with_status(304);
                     let _ = res.headers_mut().set("ETag", &etag);
-                    apply_cache_headers(&mut res, 3600, false);
+                    apply_cache_headers(&mut res, if cached_is_stub { 0 } else { 3600 }, false);
                     return Ok(res);
                 }
             }
@@ -434,13 +458,14 @@ pub fn register(router: R<'static>) -> R<'static> {
                     // stored_version == expected_version 時可達，寫 expected 誠實）。
                     let mut res = ok_json(&serde_json::json!({
                         "id": c.id, "user_id": user, "divination_type": div_type,
-                        "chart_data": parsed, "ai_interpretation": c.ai_interpretation,
+                        "chart_data": parsed,
+                        "ai_interpretation": if cached_is_stub { None } else { c.ai_interpretation.clone() },
                         "birth_data_hash": c.birth_data_hash, "fromCache": true,
                         "engineVersion": expected_version,
                         "chartSchemaVersion": CHART_SCHEMA_VERSION,
                     }), 200);
                     let _ = res.headers_mut().set("ETag", &etag);
-                    apply_cache_headers(&mut res, 3600, false);
+                    apply_cache_headers(&mut res, if cached_is_stub { 0 } else { 3600 }, false);
                     {
                         let tags: Vec<String> = birth
                             .generation_tags
@@ -587,7 +612,8 @@ pub fn register(router: R<'static>) -> R<'static> {
                     if stored_version != expected_version {
                         return Ok(error::error_code("Chart version stale, recalculation required", "RECALC_REQUIRED", 409));
                     }
-                    if let Some(ai) = &interp.ai_interpretation {
+                    // 舊資料若是離線範本（stub）視同未命中，重跑 AI 自我修復
+                    if let Some(ai) = interp.ai_interpretation.as_ref().filter(|a| !is_stub_text(a)) {
                         let etag = create_etag(format!("{}-ai", interp.birth_data_hash.clone().unwrap_or_default()), interp.updated_at.as_deref());
                         if let Some(inm) = req.headers().get("if-none-match").ok().flatten() {
                             if inm == etag {
@@ -640,10 +666,17 @@ pub fn register(router: R<'static>) -> R<'static> {
                     }
                     let chart_data = parse_chart(interp.chart_data.as_deref());
                     let ai_resp = match call_ai_mutex(&ctx, &div_type, &chart_data).await {
-                        Ok(Some(r)) => r,
-                        Ok(None) => return Ok(error::error("AI service temporarily unavailable, please try again", 503)),
+                        Ok(r) => r,
                         Err(r) => return Ok(r),
                     };
+                    if ai_resp.stub {
+                        let mut res = ok_json(&serde_json::json!({
+                            "interpretation": ai_resp.result.interpretation, "provider": "stub", "model": "offline-template", "fromCache": false, "stub": true,
+                        }), 200);
+                        apply_cache_headers(&mut res, 0, true);
+                        return Ok(res);
+                    }
+                    let ai_resp = ai_resp.result;
                     let id_t = db::text(&interp.id);
                     let ai_t = db::text(&ai_resp.interpretation);
                     if let Err(e) = db::exec(&db, "UPDATE interpretations SET ai_interpretation = ?1, updated_at = datetime('now') WHERE id = ?2", &[&ai_t, &id_t]).await {
@@ -715,56 +748,71 @@ async fn get_birth_data(db: &db::Turso, user: &str) -> Result<UserBirthRow, Resp
     row.ok_or_else(|| error::error("User not found", 404))
 }
 
+/// Workers AI binding 是否存在（2026-11-20 起文字 AI 全走 `[ai]` binding，免 key）。
 fn anything_configured(ctx: &RouteContext<()>) -> bool {
-    let res = ["GROQ_API_KEY", "CEREBRAS_API_KEY"].iter().any(|name| {
-        ctx.env
-            .secret(name)
-            .map(|s| !s.to_string().is_empty())
-            .unwrap_or(false)
-    });
-    res
+    ctx.env.ai("AI").is_ok()
 }
 
-/// Call the AI_MUTEX DO. `Ok(Some(..))` on success, `Ok(None)` on 503 (all providers
-/// failed / queue full), `Err(Response)` carries a status for other failures.
+/// 離線範本（DO 全環失敗時的 stub）判定——寫入前擋、讀快取時視同未命中。
+fn is_stub_text(ai: &str) -> bool {
+    ai.contains("離線模板") || ai.contains("offline-template")
+}
+
+/// DO 回應：成功結果＋是否為離線範本。
+struct AiOutcome {
+    result: ProviderResult,
+    stub: bool,
+}
+
+/// DO 503 的 `code` → 前端可辨識的錯誤碼（只轉發白名單，其餘收斂為
+/// `AI_UNAVAILABLE`；訊息 generic，不帶上游細節）。
+fn map_ai_503(code: Option<&str>) -> Response {
+    match code {
+        Some("AI_QUOTA") => error::error_code("Daily AI quota exceeded", "AI_QUOTA", 503),
+        Some(code @ ("AI_QUEUE_FULL" | "AI_QUEUE_TIMEOUT")) => {
+            error::error_code("AI is busy, please try again", code, 503)
+        }
+        _ => error::error_code(
+            "AI service temporarily unavailable, please try again",
+            "AI_UNAVAILABLE",
+            503,
+        ),
+    }
+}
+
+/// Call the AI_MUTEX DO. `Ok` on success (含 stub 旗標)；DO 503（額度、佇列、
+/// 全環失敗）轉成帶 `code` 的 503；其他狀態原樣轉發。
 async fn call_ai_mutex(
     ctx: &RouteContext<()>,
     chart_type: &str,
     chart_data: &serde_json::Value,
-) -> Result<Option<ProviderResult>, Response> {
+) -> Result<AiOutcome, Response> {
+    let unavailable = || map_ai_503(None);
     let ns = ctx
         .env
         .durable_object("AI_MUTEX")
-        .map_err(|_| error::error("ai unavailable", 503))?;
+        .map_err(|_| unavailable())?;
     let stub = ns
         .id_from_name("global")
         .and_then(|id| id.get_stub())
-        .map_err(|_| error::error("ai unavailable", 503))?;
-    let mut keys_map = serde_json::Map::new();
-    if let Some(v) = secret_or(&ctx.env, "GROQ_API_KEY") {
-        keys_map.insert("groq".to_string(), serde_json::Value::String(v));
-    }
-    if let Some(v) = secret_or(&ctx.env, "CEREBRAS_API_KEY") {
-        keys_map.insert("cerebras".to_string(), serde_json::Value::String(v));
-    }
-    let keys = serde_json::Value::Object(keys_map);
+        .map_err(|_| unavailable())?;
     let body = serde_json::json!({
-        "keys": keys,
         "interpretRequest": { "chartType": chart_type, "chartData": chart_data, "language": "zh" },
     });
     let mut init = RequestInit::new();
     init.with_method(Method::Post)
         .with_body(Some(body.to_string().into()));
-    let req = Request::new_with_init("https://ai-mutex/interpret", &init)
-        .map_err(|_| error::error("ai unavailable", 503))?;
+    let req =
+        Request::new_with_init("https://ai-mutex/interpret", &init).map_err(|_| unavailable())?;
     let mut res = stub
         .fetch_with_request(req)
         .await
-        .map_err(|_| error::error("ai unavailable", 503))?;
-    if res.status_code() == 503 {
-        return Ok(None);
-    }
+        .map_err(|_| unavailable())?;
     let status = res.status_code();
+    if status == 503 {
+        let err: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+        return Err(map_ai_503(err.get("code").and_then(|v| v.as_str())));
+    }
     if status != 200 {
         let err: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
         return Err(Response::from_json(&err)
@@ -775,35 +823,28 @@ async fn call_ai_mutex(
         .json()
         .await
         .map_err(|_| error::error("ai bad response", 502))?;
-    let interpretation = data
-        .get("interpretation")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let provider = data
-        .get("provider")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let model = data
-        .get("model")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    Ok(Some(ProviderResult {
-        interpretation,
-        provider,
-        model,
-        tokens_used: None,
-        finish_reason: None,
-    }))
-}
-
-fn secret_or(env: &Env, name: &str) -> Option<String> {
-    match env.secret(name) {
-        Ok(s) if !s.to_string().is_empty() => Some(s.to_string()),
-        _ => None,
-    }
+    let field = |k: &str| {
+        data.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let interpretation = field("interpretation");
+    let provider = field("provider");
+    let model = field("model");
+    let stub = data.get("stub").and_then(|v| v.as_bool()).unwrap_or(false)
+        || provider == "stub"
+        || is_stub_text(&interpretation);
+    Ok(AiOutcome {
+        result: ProviderResult {
+            interpretation,
+            provider,
+            model,
+            tokens_used: None,
+            finish_reason: None,
+        },
+        stub,
+    })
 }
 
 fn validate_ziwei_v3(resp: &serde_json::Value) -> Result<(), String> {

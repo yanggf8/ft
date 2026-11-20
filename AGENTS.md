@@ -67,12 +67,12 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 | Priority | Provider | Model | 特點 |
 |----------|----------|-------|------|
-| Primary | Groq | kimi-k2-instruct-0905 | 快速穩定、敘事柔順 |
-| Secondary | Cerebras | llama-3.3-70b | 冷備援、成本低 |
+| Primary | Workers AI | `@cf/google/gemma-4-26b-a4b-it`（不思考） | 繁中品質佳、紫微約 34s、約 45 neurons／次 |
+| Secondary | Workers AI | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | 快（約 22s）但 neurons 單價高，只當備環 |
 
-> iFlow（前 Primary，GLM-4.6）免費服務已於 2026-10-27 終止（key 一律被拒），已自鏈中移除，未加入替代 provider。
+> 2026-11-20 起全走 `[ai]` binding（免 key）；Groq→Cerebras 已退役（Cerebras 402）。iFlow 於 2026-10-27 終止。
 
-**AIMutexDO**: serialized (1 concurrent), `MAX_QUEUE_DEPTH=8`, `MAX_QUEUE_WAIT_MS=60000`, rpm/rpd limits, exresource tracking (`requests/tokens/errors/lastError/latencySum/failovers`), 45s provider timeout, offline stub when all fail. `SessionDO` key `session`, 7-day TTL.
+**AIMutexDO**: serialized (1 concurrent), `MAX_QUEUE_DEPTH=8`, `MAX_QUEUE_WAIT_MS=25000`, text chain Workers AI only (`@cf/google/gemma-4-26b-a4b-it` → `@cf/meta/llama-3.3-70b-instruct-fp8-fast`), per-request budget 88s from enqueue (each ring ≤55s, ≥15s), exresource tracking (`requests/tokens/errors/lastError/latencySum/failovers`); daily neurons quota (3036/4006) → 503 `AI_QUOTA` (no stub); other all-ring failure → offline stub flagged `stub:true` (never cached, frontend shows retry). `SessionDO` key `session`, 7-day TTL.
 
 ### Chart & AI Endpoints (Birth-Data Centric)
 ```bash
@@ -124,8 +124,7 @@ DELETE /api/practice                  # 刪全部練習資料並 practice_epoch+
 
 | Secret | Purpose |
 |--------|---------|
-| `GROQ_API_KEY` | Primary AI |
-| `CEREBRAS_API_KEY` | Secondary AI |
+| `GROQ_API_KEY`／`CEREBRAS_API_KEY` | 已退役（2026-11-20），保留至穩定一週供回滾，之後刪除 |
 | `TURSO_URL` / `TURSO_AUTH_TOKEN` | Turso (vars + secret)；`/health/db` 回 401 `token expired` 時輪換：`turso db tokens create fortunet --group \| wrangler secret put TURSO_AUTH_TOKEN`（2026-10-20 已輪換為 never-expire group token） |
 
 ---
@@ -251,8 +250,8 @@ armo price / armo mint / ...                                  # Turso/gwebcdb to
 **Current Usage** (2026-09):
 - Workers: ~10 req/day (testing)
 - Turso: libSQL (no D1 cap)
-- DO: session + AI mutex (queue 8 / 60s)
-- AI: free tiers (Groq/Cerebras) within $0
+- DO: session + AI mutex (queue 8 / 25s)
+- AI: Workers AI 免費方案 10,000 neurons／日（文字＋手相共用）
 
 **Free Tier Limits**: Workers 100K/day, DO 400K/day, R2 10GB, Turso free.
 

@@ -156,13 +156,19 @@ turso db shell fortunet < scripts/schema.sql
 
 ## Scenario 5: AI Provider Failures
 
-### Issue: Primary Provider (Groq) Down
+### Issue: Workers AI 主環（gemma-4）失敗或過慢
 
-**Automatic**: Failover to Cerebras (secondary)
-**Manual**: Check AI Mutex DO logs
+**Automatic**: 換備環 `llama-3.3-70b-instruct-fp8-fast`（AIMutexDO `TEXT_CHAIN`）
+**Manual**: `wrangler tail fortunet-api` 看 `metric: … provider=workers-ai model=…`
 
-> Historical: the original primary (iFlow) ended its free tier on 2026-10-27 and was
-> removed from the chain entirely; Groq became primary and no replacement was added.
+### Issue: 每日免費額度用盡（Workers AI 10,000 neurons／日，與手相共用）
+
+**Symptom**: 前端顯示「今日 AI 解讀額度已滿」，API 回 503 `AI_QUOTA`
+**Action**: 隔日（UTC 0 點）自動恢復；長期不足再評估 Workers 付費方案（站長未裁示前不升級）。
+用量看 Cloudflare dashboard → Workers AI。
+
+> Historical: iFlow 於 2026-10-27 終止；Groq→Cerebras 於 2026-11-20 改為 Workers AI（Cerebras 已 402）。
+> 回滾到舊 API 版本時需要 `GROQ_API_KEY`／`CEREBRAS_API_KEY` secret——穩定一週前不要刪。
 
 ### Issue: All Providers Down
 
@@ -213,8 +219,10 @@ unset CLOUDFLARE_API_TOKEN && wrangler deploy   # from crates/api, or: ./scripts
 **Immediate**:
 ```bash
 # Rotate all secrets
-unset CLOUDFLARE_API_TOKEN && wrangler secret put GROQ_API_KEY
-unset CLOUDFLARE_API_TOKEN && wrangler secret put CEREBRAS_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler secret put TURSO_AUTH_TOKEN
+unset CLOUDFLARE_API_TOKEN && wrangler secret put RESEND_API_KEY
+unset CLOUDFLARE_API_TOKEN && wrangler secret put GOOGLE_CLIENT_SECRET
+# Workers AI 走 [ai] binding，無 API key 可外洩
 ```
 
 **Follow-up**:

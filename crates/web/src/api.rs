@@ -12,6 +12,7 @@ use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use wasm_bindgen::JsCast;
 
 /// Canonical production API (custom domain, 2026-09); the workers.dev URL
 /// keeps serving as backup and for `verify-deployment.sh`.
@@ -47,6 +48,37 @@ impl ApiErr {
     pub fn needs_birth_data(&self) -> bool {
         self.is_code("NO_BIRTH_DATA") || self.is_code("NO_GENDER")
     }
+
+    /// AI 端點失敗的友善中文（**不直印** `to_string()`——524／HTML 錯誤頁
+    /// 會把整頁 HTML 印到畫面）。
+    pub fn ai_message(&self) -> String {
+        ai_error_message(
+            self.code(),
+            self.status(),
+            matches!(self, ApiErr::Network(_)),
+        )
+    }
+
+    fn code(&self) -> Option<&str> {
+        match self {
+            ApiErr::Api { body, .. } => body.code.as_deref(),
+            _ => None,
+        }
+    }
+}
+
+/// [`ApiErr::ai_message`] 的純函式核心（便於推理；`network`＝連線失敗／逾時）。
+pub fn ai_error_message(code: Option<&str>, status: Option<u16>, network: bool) -> String {
+    let msg = match (code, status) {
+        (Some("AI_QUOTA"), _) => "今日 AI 解讀額度已滿，明天再試",
+        (Some("RATE_LIMIT"), _) | (_, Some(429)) => "請求太頻繁，請稍後再試",
+        (Some("AI_QUEUE_FULL" | "AI_QUEUE_TIMEOUT"), _) => "AI 目前忙碌中，請稍後再試",
+        (_, Some(524 | 504)) => "AI 回應逾時，請稍後再試",
+        (_, Some(s)) if s >= 500 => "AI 服務暫時無法使用，請稍後再試",
+        _ if network => "連線逾時或中斷，請檢查網路後再試",
+        _ => "AI 解讀失敗，請稍後再試",
+    };
+    msg.to_string()
 }
 
 impl std::fmt::Display for ApiErr {
@@ -131,6 +163,48 @@ async fn send_json<B: Serialize, T: DeserializeOwned>(
         .header("Content-Type", "application/json")
         .json(body)
         .map_err(|e| ApiErr::Network(e.to_string()))?;
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    decode(resp).await
+}
+
+/// AI 端點 client 逾時：文字解讀伺服端整筆預算 88s（自 DO 入列起）＋route 前後
+/// DB／engine 與網路餘裕，取 95s（仍低於 Cloudflare 100s 524）；超過即中止（防無限轉圈）。
+/// 手相走 DO 的 palm 兩環（各 45s、不受 88s 預算約束），最壞可能先被此逾時中止。
+const AI_CLIENT_TIMEOUT_MS: i32 = 95_000;
+
+/// 建一個 `AI_CLIENT_TIMEOUT_MS` 後自動 abort 的 `AbortController`
+/// （不用 `AbortSignal.timeout()`：舊 iOS Safari 不支援，呼叫會 throw）。
+fn ai_abort_controller() -> Option<web_sys::AbortController> {
+    let ctrl = web_sys::AbortController::new().ok()?;
+    let c2 = ctrl.clone();
+    let cb = wasm_bindgen::closure::Closure::once_into_js(move || c2.abort());
+    web_sys::window()?
+        .set_timeout_with_callback_and_timeout_and_arguments_0(
+            cb.unchecked_ref(),
+            AI_CLIENT_TIMEOUT_MS,
+        )
+        .ok()?;
+    Some(ctrl)
+}
+
+/// AI 端點用的 POST（body 可無）：掛 95s abort。
+async fn post_ai<B: Serialize, T: DeserializeOwned>(
+    builder: gloo_net::http::RequestBuilder,
+    body: Option<&B>,
+) -> Result<T, ApiErr> {
+    let ctrl = ai_abort_controller();
+    let signal = ctrl.as_ref().map(|c| c.signal());
+    let builder = with_auth(builder)
+        .header("Content-Type", "application/json")
+        .abort_signal(signal.as_ref());
+    let req = match body {
+        Some(b) => builder.json(b),
+        None => builder.build(),
+    }
+    .map_err(|e| ApiErr::Network(e.to_string()))?;
     let resp = req
         .send()
         .await
@@ -331,10 +405,11 @@ pub async fn get_chart(chart_type: &str, no_cache: bool) -> Result<ChartResponse
 /// the server reports the cached chart is stale (409 RECALC_REQUIRED).
 pub async fn interpret(chart_type: &str) -> Result<InterpretResponse, ApiErr> {
     let path = format!("/api/charts/{}/interpret", chart_type);
-    match post_empty::<InterpretResponse>(&path).await {
+    let call = || post_ai::<(), InterpretResponse>(Request::post(&url(&path)), None);
+    match call().await {
         Err(e) if e.status() == Some(409) => {
             get_chart(chart_type, true).await?;
-            post_empty::<InterpretResponse>(&path).await
+            call().await
         }
         other => other,
     }
@@ -345,7 +420,7 @@ pub async fn get_story(no_cache: bool) -> Result<StoryResponse, ApiErr> {
 }
 
 pub async fn generate_story() -> Result<StoryResponse, ApiErr> {
-    post_empty("/api/charts/story/generate").await
+    post_ai::<(), _>(Request::post(&url("/api/charts/story/generate")), None).await
 }
 
 // ── Big5 personality (F1) ──
@@ -407,7 +482,7 @@ pub async fn tarot_interpret(id: &str, include_chart: bool) -> Result<TarotReadi
     } else {
         format!("/api/tarot/readings/{id}/interpret?chart=0")
     };
-    post_empty(&path).await
+    post_ai::<(), _>(Request::post(&url(&path)), None).await
 }
 
 /// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。
@@ -429,7 +504,7 @@ pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
 /// `POST /api/palm/analyze` — 拍照抽取＋規則式解讀（requestId 冪等；同鍵同 body
 /// 重放回原結果，201/200 皆成功；422 PALM_QUALITY_LOW＝照片品質不足請重拍）。
 pub async fn palm_analyze(body: &PalmAnalyzeRequest) -> Result<PalmReadingView, ApiErr> {
-    send_json(Request::post(&url("/api/palm/analyze")), body).await
+    post_ai(Request::post(&url("/api/palm/analyze")), Some(body)).await
 }
 
 /// `GET /api/palm/readings` — 歷史分頁（items + nextCursor）。

@@ -13,7 +13,7 @@ use super::super::{
 use super::common::page_query;
 use super::common::{
     apply_cache_headers, auth_user, body_too_large, client_ip, ok_json, rate_limit,
-    rate_limit_strict,
+    rate_limit_strict_refundable, refund_strict,
 };
 use super::R;
 use ft_schema::tarot::{
@@ -33,8 +33,8 @@ const IP_WINDOW_MS: f64 = 60_000.0;
 const USER_LIMIT: u32 = 20;
 const USER_WINDOW_MS: f64 = 86_400_000.0;
 
-/// v2 AI 限流（spec §Tarot v2-13）：皆 24h 固定視窗、`rate_limit_strict`
-/// （fail-closed）；計次邊界＝進入 AI 呼叫即計（含 queue-full 與失敗）。
+/// v2 AI 限流（spec §Tarot v2-13）：皆 24h 固定視窗、`rate_limit_strict_refundable`
+/// （fail-closed）；計次邊界＝進入 AI 呼叫即計（失敗也計）；額度用盡／佇列滿／逾時退次。
 const AI_USER_LIMIT: u32 = 3;
 const AI_IP_LIMIT: u32 = 10;
 const AI_WINDOW_MS: f64 = 86_400_000.0;
@@ -151,26 +151,34 @@ struct AiOk {
     model: String,
 }
 
+/// AI 失敗的 DO `(status, code)`（code 可能為空）。
+type AiErr = (u16, String);
+
+/// 非使用者責任的失敗（全站額度用盡／佇列滿／佇列逾時）：退次、不寫
+/// `ai_status=failed`、原碼 503 回前端（使用者可稍後／明天重試）。
+fn tarot_refundable(err: &AiErr) -> Option<&'static str> {
+    match (err.0, err.1.as_str()) {
+        (503, "AI_QUOTA") => Some("AI_QUOTA"),
+        (503, "AI_QUEUE_FULL") => Some("AI_QUEUE_FULL"),
+        (503, "AI_QUEUE_TIMEOUT") => Some("AI_QUEUE_TIMEOUT"),
+        _ => None,
+    }
+}
+
 /// 呼 AIMutexDO **專屬實例**（`id_from_name("tarot")`，spec §Tarot v2-4）。
-/// 任何失敗（DO 不可用／503 queue-full／非 200／**`stub:true`**——spec v2-11
-/// 一律視為 failed／空解讀）回 `Err`；呼叫端記 `ai_status=failed`。
-async fn call_tarot_ai(ctx: &RouteContext<()>, chart_data: &serde_json::Value) -> Result<AiOk, ()> {
-    let ns = ctx.env.durable_object("AI_MUTEX").map_err(|_| ())?;
+/// 任何失敗（DO 不可用／非 200／**`stub:true`**——spec v2-11 一律視為
+/// failed／空解讀）回 `Err((status, code))`；分類見 [`tarot_refundable`]。
+async fn call_tarot_ai(
+    ctx: &RouteContext<()>,
+    chart_data: &serde_json::Value,
+) -> Result<AiOk, AiErr> {
+    let fail = |_| (0u16, String::new());
+    let ns = ctx.env.durable_object("AI_MUTEX").map_err(fail)?;
     let stub = ns
         .id_from_name("tarot")
         .and_then(|id| id.get_stub())
-        .map_err(|_| ())?;
-    let mut keys_map = serde_json::Map::new();
-    for (env_key, name) in [("GROQ_API_KEY", "groq"), ("CEREBRAS_API_KEY", "cerebras")] {
-        if let Ok(v) = ctx.env.secret(env_key) {
-            let v = v.to_string();
-            if !v.is_empty() {
-                keys_map.insert(name.to_string(), serde_json::Value::String(v));
-            }
-        }
-    }
+        .map_err(fail)?;
     let body = serde_json::json!({
-        "keys": serde_json::Value::Object(keys_map),
         "interpretRequest": {
             "chartType": "tarot",
             "chartData": chart_data,
@@ -180,16 +188,22 @@ async fn call_tarot_ai(ctx: &RouteContext<()>, chart_data: &serde_json::Value) -
     let mut init = RequestInit::new();
     init.with_method(Method::Post)
         .with_body(Some(body.to_string().into()));
-    let req = Request::new_with_init("https://ai-mutex/interpret", &init).map_err(|_| ())?;
-    let mut res = stub.fetch_with_request(req).await.map_err(|_| ())?;
-    if res.status_code() != 200 {
-        // 503 = queue full / 全 provider 失敗；其他非 200 同樣視為失敗
-        return Err(());
+    let req = Request::new_with_init("https://ai-mutex/interpret", &init).map_err(fail)?;
+    let mut res = stub.fetch_with_request(req).await.map_err(fail)?;
+    let status = res.status_code();
+    if status != 200 {
+        let err: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
+        let code = err
+            .get("code")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        return Err((status, code));
     }
-    let data: serde_json::Value = res.json().await.map_err(|_| ())?;
+    let data: serde_json::Value = res.json().await.map_err(fail)?;
     if data.get("stub").and_then(|v| v.as_bool()).unwrap_or(false) {
         // spec v2-11：stub 文案不得入庫——一律視為 failed
-        return Err(());
+        return Err((200, "STUB".to_string()));
     }
     let interpretation = data
         .get("interpretation")
@@ -197,7 +211,7 @@ async fn call_tarot_ai(ctx: &RouteContext<()>, chart_data: &serde_json::Value) -
         .unwrap_or("")
         .to_string();
     if interpretation.trim().is_empty() {
-        return Err(());
+        return Err((200, "EMPTY".to_string()));
     }
     Ok(AiOk {
         interpretation,
@@ -454,12 +468,16 @@ pub fn register(router: R<'static>) -> R<'static> {
       if row.ai_status.as_deref() == Some("done") {
         return Ok(match row_view(&row) { Ok(v) => json(&v, 200), Err(_) => db_error() });
       }
-      if !rate_limit_strict(&ctx, &format!("tarot:ai:ip:{}", client_ip(&req)), AI_IP_LIMIT, AI_WINDOW_MS).await {
+      let ip_key = format!("tarot:ai:ip:{}", client_ip(&req));
+      let user_key = format!("tarot:ai:{}", user);
+      let Some(ip_reset) = rate_limit_strict_refundable(&ctx, &ip_key, AI_IP_LIMIT, AI_WINDOW_MS).await else {
         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
-      }
-      if !rate_limit_strict(&ctx, &format!("tarot:ai:{}", user), AI_USER_LIMIT, AI_WINDOW_MS).await {
+      };
+      let Some(user_reset) = rate_limit_strict_refundable(&ctx, &user_key, AI_USER_LIMIT, AI_WINDOW_MS).await else {
+        // IP 已計次、使用者額度拒絕：退回 IP 那次
+        refund_strict(&ctx, &ip_key, ip_reset).await;
         return Ok(error::error_code("Too many requests", "RATE_LIMIT", 429));
-      }
+      };
       // include_chart=0 → 純塔羅（契約 #7：命盤感知為可控制選項）
       let include_chart = req
         .url()
@@ -473,10 +491,17 @@ pub fn register(router: R<'static>) -> R<'static> {
           Err(_) => return Ok(db_error()),
         };
       let outcome = call_tarot_ai(&ctx, &chart_data).await;
+      // 額度用盡／佇列滿／逾時：非使用者責任——退兩把次數、不覆寫 DB、503 原碼
+      if let Some(code) = outcome.as_ref().err().and_then(tarot_refundable) {
+        refund_strict(&ctx, &user_key, user_reset).await;
+        refund_strict(&ctx, &ip_key, ip_reset).await;
+        let msg = if code == "AI_QUOTA" { "Daily AI quota exceeded" } else { "AI is busy, please try again" };
+        return Ok(error::error_code(msg, code, 503));
+      }
       let now = clock::now_iso();
       let (ai_text, status, provider, model) = match outcome {
         Ok(o) => (Some(o.interpretation), "done", Some(o.provider), Some(o.model)),
-        Err(()) => (None, "failed", None, None),
+        Err(_) => (None, "failed", None, None),
       };
       // S8 伺服端防護（first-wins）：另一分頁已完成（done）則不覆寫，敗者
       // 回查回贏者結果。兩邊都進了 AI 呼叫＝都計次（同步無 pending 的取捨）。
@@ -553,6 +578,30 @@ pub fn register(router: R<'static>) -> R<'static> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tarot_refund_classification() {
+        use super::tarot_refundable;
+        assert_eq!(
+            tarot_refundable(&(503, "AI_QUOTA".into())),
+            Some("AI_QUOTA")
+        );
+        assert_eq!(
+            tarot_refundable(&(503, "AI_QUEUE_FULL".into())),
+            Some("AI_QUEUE_FULL")
+        );
+        assert_eq!(
+            tarot_refundable(&(503, "AI_QUEUE_TIMEOUT".into())),
+            Some("AI_QUEUE_TIMEOUT")
+        );
+        assert_eq!(
+            tarot_refundable(&(200, "STUB".into())),
+            None,
+            "stub 照舊記 failed、不退"
+        );
+        assert_eq!(tarot_refundable(&(503, "".into())), None);
+        assert_eq!(tarot_refundable(&(0, "".into())), None);
+    }
+
     use super::*;
 
     fn row(question: Option<&str>) -> ReadingRow {

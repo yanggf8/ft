@@ -138,17 +138,10 @@ fn parse_blocks(body: &str) -> Vec<Block> {
             ol_buf.push(item.to_string());
             continue;
         }
-        let is_list_item =
-            trimmed.starts_with("- ") || (trimmed.starts_with('-') && trimmed.len() > 1);
-        if is_list_item {
+        if let Some(item) = bullet_item(trimmed) {
             flush_para(&mut para_buf, &mut blocks);
             flush_ol(&mut ol_buf, &mut blocks);
-            let item = if trimmed.starts_with("- ") {
-                trimmed[2..].trim().to_string()
-            } else {
-                trimmed[1..].trim().to_string()
-            };
-            list_buf.push(item);
+            list_buf.push(item.to_string());
         } else {
             flush_list(&mut list_buf, &mut blocks);
             flush_ol(&mut ol_buf, &mut blocks);
@@ -181,6 +174,17 @@ fn render_inline_parts(parts: Vec<InlinePart>) -> AnyView {
         })
         .collect_view()
         .into_any()
+}
+
+/// 無序清單項：`-`（相容舊語料的 `-項目` 無空白寫法）或 `*`＋空白
+/// （gemma 輸出 `*   項目`）。`*` 後非空白不算——`**粗體**` 開頭的段落
+/// 不得誤判為清單。回傳去掉記號後的內容。
+fn bullet_item(trimmed: &str) -> Option<&str> {
+    if let Some(rest) = trimmed.strip_prefix('-') {
+        return (!rest.is_empty()).then(|| rest.trim());
+    }
+    let rest = trimmed.strip_prefix('*')?;
+    rest.starts_with(char::is_whitespace).then(|| rest.trim())
 }
 
 /// AI 解讀（紫微／西洋）用：`#`～`####` 行轉小標，其餘沿用 parse_blocks 的段落／清單／粗體。
@@ -405,7 +409,7 @@ pub fn StoryPage() -> impl IntoView {
                     } else if e.needs_birth_data() {
                         nav("/profile", Default::default());
                     } else {
-                        err.set(e.to_string());
+                        err.set("故事載入失敗，請稍後再試".to_string());
                     }
                 }
             }
@@ -423,19 +427,17 @@ pub fn StoryPage() -> impl IntoView {
             generating.set(true);
             err.set(String::new());
             match api::generate_story().await {
+                // stub＝離線範本：不當成功顯示，保留產生按鈕
+                Ok(resp) if resp.stub => err.set("AI 服務暫時無法使用，請稍後再試".to_string()),
                 Ok(resp) => {
                     story.set(Some(resp.story));
                     not_generated.set(false);
                 }
                 Err(e) => {
-                    if e.is_code("RATE_LIMIT") {
-                        err.set("請求過於頻繁，請稍後再試".to_string());
-                    } else if e.is_code("AI_UNAVAILABLE") {
-                        err.set("AI 服務暫時無法使用，請稍後再試".to_string());
-                    } else if e.needs_birth_data() {
+                    if e.needs_birth_data() {
                         nav("/profile", Default::default());
                     } else {
-                        err.set(e.to_string());
+                        err.set(e.ai_message());
                     }
                 }
             }
@@ -469,7 +471,7 @@ pub fn StoryPage() -> impl IntoView {
             >
               {move || {
                 if generating.get() {
-                  "故事生成中…（約 10–30 秒）".to_string()
+                  "故事生成中…（約需半分鐘）".to_string()
                 } else {
                   "生成合盤故事".to_string()
                 }
@@ -498,5 +500,27 @@ fn StoryChapters(story: RwSignal<Option<String>>) -> impl IntoView {
       }
         .into_any()
         }
+    }
+}
+
+#[cfg(test)]
+mod bullet_tests {
+    use super::bullet_item;
+
+    #[test]
+    fn star_bullet_needs_whitespace() {
+        assert_eq!(bullet_item("*   命宮主星"), Some("命宮主星"));
+        assert_eq!(bullet_item("* 財帛"), Some("財帛"));
+        assert_eq!(bullet_item("**粗體開頭**的段落"), None, "粗體段落不是清單");
+        assert_eq!(bullet_item("*斜體*"), None);
+        assert_eq!(bullet_item("*"), None);
+    }
+
+    #[test]
+    fn dash_bullet_unchanged() {
+        assert_eq!(bullet_item("- 項目"), Some("項目"));
+        assert_eq!(bullet_item("-項目"), Some("項目"));
+        assert_eq!(bullet_item("-"), None);
+        assert_eq!(bullet_item("一般段落"), None);
     }
 }

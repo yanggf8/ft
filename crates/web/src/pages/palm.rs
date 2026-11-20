@@ -271,6 +271,8 @@ fn palm_error_message(e: &api::ApiErr) -> String {
         "照片格式無法解析，請重拍一張。".to_string()
     } else if e.status() == Some(413) {
         "照片檔案太大，請重拍一張。".to_string()
+    } else if e.is_code("AI_QUOTA") {
+        "今日 AI 解讀額度已滿，明天再試。".to_string()
     } else if e.status() == Some(429) {
         "分析次數已達上限（24 小時內 3 次），請稍後再試。".to_string()
     } else if e.status() == Some(409) {
@@ -713,7 +715,7 @@ pub fn PalmCapturePage() -> impl IntoView {
                                         disabled=move || submitting.get()
                                         on:click=on_submit
                                     >
-                                        {move || if submitting.get() { "分析中…" } else { "開始分析" }}
+                                        {move || if submitting.get() { "分析中…（約需半分鐘）" } else { "開始分析" }}
                                     </button>
                                 </div>
                                 <p class="muted" style="font-size:0.8rem;margin:0.5rem 0 0 0">

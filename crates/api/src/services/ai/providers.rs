@@ -1,20 +1,20 @@
-//! AI provider calls — one adapter per provider in the failover chain.
+//! AI provider calls — all on Cloudflare Workers AI（`[ai]` binding、免 key、
+//! 不出站）。
 //!
-//! Groq & Cerebras both go through the OpenAI-compatible /chat/completions
-//! endpoint with the same JSON envelope. Each uses `Fetch::Request` with a JSON
-//! body and a 45s timeout. The chain shrank to these two on 2026-10-27, when
-//! the former primary's free tier ended; Groq is now priority 1 and Cerebras
-//! priority 2.
+//! - 文字解讀（ziwei／western／story／tarot／zodiac_match）：`call_workers_ai_text`，
+//!   鏈與模型在 `ai_mutex_do.rs TEXT_CHAIN`（2026-11-20 起；取代 Groq→Cerebras，
+//!   後者備援已 402 失效）。
+//! - 手相影像抽取：`call_workers_ai`（palm 專用，契約不變）。
 
 use std::time::Duration;
 
 use super::prompts::{build_prompt, get_system_prompt};
-use worker::{Ai, Delay, Error, Fetch, Headers, Method, Request, RequestInit};
+use worker::{Ai, Delay};
 
-pub const GROQ_BASE: &str = "https://api.groq.com/openai/v1";
-pub const CEREBRAS_BASE: &str = "https://api.cerebras.ai/v1";
-
-const PROVIDER_TIMEOUT_MS: u64 = 45000;
+/// palm 影像呼叫逾時（spec §6.2，不變）。
+const PALM_TIMEOUT_MS: u64 = 45000;
+/// gemma-4 主環：關閉思考（實測長 prompt 30–34s；開思考 67–83s）。
+pub const GEMMA_MODEL: &str = "@cf/google/gemma-4-26b-a4b-it";
 /// palm v1 影像 payload（B1：`InterpretRequest.image` 的形狀；wire 鍵全小寫）。
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ImagePayload {
@@ -28,116 +28,65 @@ pub struct ProviderResult {
     pub provider: String,
     pub model: String,
     pub tokens_used: Option<f64>,
-    /// B5：回應截斷旗標透傳（choices 形的 finish_reason）。
-    /// 僅 Workers AI 分支填值；groq/cerebras 一律 `None`。
+    /// B5：回應截斷旗標透傳（choices 形 finish_reason；Responses 形
+    /// `status=="incomplete"` 正規化為 `"incomplete"`）。
     pub finish_reason: Option<String>,
 }
 
-/// Call a single provider. Returns a `ProviderResult` or an error string that the
-/// AIMutexDO uses to fail over to the next provider.
-pub async fn call_provider(
-    name: &str,
+/// 文字鏈 Workers AI 請求 body（純函式）。messages 形；gemma 系列關閉思考
+/// （`chat_template_kwargs.enable_thinking=false`），其他模型不帶該鍵。
+pub fn build_text_payload(
     model: &str,
-    api_key: &str,
-    chart_type: &str,
-    chart_data: &serde_json::Value,
-    language: Option<&str>,
-    focus: Option<&str>,
+    system: &str,
+    user: &str,
     max_tokens: u32,
-) -> Result<ProviderResult, String> {
-    let system = get_system_prompt(chart_type, language);
-    let user = build_prompt(chart_type, chart_data, language, focus);
-    let body = serde_json::json!({
-        "model": model,
+) -> serde_json::Value {
+    let mut body = serde_json::json!({
         "messages": [
             { "role": "system", "content": system },
             { "role": "user", "content": user },
         ],
         "max_tokens": max_tokens,
-        "temperature": 0.7,
     });
-
-    let (url, auth) = match name {
-        "groq" => (
-            format!("{}/chat/completions", GROQ_BASE),
-            format!("Bearer {}", api_key),
-        ),
-        "cerebras" => (
-            format!("{}/chat/completions", CEREBRAS_BASE),
-            format!("Bearer {}", api_key),
-        ),
-        other => return Err(format!("unknown provider {}", other)),
-    };
-
-    let mut res = match build_request(&url, &auth, &body.to_string()).await {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
-
-    let status = res.status_code();
-    if status != 200 {
-        let text = res.text().await.unwrap_or_default();
-        let preview: String = text.chars().take(200).collect();
-        return Err(format!("{} {}: {}", name, status, preview));
+    if model.starts_with("@cf/google/gemma") {
+        body["chat_template_kwargs"] = serde_json::json!({ "enable_thinking": false });
     }
-    let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    let content = data
-        .pointer("/choices/0/message/content")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let content = match content {
-        Some(c) if !c.is_empty() => c,
-        _ => return Err(format!("{}: empty response", name)),
-    };
-    let tokens_used = data
-        .pointer("/usage/total_tokens")
-        .and_then(|v| v.as_number())
-        .and_then(|n| n.as_f64());
+    body
+}
 
-    Ok(ProviderResult {
-        interpretation: content,
-        provider: name.to_string(),
-        model: model.to_string(),
-        tokens_used,
-        finish_reason: None,
+/// Workers AI 每日免費額度用盡（10,000 neurons／日）。官方主碼 3036；4006 為
+/// 變體；訊息含 "daily free allocation"／"10,000 neurons"。**3040（容量暫滿）
+/// 與一般 429 不算**——那些要換下一環，不是全站額度。
+pub fn is_daily_quota_error(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    // 自家逾時訊息（`workers-ai timeout after 23036ms`）的毫秒數可能含 3036／4006——排除。
+    if m.contains("timeout") {
+        return false;
+    }
+    has_isolated_code(&m, "3036")
+        || has_isolated_code(&m, "4006")
+        || m.contains("daily free allocation")
+        || m.contains("10,000 neurons")
+        || m.contains("10000 neurons")
+}
+
+/// `code` 出現且前後都不是英數字（`AiError: 3036: …`、`"code":3036` 命中；
+/// `23036ms`、hex request id `a3036f` 不命中）。
+fn has_isolated_code(m: &str, code: &str) -> bool {
+    let bytes = m.as_bytes();
+    m.match_indices(code).any(|(i, _)| {
+        let before = i.checked_sub(1).map(|j| bytes[j]);
+        let after = bytes.get(i + code.len()).copied();
+        !before.is_some_and(|c| c.is_ascii_alphanumeric())
+            && !after.is_some_and(|c| c.is_ascii_alphanumeric())
     })
 }
 
-async fn build_request(url: &str, auth: &str, body_json: &str) -> Result<worker::Response, Error> {
-    let headers = Headers::new();
-    headers.set("Authorization", auth)?;
-    headers.set("Content-Type", "application/json")?;
-    let mut init = RequestInit::new();
-    init.with_method(Method::Post)
-        .with_headers(headers)
-        .with_body(Some(body_json.into()));
-    let req = Request::new_with_init(url, &init)?;
-    send_with_timeout(req).await
-}
-
-/// Wraps `Fetch::Request(req).send()` with a 45s timeout — mirrors
-/// `signal: AbortSignal.timeout(45000)` in TS. Uses `worker::Delay` + `futures_util::future::select`
-/// because `worker::RequestInit` (0.8.5) does not expose a `signal` field; this
-/// is the Promise-race equivalent that guarantees we never hang indefinitely.
-async fn send_with_timeout(req: Request) -> Result<worker::Response, Error> {
-    use futures_util::future::{select, Either};
-    let fetch_fut = Box::pin(async move { Fetch::Request(req).send().await });
-    let timeout_fut = Box::pin(Delay::from(Duration::from_millis(PROVIDER_TIMEOUT_MS)));
-    let x = match select(fetch_fut, timeout_fut).await {
-        Either::Left((res, _)) => res,
-        Either::Right((_, _)) => Err(Error::from(format!(
-            "provider timeout after {}ms",
-            PROVIDER_TIMEOUT_MS
-        ))),
-    };
-    x
-}
-
 // ── Workers AI（palm v1 抽取；spec §6.2 選型終局）─────────────────────────────
-/// B4：Workers AI 回應雙形解析——`result.response`／`response` 與 OpenAI 形
-/// `result.choices[0].message.content`／頂層 `choices` 都要解；逐一檢查候選
-/// 位置、取**第一個非空字串**（空欄位不短路，Muse 審 Minor）。
-/// （`Ai` binding 版回應無 result 外殼、REST 版有——四個位置都容忍。）
+/// B4：Workers AI 回應解析——`result.response`／`response`、OpenAI 形
+/// `result.choices[0].message.content`／頂層 `choices`，以及 Responses 形
+/// （gpt-oss 系列：`output[]`）。逐一檢查候選位置、取**第一個非空字串**
+/// （空欄位不短路，Muse 審 Minor）。（`Ai` binding 版無 result 外殼、REST 版有。）
 pub fn parse_workers_ai_content(v: &serde_json::Value) -> Option<String> {
     [
         "/result/response",
@@ -149,15 +98,52 @@ pub fn parse_workers_ai_content(v: &serde_json::Value) -> Option<String> {
     .filter_map(|p| v.pointer(p).and_then(|x| x.as_str()))
     .find(|s| !s.is_empty())
     .map(str::to_string)
+    .or_else(|| parse_responses_output(v))
 }
 
-/// B4/B5：finish_reason 只在 choices 形出現（`choices[0].finish_reason`）；
-/// response 形 → None。
+/// Responses 形：只串接 `type=="message"` 下 `type=="output_text"` 的 `text`，
+/// **跳過 `reasoning`**（否則會把模型英文思考當解讀輸出）；再以頂層
+/// `output_text` 兜底。
+fn parse_responses_output(v: &serde_json::Value) -> Option<String> {
+    let output = v
+        .pointer("/result/output")
+        .or_else(|| v.pointer("/output"))
+        .and_then(|x| x.as_array());
+    if let Some(items) = output {
+        let text: String = items
+            .iter()
+            .filter(|it| it.get("type").and_then(|t| t.as_str()) == Some("message"))
+            .filter_map(|it| it.get("content").and_then(|c| c.as_array()))
+            .flatten()
+            .filter(|c| c.get("type").and_then(|t| t.as_str()) == Some("output_text"))
+            .filter_map(|c| c.get("text").and_then(|t| t.as_str()))
+            .collect();
+        if !text.is_empty() {
+            return Some(text);
+        }
+    }
+    ["/result/output_text", "/output_text"]
+        .iter()
+        .filter_map(|p| v.pointer(p).and_then(|x| x.as_str()))
+        .find(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// B4/B5：choices 形回 `choices[0].finish_reason`；Responses 形
+/// `status=="incomplete"` → `"incomplete"`；response 形 → None。
 pub fn parse_workers_ai_finish_reason(v: &serde_json::Value) -> Option<String> {
-    v.pointer("/result/choices/0/finish_reason")
+    if let Some(r) = v
+        .pointer("/result/choices/0/finish_reason")
         .or_else(|| v.pointer("/choices/0/finish_reason"))
         .and_then(|x| x.as_str())
-        .map(str::to_string)
+    {
+        return Some(r.to_string());
+    }
+    let status = v
+        .pointer("/result/status")
+        .or_else(|| v.pointer("/status"))
+        .and_then(|x| x.as_str());
+    (status == Some("incomplete")).then(|| "incomplete".to_string())
 }
 
 /// B7：Workers AI llama vision 的 user content 陣列（文字＋data URL 圖片）。
@@ -173,8 +159,7 @@ pub fn build_messages(text: &str, image: &ImagePayload) -> serde_json::Value {
 }
 
 /// B3/B7：Workers AI 呼叫（palm 抽取專用）。`Ai` binding 就地、不出站、免 API
-/// key、不帶 temperature（模型預設，spike 實測條件）；45s timeout 比照
-/// `send_with_timeout` 的 select＋Delay 模式。錯誤字串只含 model 名＋截斷摘要
+/// key、不帶 temperature（模型預設，spike 實測條件）；45s timeout（select＋Delay）。錯誤字串只含 model 名＋截斷摘要
 /// （P5 單點堵漏：DO 的 console_error!/record_error/錯誤回應三路都繼承自這裡）。
 pub async fn call_workers_ai(
     ai: &Ai,
@@ -194,9 +179,32 @@ pub async fn call_workers_ai(
         ],
         "max_tokens": max_tokens,
     });
-    let data = run_with_timeout(ai, model, input).await?;
+    let data = run_with_timeout(ai, model, input, PALM_TIMEOUT_MS).await?;
+    result_from(model, &data)
+}
+
+/// 文字解讀呼叫（Workers AI）。`timeout_ms` 由 DO 依整筆請求 deadline 計算。
+#[allow(clippy::too_many_arguments)]
+pub async fn call_workers_ai_text(
+    ai: &Ai,
+    model: &str,
+    chart_type: &str,
+    chart_data: &serde_json::Value,
+    language: Option<&str>,
+    focus: Option<&str>,
+    max_tokens: u32,
+    timeout_ms: u64,
+) -> Result<ProviderResult, String> {
+    let system = get_system_prompt(chart_type, language);
+    let user = build_prompt(chart_type, chart_data, language, focus);
+    let input = build_text_payload(model, &system, &user, max_tokens);
+    let data = run_with_timeout(ai, model, input, timeout_ms).await?;
+    result_from(model, &data)
+}
+
+fn result_from(model: &str, data: &serde_json::Value) -> Result<ProviderResult, String> {
     let content =
-        parse_workers_ai_content(&data).ok_or_else(|| format!("{}: empty response", model))?;
+        parse_workers_ai_content(data).ok_or_else(|| format!("{}: empty response", model))?;
     let tokens_used = ["/usage/total_tokens", "/result/usage/total_tokens"]
         .iter()
         .filter_map(|p| {
@@ -210,20 +218,21 @@ pub async fn call_workers_ai(
         provider: "workers-ai".to_string(),
         model: model.to_string(),
         tokens_used,
-        finish_reason: parse_workers_ai_finish_reason(&data),
+        finish_reason: parse_workers_ai_finish_reason(data),
     })
 }
 
-/// `Ai::run` 包 45s timeout（select＋Delay，比照 `send_with_timeout`）。
+/// `Ai::run` 包逾時（select＋Delay；`worker::RequestInit` 無 signal 欄位）。
 /// 錯誤只含 model 名＋截斷摘要——絕不嵌入 input（含 base64，P5）。
 async fn run_with_timeout(
     ai: &Ai,
     model: &str,
     input: serde_json::Value,
+    timeout_ms: u64,
 ) -> Result<serde_json::Value, String> {
     use futures_util::future::{select, Either};
     let run_fut = Box::pin(ai.run::<_, serde_json::Value>(model, input));
-    let timeout_fut = Box::pin(Delay::from(Duration::from_millis(PROVIDER_TIMEOUT_MS)));
+    let timeout_fut = Box::pin(Delay::from(Duration::from_millis(timeout_ms)));
     match select(run_fut, timeout_fut).await {
         Either::Left((res, _)) => res.map_err(|e| {
             let summary: String = e.to_string().chars().take(200).collect();
@@ -231,7 +240,7 @@ async fn run_with_timeout(
         }),
         Either::Right((_, _)) => Err(format!(
             "{}: workers-ai timeout after {}ms",
-            model, PROVIDER_TIMEOUT_MS
+            model, timeout_ms
         )),
     }
 }
@@ -307,6 +316,100 @@ mod tests {
             "choices": [ { "message": { "content": "B" } } ],
         });
         assert_eq!(parse_workers_ai_content(&v).as_deref(), Some("B"));
+    }
+
+    // ── 階段 0：Responses 形（gpt-oss）──
+    #[test]
+    fn responses_shape_skips_reasoning() {
+        let v = serde_json::json!({ "result": { "status": "completed", "output": [
+            { "type": "reasoning", "content": [ { "type": "reasoning_text", "text": "We need to think" } ] },
+            { "type": "message", "content": [
+                { "type": "output_text", "text": "## 命宮\n" },
+                { "type": "output_text", "text": "內容" }
+            ] }
+        ] } });
+        assert_eq!(
+            parse_workers_ai_content(&v).as_deref(),
+            Some("## 命宮\n內容")
+        );
+        assert_eq!(parse_workers_ai_finish_reason(&v), None);
+    }
+
+    #[test]
+    fn responses_shape_reasoning_only_is_none() {
+        let v = serde_json::json!({ "output": [
+            { "type": "reasoning", "content": [ { "type": "reasoning_text", "text": "thinking..." } ] }
+        ] });
+        assert_eq!(parse_workers_ai_content(&v), None, "不得把思考當內容");
+    }
+
+    #[test]
+    fn responses_shape_incomplete_is_truncation() {
+        let v = serde_json::json!({ "result": { "status": "incomplete",
+            "incomplete_details": { "reason": "max_output_tokens" },
+            "output": [ { "type": "message", "content": [ { "type": "output_text", "text": "半" } ] } ] } });
+        assert_eq!(
+            parse_workers_ai_finish_reason(&v).as_deref(),
+            Some("incomplete")
+        );
+    }
+
+    #[test]
+    fn real_gemma_rest_fixture_parses() {
+        // 2026-11-20 以主環 body 形狀實打 REST 的真實回應（紫微 prompt）
+        let raw = include_str!("../../../tests/fixtures/workers_ai_gemma4_ziwei.json");
+        let v: serde_json::Value = serde_json::from_str(raw).expect("fixture json");
+        let text = parse_workers_ai_content(&v).expect("must extract content");
+        assert!(
+            text.chars().count() > 300,
+            "內容過短：{}",
+            text.chars().count()
+        );
+        assert!(text.contains("紫微"));
+        assert_eq!(parse_workers_ai_finish_reason(&v).as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn text_payload_gemma_disables_thinking() {
+        let v = build_text_payload(GEMMA_MODEL, "S", "U", 2048);
+        assert_eq!(v["chat_template_kwargs"]["enable_thinking"], false);
+        assert_eq!(v["max_tokens"], 2048);
+        assert_eq!(v["messages"][0]["role"], "system");
+        assert_eq!(v["messages"][1]["content"], "U");
+        let l = build_text_payload("@cf/meta/llama-3.3-70b-instruct-fp8-fast", "S", "U", 1536);
+        assert!(l.get("chat_template_kwargs").is_none());
+        assert_eq!(l["max_tokens"], 1536);
+    }
+
+    #[test]
+    fn daily_quota_error_detection() {
+        assert!(is_daily_quota_error(
+            "@cf/x: AiError: 3036: you have used up your daily free allocation of 10,000 neurons"
+        ));
+        assert!(is_daily_quota_error(
+            "AiError: 4006: daily free allocation exceeded"
+        ));
+        assert!(!is_daily_quota_error(
+            "AiError: 3040: Capacity temporarily exceeded, please try again (429)"
+        ));
+        assert!(!is_daily_quota_error("429 Too Many Requests"));
+        assert!(!is_daily_quota_error(
+            "@cf/x: workers-ai timeout after 55000ms"
+        ));
+        // 逾時毫秒數、hex request id 裡的 3036／4006 不得誤判
+        assert!(!is_daily_quota_error(
+            "@cf/x: workers-ai timeout after 23036ms"
+        ));
+        assert!(!is_daily_quota_error(
+            "@cf/x: workers-ai timeout after 24006ms"
+        ));
+        assert!(!is_daily_quota_error(
+            "AiError: 5000: upstream error (request id a3036f9e40061b)"
+        ));
+        assert!(!is_daily_quota_error("InferenceUpstreamError: 13036 bytes"));
+        // 帶界符的代碼仍命中
+        assert!(is_daily_quota_error(r#"{"code":3036,"message":"quota"}"#));
+        assert!(is_daily_quota_error("AiError: 4006: something"));
     }
 
     // ── B9-5：build_messages 形狀（data URL 組裝、content array 結構）──

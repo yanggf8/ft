@@ -1,10 +1,12 @@
 //! AI Mutex Durable Object.
 //!
-//! - 2-provider failover: Groq → Cerebras (the former primary's free tier
-//!   ended 2026-10-27; it was removed from the chain with no replacement)
+//! - 文字鏈全走 Cloudflare Workers AI（2026-11-20 起）：`TEXT_CHAIN` 主環
+//!   gemma-4-26b（關閉思考）→ 備環 llama-3.3-70b；取代 Groq→Cerebras
+//!   （Cerebras 已 402）。palm 影像另走 `PALM_CHAIN`（不變）。
 //! - Serializes requests (1 concurrent at a time; backpressure sheds load)
 //! - Tracks exresource (requests/tokens/errors/latency/failovers) per provider/day
-//! - rpm / rpd limits enforced before each provider call
+//! - rpm limit enforced before each ring; 整筆請求自入列起 88s 總預算（避開
+//!   Cloudflare 代理 100s 524）；每日 neurons 額度用盡 → 503 `AI_QUOTA`（不走 stub）
 //!
 //! Storage keys (`rpm:{provider}`, `exresource:{provider}:{date}`) keep their
 //! established shape, so previously recorded metrics stay readable (see
@@ -17,16 +19,34 @@ use std::collections::VecDeque;
 
 use ft_schema::storage::{exresource_key, rpm_key, ExResource, ExResourceError, MinuteRecord};
 use futures_channel::oneshot;
+use futures_util::future::{select, Either};
 use worker::*;
 
-use crate::services::ai::providers::{call_workers_ai, ImagePayload};
-use crate::services::ai::{call_provider, ProviderResult};
+use crate::services::ai::providers::{
+    call_workers_ai, call_workers_ai_text, is_daily_quota_error, ImagePayload, ProviderResult,
+    GEMMA_MODEL,
+};
 use crate::services::clock;
 
 const MAX_QUEUE_DEPTH: usize = 8;
-const MAX_QUEUE_WAIT_MS: f64 = 60000.0;
-const RPM_LIMITS: [(&str, u32, f64); 2] = [("groq", 30, 14400.0), ("cerebras", 30, 14400.0)];
-const RPD_LIMITS: [(&str, f64); 2] = [("groq", 14400.0), ("cerebras", 14400.0)];
+const MAX_QUEUE_WAIT_MS: f64 = 25000.0;
+/// 整筆請求總預算（自入列 `queued_at` 起算，含佇列等待）——留餘裕避開
+/// Cloudflare 代理 100s Read Timeout（HTTP 524）。
+const REQUEST_BUDGET_MS: f64 = 88000.0;
+/// 持鎖超過此值（> 整筆預算 88s）視為持有者卡死，下一個請求可奪回處理權。
+const LOCK_STALE_MS: f64 = 95000.0;
+/// 單環上限（主環實測長 prompt 30–34s）。
+const RING_CAP_MS: f64 = 55000.0;
+/// 剩餘預算低於此值不再進下一環。
+const MIN_RING_MS: f64 = 15000.0;
+
+/// 文字鏈（全 Workers AI，免 key、不出站）。實測見
+/// docs/superpowers/plans/2026-11-19-zodiac-match.md §1.3。
+const TEXT_PROVIDER: &str = "workers-ai";
+const TEXT_RPM_KEY: &str = "workers-ai-text";
+const TEXT_RPM: u32 = 30;
+const LLAMA_MODEL: &str = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const TEXT_CHAIN: [&str; 2] = [GEMMA_MODEL, LLAMA_MODEL];
 
 /// palm 兩環（spec §6.2 選型終局，皆 Workers AI、免 API key、不設 rpd）：
 /// 主環 llama-4-scout max_tokens 2048（P10）；備環 llama-3.2-11b-vision 3072
@@ -39,10 +59,23 @@ const PALM_CHAIN: [(&str, u32); 2] = [
     (ft_schema::palm::wire::BACKUP_MODEL, 3072),
 ];
 
-struct QueuedEntry {
-    queued_at: f64,
-    req: Request,
-    tx: oneshot::Sender<Result<Response>>,
+/// 佇列成員＝等待交棒的喚醒通道（號誌式排隊，2026-11-20 Fable 二審 B1）：
+/// 每個 fetch 只處理**自己的**請求、做完把處理權交給下一位，驅動者的回應不會被
+/// 後面排隊者的 AI 時間拖住（舊版驅動者要排空整個佇列才回應，單筆 30–88s 時會
+/// 撞前端 abort 與 Cloudflare 524）。
+type Waiter = oneshot::Sender<()>;
+
+/// 把處理權交給下一位仍在等的請求；佇列空或只剩已逾時（receiver 已丟棄）者時
+/// 釋放鎖。回傳是否成功交棒。純同步，wasm 單執行緒下與 push 不會交錯。
+fn hand_off(q: &QueueState<Waiter>, now: f64) -> bool {
+    while let Some(next) = q.pop() {
+        if next.send(()).is_ok() {
+            q.touch(now);
+            return true;
+        }
+    }
+    q.release();
+    false
 }
 
 /// 每實例的佇列狀態（v2 前置，spec §Tarot 第 4 點：從 `thread_local!` 遷至
@@ -51,6 +84,8 @@ struct QueuedEntry {
 struct QueueState<T> {
     queue: RefCell<VecDeque<T>>,
     processing: Cell<bool>,
+    /// 取得處理權的時間；持有超過 `LOCK_STALE_MS` 視為卡死可奪回（N2）。
+    acquired_at: Cell<f64>,
 }
 
 impl<T> QueueState<T> {
@@ -58,6 +93,7 @@ impl<T> QueueState<T> {
         Self {
             queue: RefCell::new(VecDeque::new()),
             processing: Cell::new(false),
+            acquired_at: Cell::new(0.0),
         }
     }
 
@@ -73,14 +109,30 @@ impl<T> QueueState<T> {
         self.queue.borrow_mut().pop_front()
     }
 
+    #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.queue.borrow().is_empty()
     }
 
     /// 取得處理權；已被持有則回 false（原 `PROCESSING.replace(true)` 語意：
     /// replace 回傳舊值，舊值 true＝已有人持有）。
-    fn try_acquire(&self) -> bool {
-        !self.processing.replace(true)
+    fn try_acquire(&self, now: f64) -> bool {
+        if self.processing.get() && now - self.acquired_at.get() <= LOCK_STALE_MS {
+            return false;
+        }
+        self.processing.set(true);
+        self.acquired_at.set(now);
+        true
+    }
+
+    /// 交棒時更新持有時間（接棒者重新計時）。
+    fn touch(&self, now: f64) {
+        self.acquired_at.set(now);
+    }
+
+    /// 移除不符條件的成員（清掉已逾時離開的等待者，避免灌水深度；N3）。
+    fn retain(&self, keep: impl FnMut(&T) -> bool) {
+        self.queue.borrow_mut().retain(keep);
     }
 
     fn release(&self) {
@@ -124,12 +176,47 @@ mod tests {
     }
 
     #[test]
+    fn hand_off_skips_timed_out_waiters_and_keeps_lock() {
+        let q = QueueState::<Waiter>::new();
+        assert!(q.try_acquire(0.0));
+        let (dead_tx, dead_rx) = oneshot::channel::<()>();
+        drop(dead_rx); // 已逾時離開的等待者
+        let (live_tx, mut live_rx) = oneshot::channel::<()>();
+        q.push(dead_tx);
+        q.push(live_tx);
+        assert!(hand_off(&q, 0.0), "應交棒給仍在等的請求");
+        assert_eq!(live_rx.try_recv(), Ok(Some(())));
+        assert!(!q.try_acquire(0.0), "交棒後處理權仍被持有（由接棒者持有）");
+        assert!(q.is_empty());
+    }
+
+    #[test]
+    fn hand_off_releases_when_no_live_waiter() {
+        let q = QueueState::<Waiter>::new();
+        assert!(q.try_acquire(0.0));
+        let (dead_tx, dead_rx) = oneshot::channel::<()>();
+        drop(dead_rx);
+        q.push(dead_tx);
+        assert!(!hand_off(&q, 0.0));
+        assert!(q.try_acquire(0.0), "無人可接棒時必須釋放鎖");
+    }
+
+    #[test]
+    fn stale_lock_is_reclaimed() {
+        let q = QueueState::<u32>::new();
+        assert!(q.try_acquire(0.0));
+        assert!(!q.try_acquire(LOCK_STALE_MS), "未逾時不得奪鎖");
+        assert!(q.try_acquire(LOCK_STALE_MS + 1.0), "持有者卡死超時應可奪回");
+        assert!(!q.try_acquire(LOCK_STALE_MS + 2.0), "奪回後重新計時");
+    }
+
+    #[test]
     fn acquire_release_semantics() {
         let q = QueueState::<u32>::new();
-        assert!(q.try_acquire(), "首個取得者應成功");
-        assert!(!q.try_acquire(), "第二個取得者應失敗（已持有）");
+        assert!(q.try_acquire(0.0), "首個取得者應成功");
+        assert!(!q.try_acquire(0.0), "第二個取得者應失敗（已持有）");
         q.release();
-        assert!(q.try_acquire(), "釋放後可再取得");
+        assert!(q.try_acquire(0.0), "釋放後可再取得");
     }
 
     // ── palm v1（B1/B2/B5/B9）──
@@ -167,7 +254,7 @@ mod tests {
         // palm 帶 image
         assert_eq!(validate_entry("palm", true), Ok(()));
         // 既有 chartType：不帶 image 全綠、帶 image 全擋（→ INVALID_IMAGE）
-        for ct in ["ziwei", "western", "story", "tarot"] {
+        for ct in ["ziwei", "western", "story", "tarot", "zodiac_match"] {
             assert_eq!(validate_entry(ct, false), Ok(()), "{ct} without image");
             assert_eq!(
                 validate_entry(ct, true),
@@ -188,11 +275,43 @@ mod tests {
             PALM_CHAIN[1],
             ("@cf/meta/llama-3.2-11b-vision-instruct", 3072)
         );
-        // 既有 chartType 映射不變：story 2048、其他 1024（palm 不經此路）
-        assert_eq!(max_tokens_for("story"), 2048);
-        for ct in ["ziwei", "western", "tarot"] {
-            assert_eq!(max_tokens_for(ct), 1024, "{ct}");
+        // 文字鏈依 (model, chart_type)：gemma story 3072／其他 2048；
+        // llama story 2048／其他 1536（palm 不經此路）
+        assert_eq!(max_tokens_for(GEMMA_MODEL, "story"), 3072);
+        assert_eq!(max_tokens_for(LLAMA_MODEL, "story"), 2048);
+        for ct in ["ziwei", "western", "tarot", "zodiac_match"] {
+            assert_eq!(max_tokens_for(GEMMA_MODEL, ct), 2048, "{ct}");
+            assert_eq!(max_tokens_for(LLAMA_MODEL, ct), 1536, "{ct}");
         }
+    }
+
+    #[test]
+    fn text_chain_is_workers_ai_gemma_then_llama() {
+        assert_eq!(
+            TEXT_CHAIN,
+            [
+                "@cf/google/gemma-4-26b-a4b-it",
+                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+            ]
+        );
+    }
+
+    #[test]
+    fn ring_timeout_respects_budget() {
+        // 剛入列：取單環上限
+        assert_eq!(ring_timeout_ms(0.0, 0.0), Some(55000));
+        // 排隊 24s＋主環 50s 後：剩 14s < 15s → 不進備環
+        assert_eq!(ring_timeout_ms(0.0, 74000.0), None);
+        // 剩 30s：給 30s
+        assert_eq!(ring_timeout_ms(0.0, 58000.0), Some(30000));
+    }
+
+    #[test]
+    fn text_truncation_includes_incomplete() {
+        assert!(text_truncated(Some("length")));
+        assert!(text_truncated(Some("incomplete")));
+        assert!(!text_truncated(Some("stop")));
+        assert!(!text_truncated(None));
     }
 
     #[test]
@@ -208,7 +327,7 @@ pub struct AIMutexDO {
     state: State,
     env: Env,
     /// per-DO-instance 佇列（v2 前置：見 QueueState 文檔註解）
-    queue: QueueState<QueuedEntry>,
+    queue: QueueState<Waiter>,
 }
 
 impl DurableObject for AIMutexDO {
@@ -221,92 +340,54 @@ impl DurableObject for AIMutexDO {
     }
 
     async fn fetch(&self, req: Request) -> Result<Response> {
-        // Backpressure: check queue depth before enqueuing (mirrors TS MAX_QUEUE_DEPTH).
-        let depth = self.queue.depth();
-        if depth >= MAX_QUEUE_DEPTH {
-            let mut r = Response::from_json(&serde_json::json!({
-                "error": "AI queue is full, please try again shortly",
-                "code": "AI_QUEUE_FULL",
-                "queueDepth": depth,
-            }))?
-            .with_status(503);
-            r.headers_mut().append("Retry-After", "30")?;
-            return Ok(r);
-        }
-
-        let (tx, rx) = oneshot::channel();
         let queued_at = clock::now_ms();
-        self.queue.push(QueuedEntry { queued_at, req, tx });
-
-        // Drive the queue. If another fetch is already processing, this returns immediately
-        // and the current request will be picked up by the in-flight loop.
-        self.process_queue().await;
-
-        match rx.await {
-            Ok(res) => res,
-            Err(_) => {
-                // Sender dropped before responding — should not happen, treat as queue timeout.
-                // P2-01: propagate instead of `unwrap` (panic = "abort").
-                Response::from_json(&serde_json::json!({
-                    "error": "AI request timed out while queued",
-                    "code": "AI_QUEUE_TIMEOUT",
-                    "waitedMs": clock::now_ms() - queued_at,
-                }))
-                .map(|r| r.with_status(503))
+        if !self.queue.try_acquire(queued_at) {
+            self.queue.retain(|w| !w.is_canceled());
+            // Backpressure: check queue depth before enqueuing (mirrors TS MAX_QUEUE_DEPTH).
+            let depth = self.queue.depth();
+            if depth >= MAX_QUEUE_DEPTH {
+                let mut r = Response::from_json(&serde_json::json!({
+                    "error": "AI queue is full, please try again shortly",
+                    "code": "AI_QUEUE_FULL",
+                    "queueDepth": depth,
+                }))?
+                .with_status(503);
+                r.headers_mut().append("Retry-After", "30")?;
+                return Ok(r);
+            }
+            let (tx, rx) = oneshot::channel::<()>();
+            self.queue.push(tx);
+            // 準時 25s 逾時（不必等前一筆跑完才發現）；逾時即丟棄 rx，交棒時
+            // send 失敗會自動跳過本請求。兩者同時就緒時 select 先看左邊（交棒）。
+            let timer = Box::pin(Delay::from(std::time::Duration::from_millis(
+                MAX_QUEUE_WAIT_MS as u64,
+            )));
+            match select(rx, timer).await {
+                Either::Left((Ok(()), _)) => {} // 已接棒，持有處理權
+                _ => return queue_timeout(clock::now_ms() - queued_at),
             }
         }
+        // 持有處理權：只處理自己的請求，結束後一定交棒（handle_request 以 Result
+        // 回傳、不 panic，中間沒有提早 return）。
+        let res = self.handle_request(req, queued_at).await;
+        hand_off(&self.queue, clock::now_ms());
+        res
     }
 }
 
+fn queue_timeout(waited: f64) -> Result<Response> {
+    let mut r = Response::from_json(&serde_json::json!({
+        "error": "AI request timed out while queued",
+        "code": "AI_QUEUE_TIMEOUT",
+        "waitedMs": waited,
+    }))?
+    .with_status(503);
+    r.headers_mut().append("Retry-After", "30")?;
+    Ok(r)
+}
+
 impl AIMutexDO {
-    /// Mirrors TS `processQueue()`: ensures only one handle_request runs at a time,
-    /// respects MAX_QUEUE_WAIT_MS, and drains the queue sequentially.
-    async fn process_queue(&self) {
-        // If already processing, let the active loop drain the queue.
-        if !self.queue.try_acquire() {
-            return;
-        }
-
-        loop {
-            let entry = self.queue.pop();
-            let Some(entry) = entry else {
-                // Queue drained — release lock and double-check for races where a new
-                // entry arrived between pop_front returning None and clearing the flag.
-                self.queue.release();
-                if !self.queue.is_empty() {
-                    // Another entry slipped in; reclaim the lock and continue.
-                    if self.queue.try_acquire() {
-                        continue;
-                    }
-                }
-                return;
-            };
-
-            let waited = clock::now_ms() - entry.queued_at;
-            if waited > MAX_QUEUE_WAIT_MS {
-                let resp = Response::from_json(&serde_json::json!({
-                    "error": "AI request timed out while queued",
-                    "code": "AI_QUEUE_TIMEOUT",
-                    "waitedMs": waited,
-                }))
-                .map(|r| r.with_status(503));
-                let resp = match resp {
-                    Ok(mut r) => {
-                        let _ = r.headers_mut().append("Retry-After", "30");
-                        Ok(r)
-                    }
-                    Err(e) => Err(e),
-                };
-                let _ = entry.tx.send(resp);
-                continue;
-            }
-
-            let res = self.handle_request(entry.req).await;
-            let _ = entry.tx.send(res);
-        }
-    }
-
-    async fn handle_request(&self, mut req: Request) -> Result<Response> {
+    async fn handle_request(&self, mut req: Request, queued_at: f64) -> Result<Response> {
         let body: InterpretMsg = match req.json().await {
             Ok(b) => b,
             Err(_) => {
@@ -359,45 +440,61 @@ impl AIMutexDO {
         let mut last_error: Option<(String, String, String)> = None;
         let mut failover_count = 0u32;
 
-        let max_tokens = max_tokens_for(&interpret.chartType);
-
-        for (name, rpm, _) in RPM_LIMITS.iter() {
-            let api_key = match body.keys.get(*name) {
-                Some(Some(v)) if !v.is_empty() => v.clone(),
-                _ => {
-                    continue;
-                }
-            };
-            let model = model_for(name);
-
-            if self.rpd_blocked(name, &today).await? {
-                continue;
+        let ai = match self.env.ai("AI") {
+            Ok(ai) => Some(ai),
+            Err(e) => {
+                console_error!("workers-ai binding error: {}", e);
+                None
             }
-            if !self.check_rpm(name, *rpm).await? {
+        };
+
+        // binding 缺失＝部署錯：不進鏈，直接落到下方 stub（既有降級語意）
+        let chain: &[&str] = if ai.is_some() { &TEXT_CHAIN } else { &[] };
+        for model in chain.iter() {
+            let Some(ai) = ai.as_ref() else { break };
+            let Some(timeout_ms) = ring_timeout_ms(queued_at, clock::now_ms()) else {
+                console_error!(
+                    "text chain budget exhausted before {} failovers={}",
+                    model,
+                    failover_count
+                );
+                break;
+            };
+            if !self.check_rpm(TEXT_RPM_KEY, TEXT_RPM).await? {
                 continue;
             }
 
             let start = clock::now_ms();
-            match call_provider(
-                name,
+            match call_workers_ai_text(
+                ai,
                 model,
-                &api_key,
                 &interpret.chartType,
                 &interpret.chartData,
                 interpret.language.as_deref(),
                 interpret.focus.as_deref(),
-                max_tokens,
+                max_tokens_for(model, &interpret.chartType),
+                timeout_ms,
             )
             .await
             {
+                Ok(result) if text_truncated(result.finish_reason.as_deref()) => {
+                    // 截斷內容不可用：換下一環（palm 的 500 AI_TRUNCATED 契約不同）
+                    let msg = format!("{}: truncated ({:?})", model, result.finish_reason);
+                    console_error!("{}", msg);
+                    self.record_error(TEXT_PROVIDER, &today, "TRUNCATED", &msg)
+                        .await?;
+                    last_error = Some((TEXT_PROVIDER.to_string(), "TRUNCATED".to_string(), msg));
+                    failover_count += 1;
+                }
                 Ok(result) => {
                     let latency = clock::now_ms() - start;
                     let tokens = result.tokens_used.unwrap_or(0.0);
                     // P2 telemetry: generation hit + story length + stub flag
                     worker::console_log!(
-                        "metric: ai_chart_type={} provider={} ai_is_stub=false ai_generation_tags_len={} ai_has_generation_story={} ai_story_chars={} failovers={} latency_ms={}",
+                        "metric: ai_chart_type={} provider={} model={} ai_is_stub=false ai_generation_tags_len={} ai_has_generation_story={} ai_story_chars={} failovers={} latency_ms={}",
                         interpret.chartType,
-                        name,
+                        TEXT_PROVIDER,
+                        model,
                         ai_tags_len,
                         ai_has_generation_story,
                         result.interpretation.chars().count(),
@@ -406,7 +503,7 @@ impl AIMutexDO {
                     );
                     self.record(
                         RecordCtx {
-                            provider: name.to_string(),
+                            provider: TEXT_PROVIDER.to_string(),
                             tokens,
                             latency,
                             failovers: failover_count,
@@ -414,14 +511,28 @@ impl AIMutexDO {
                         &today,
                     )
                     .await?;
-                    return response_for(result, name, model, latency, failover_count, &today);
+                    return response_for(
+                        result,
+                        TEXT_PROVIDER,
+                        model,
+                        latency,
+                        failover_count,
+                        &today,
+                    );
                 }
                 Err(e) => {
-                    console_error!("provider {} failed: {}", name, e);
+                    console_error!("provider {} ({}) failed: {}", TEXT_PROVIDER, model, e);
+                    if is_daily_quota_error(&e) {
+                        // 全站每日 neurons 用盡：換環無益、不寫 stub——直接 503 AI_QUOTA
+                        self.record_error(TEXT_PROVIDER, &today, "AI_QUOTA", &e)
+                            .await?;
+                        return quota_exceeded();
+                    }
                     let code = classify(&e);
                     let code_owned = code.to_string();
-                    self.record_error(name, &today, &code_owned, &e).await?;
-                    last_error = Some((name.to_string(), code_owned, e.clone()));
+                    self.record_error(TEXT_PROVIDER, &today, &code_owned, &e)
+                        .await?;
+                    last_error = Some((TEXT_PROVIDER.to_string(), code_owned, e.clone()));
                     failover_count += 1;
                 }
             }
@@ -433,7 +544,7 @@ impl AIMutexDO {
         // This is a graceful degradation, not a hard 503, and matches the
         // frontend's expectation that a chart can always be interpreted.
         let stub = format!(
-            "【{}】此為本地備用解讀（AI 服務暫時不可用，已自動切換為離線模板，待 AI 恢復後可重新生成）。命盤已正確計算，本次為離線模板的溫和解讀，字數足夠通過測試門檻。",
+            "【{}】此為本地備用解讀（AI 服務暫時不可用，已自動切換為離線模板，待 AI 恢復後可重新生成）。命盤已正確計算，稍後再試即可取得 AI 解讀。",
             interpret.chartType
         );
         worker::console_log!(
@@ -552,6 +663,11 @@ impl AIMutexDO {
                 Err(e) => {
                     // P5：e 只含 model 名＋截斷摘要（call_workers_ai 源頭保證）
                     console_error!("provider {} ({}) failed: {}", PALM_PROVIDER, model, e);
+                    if is_daily_quota_error(&e) {
+                        self.record_error(PALM_PROVIDER, today, "AI_QUOTA", &e)
+                            .await?;
+                        return quota_exceeded();
+                    }
                     let code = classify(&e);
                     let code_owned = code.to_string();
                     self.record_error(PALM_PROVIDER, today, &code_owned, &e)
@@ -602,20 +718,6 @@ impl AIMutexDO {
         Ok(true)
     }
 
-    async fn rpd_blocked(&self, provider: &str, today: &str) -> Result<bool> {
-        let limit = RPD_LIMITS
-            .iter()
-            .find(|(p, _)| *p == provider)
-            .map(|(_, l)| *l)
-            .unwrap_or(f64::INFINITY);
-        if limit.is_infinite() {
-            return Ok(false);
-        }
-        let key = exresource_key(provider, today);
-        let rec: Option<ExResource> = self.state.storage().get(&key).await?;
-        Ok(rec.map(|r| r.requests >= limit).unwrap_or(false))
-    }
-
     async fn record(&self, r: RecordCtx, today: &str) -> Result<()> {
         let key = exresource_key(&r.provider, today);
         let cur: Option<ExResource> = self.state.storage().get(&key).await?;
@@ -663,7 +765,7 @@ fn validate_entry(chart_type: &str, has_image: bool) -> Result<(), &'static str>
                 Err("INVALID_IMAGE")
             }
         }
-        "ziwei" | "western" | "story" | "tarot" => {
+        "ziwei" | "western" | "story" | "tarot" | "zodiac_match" => {
             if has_image {
                 Err("INVALID_IMAGE")
             } else {
@@ -687,14 +789,40 @@ fn entry_error(code: &str) -> Result<Response> {
     .map(|r| r.with_status(400))
 }
 
-/// 既有 chartType 的 max_tokens 映射（story 2048、其餘 1024）。
-/// palm 不經此路——走 PALM_CHAIN 各環自帶值（2048/3072）。
-fn max_tokens_for(chart_type: &str) -> u32 {
-    if chart_type == "story" {
-        2048
-    } else {
-        1024
+/// 文字鏈 max_tokens 依 (model, chart_type)：gemma（實測輸出 1.2–1.5k）
+/// story 3072／其他 2048；llama（輸出單價高 7.5 倍，壓低上限）story 2048／
+/// 其他 1536。palm 不經此路——走 PALM_CHAIN 各環自帶值（2048/3072）。
+fn max_tokens_for(model: &str, chart_type: &str) -> u32 {
+    let story = chart_type == "story";
+    match (model == GEMMA_MODEL, story) {
+        (true, true) => 3072,
+        (true, false) => 2048,
+        (false, true) => 2048,
+        (false, false) => 1536,
     }
+}
+
+/// 本環可用逾時：`min(RING_CAP, deadline − now)`；剩不到 MIN_RING 回 None。
+fn ring_timeout_ms(queued_at: f64, now: f64) -> Option<u64> {
+    let remaining = queued_at + REQUEST_BUDGET_MS - now;
+    if remaining < MIN_RING_MS {
+        return None;
+    }
+    Some(remaining.min(RING_CAP_MS) as u64)
+}
+
+/// 文字鏈截斷判定（→ 換下一環）：choices 形 `length`、Responses 形 `incomplete`。
+fn text_truncated(finish_reason: Option<&str>) -> bool {
+    matches!(finish_reason, Some("length") | Some("incomplete"))
+}
+
+/// 每日 Workers AI 額度用盡：503 `AI_QUOTA`（文字與 palm 共用；不走 stub）。
+fn quota_exceeded() -> Result<Response> {
+    Response::from_json(&serde_json::json!({
+        "error": "Daily AI quota exceeded",
+        "code": "AI_QUOTA",
+    }))
+    .map(|r| r.with_status(503))
 }
 
 /// B5：finish_reason=length 判定（→ 500 AI_TRUNCATED）；None／其他值不觸發。
@@ -722,14 +850,6 @@ fn palm_all_failed(
         "code": "AI_ALL_FAILED",
     }))
     .map(|r| r.with_status(503))
-}
-
-fn model_for(provider: &str) -> &'static str {
-    match provider {
-        "groq" => "openai/gpt-oss-20b",
-        "cerebras" => "gpt-oss-120b",
-        _ => "",
-    }
 }
 
 fn classify(e: &str) -> &'static str {
@@ -785,8 +905,6 @@ fn response_for(
 #[allow(non_snake_case)]
 #[derive(serde::Deserialize)]
 struct InterpretMsg {
-    #[serde(default)]
-    keys: std::collections::HashMap<String, Option<String>>,
     interpretRequest: InterpretRequest,
 }
 

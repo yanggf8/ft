@@ -3,4 +3,4 @@
 pub mod prompts;
 pub mod providers;
 
-pub use providers::{call_provider, ProviderResult};
+pub use providers::ProviderResult;

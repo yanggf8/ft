@@ -429,7 +429,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                             "AI 整合解牌"
                                             {ai_context_note.clone()}
                                         </h3>
-                                        <p style="white-space:pre-line;margin:0">{text}</p>
+                                        <div class="ai-reading">{super::story::render_markdown(&text)}</div>
                                         {ai_provider_note.clone().map(|note| view! {
                                             <p class="muted" style="font-size:0.8rem;margin:0.75rem 0 0 0">{note}</p>
                                         }.into_any())}
@@ -494,7 +494,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                                                 if matches!(&e, api::ApiErr::Api { status: 429, .. }) {
                                                                     "次數已達上限，請稍後再試（24 小時內最多 3 次）。".to_string()
                                                                 } else {
-                                                                    "AI 服務暫時無法使用，可稍後再試一次。".to_string()
+                                                                    e.ai_message()
                                                                 },
                                                             ),
                                                         }
@@ -502,7 +502,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                                                     });
                                                 }
                                             >
-                                                {move || if ai_loading.get() { "AI 解讀中…" } else if ai_failed { "重試 AI 整合解牌" } else { "AI 整合解牌" }}
+                                                {move || if ai_loading.get() { "AI 解讀中…（約需半分鐘）" } else if ai_failed { "重試 AI 整合解牌" } else { "AI 整合解牌" }}
                                             </button>
                                         </div>
                                     }.into_any()
@@ -580,7 +580,9 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         view! {
                             <div style="margin-top:0.75rem;border-top:1px solid var(--glass-border);padding-top:0.5rem">
                                 <p style="margin:0;font-size:0.9rem">{format!("AI 整合解牌（娛樂參考）{ctx_note}")}</p>
-                                <p style="white-space:pre-line;margin:0.25rem 0 0 0;font-size:0.9rem">{ai}</p>
+                                <div class="ai-reading" style="margin:0.25rem 0 0 0;font-size:0.9rem">
+                                    {super::story::render_markdown(ai)}
+                                </div>
                             </div>
                         }
                         .into_any()

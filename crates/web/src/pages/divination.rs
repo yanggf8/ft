@@ -74,7 +74,7 @@ pub fn DivinationPage() -> impl IntoView {
                         // surface a friendly message; Profile CTA below
                         err.set("請先到「我的命格」填寫出生資料".to_string());
                     } else {
-                        err.set(e.to_string());
+                        err.set("命盤載入失敗，請稍後再試".to_string());
                     }
                 }
             }
@@ -93,6 +93,8 @@ pub fn DivinationPage() -> impl IntoView {
             interpreting.set(true);
             err.set(String::new());
             match api::interpret(&ct).await {
+                // stub＝離線範本：不當成功顯示，保留「產生 AI 解讀」按鈕
+                Ok(resp) if resp.stub => err.set("AI 服務暫時無法使用，請稍後再試".to_string()),
                 Ok(resp) => interp.set(Some(resp.interpretation)),
                 Err(e) => {
                     if e.status() == Some(404) {
@@ -102,16 +104,18 @@ pub fn DivinationPage() -> impl IntoView {
                             } else {
                                 w.set(r.as_western());
                             }
-                            if let Ok(retry) = api::interpret(&ct).await {
-                                interp.set(Some(retry.interpretation));
-                            } else {
-                                err.set("解讀失敗，請稍後再試".to_string());
+                            match api::interpret(&ct).await {
+                                Ok(retry) if retry.stub => {
+                                    err.set("AI 服務暫時無法使用，請稍後再試".to_string())
+                                }
+                                Ok(retry) => interp.set(Some(retry.interpretation)),
+                                Err(e) => err.set(e.ai_message()),
                             }
                         } else {
                             err.set("命盤載入失敗".to_string());
                         }
                     } else {
-                        err.set(e.to_string());
+                        err.set(e.ai_message());
                     }
                 }
             }
@@ -173,7 +177,7 @@ pub fn DivinationPage() -> impl IntoView {
                                 prop:disabled=move || interpreting.get()
                                 on:click=do_interpret
                             >
-                                {move || if interpreting.get() { "解讀中..." } else { "產生 AI 解讀" }}
+                                {move || if interpreting.get() { "解讀中…（約需半分鐘）" } else { "產生 AI 解讀" }}
                             </button>
                         </div>
                     }
