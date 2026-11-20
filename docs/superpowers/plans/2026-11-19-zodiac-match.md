@@ -1,6 +1,6 @@
 # 文字 AI 全面改走 Workers AI ＋ 星座配對 — 實作計劃 v3
 
-日期：2026-11-19　狀態：**v3.1（D3 已裁示；Neon 一審 14 條＋Argon 二審 8 條已納），**已核准（2026-11-20 站長：D1／D2／D4／D5 全照建議，開工；實作審查＝Argon 一審＋Gemini 3.8 Flash 二審，commit 註明替代）**。審查替代：Codex（至 11/25）、Neon／Hydrogen（約 5 天）、Kimi（週額度）皆用盡，二審由 **Gemini 4 Argon High** 代替。
+日期：2026-11-19　狀態：**已完成並上線（2026-11-20）**——階段 0／A／B 全部部署並於正式站實測通過，實作紀錄見 §7。原核准狀態：v3.1（Neon 一審 14 條＋Argon 二審 8 條已納；站長 D1／D2／D4／D5 全照建議）。
 
 ## 0. 站長裁示
 
@@ -173,3 +173,27 @@ CREATE INDEX IF NOT EXISTS idx_zmr_lookup ON zodiac_match_readings(user_id, targ
 6. **[S] 依賴與 dead code**：`crates/web/Cargo.toml` web-sys 加 `AbortController`、`AbortSignal`（列入階段 0）；`providers.rs` 移除 `build_request`、`send_with_timeout` 與無用 imports；`InterpretMsg.keys` 移除。
 7. **[N] `*` 清單判定**：只有 `*` 後接空白才算清單（`**粗體**` 開頭的段落不可誤判）；`tarot.rs:432` 與 `zodiac.rs` 的 AI 解讀也改用 `render_markdown`。
 8. **[N] 快取鍵**：索引與查詢加入 `corpus_version` → `(user_id, target_sign, sign_key, corpus_version, prompt_version)`；`target` 先正規化成標準英文名（`"Leo"`）再查寫。
+
+## 7. 實作紀錄（2026-11-20，覆蓋上文與實作不符之處）
+
+| 階段 | commit | 上線 | 正式站實測 |
+|---|---|---|---|
+| 0 文字 AI 改 Workers AI | `98b69fd`＋`18afee4` | web → API | 紫微 13s／西洋 29s／故事 26s／塔羅 8s 皆真 AI；手相 vision 有判讀；瀏覽器紫微、塔羅實玩 |
+| A 規則版 `/zodiac` | `fda3298` | web | 匿名手機實玩：結果捲入視窗、零 API、無錯誤 |
+| B 配對 AI | `a88e9ed` | migration → API → web | API 5.5s／快取 0.9s／`INVALID_SIGN` 400；瀏覽器有時辰（3 列、4 節）與未填時辰（2 列、3 節、`sign_key` 末段 `-`）皆通過；`verify-deployment.sh` 8d 通過 |
+
+與計劃不同之處：
+- **`Ai::run` 不可用**：workers-rs 0.8.5 以預設 `serde_wasm_bindgen` 序列化，`serde_json::Value` 物件變 JS `Map`，binding 讀不到 `messages`（AiError 5006）→ 首次部署文字兩環全滅回 stub。改 `providers.rs run_plain_json`（JSON 字串 → `JSON.parse` → 底層 `worker_sys::Ai::run`）。本機以 REST 實測抓不到此問題；手相同路徑一併修正（推測先前也受影響）。
+- **AIMutexDO 改號誌式排隊**（審查 Blocking）：舊版驅動者排空整個佇列才回應，單筆 30–88s 時驅動者會被拖過 100s；改為每請求只處理自己、交棒下一位；25s 準時逾時；清除已離開等待者；持鎖 >95s 可奪回。
+- **stub 對前端**：`InterpretResponse`／`StoryResponse` 加 `stub` 旗標，前端顯示「AI 服務暫時無法使用」並保留按鈕；GET 快取命中舊 stub 回 null（ETag `-nostub`、max-age 0）。
+- **配對退次**：與 tarot 不同——AI 沒成功一律退 IP＋user 兩把（含 stub、空內容、DO 錯誤、`output_ok` 不過）；user 24h 上限回 429 `AI_DAILY_LIMIT`。
+- **落庫前輸出檢查** `output_ok`：必含 `## 核心價值`；缺上升／月亮不得出現對應字樣；禁「你們的／對方的 月亮／上升」與百分比。
+- **關係中立**：prompt 明定對方可能是伴侶／朋友／同事／家人，不預設戀愛與性別；語料「吸引與拉鋸」改「互相欣賞與拉鋸」。`ZODIAC_MATCH_PROMPT_VERSION="2"`、`ZODIAC_MATCH_CORPUS_VERSION="2"`。
+- **資料表**：依站長全域規則，`zodiac_match_readings` 只保留 `id` 主鍵，其他欄位不加 `NOT NULL`；讀取端容忍 NULL。
+- **審查替代**：Codex、Neon、Argon 額度用盡；GPT-OSS 經站長裁示不再擔任審查；最終採「一個 Fable、最多兩輪」（站長 2026-11-20）。
+
+遺留：
+- 手相未納入 88s 總預算（最壞 25s 佇列＋2×45s）。
+- `rate_limit_strict_refundable` 在限流 DO 故障時被當成超限（配對顯示「次數已用完」、塔羅同款），應區分回 503。
+- 約 2026-11-27（穩定一週）刪除 `GROQ_API_KEY`／`CEREBRAS_API_KEY` secret（先確認 `~/.secrets` 已留存）。
+- 一週後看 Workers AI dashboard 用量，校正 §2.1 neurons 估算。

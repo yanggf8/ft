@@ -63,6 +63,8 @@ FortuneT V2 is a **Rust** platform: Leptos CSR frontend + Cloudflare Workers (`w
 
 **F5 本週預測** (2026-09): `predictions` / `situation_checks` / `prediction_feedback` / `prediction_generations` / `prediction_strengths` / `prediction_runs` 六表 + 4 端點已上線。同週可建立多個 prediction run，舊預測與回饋保留；寫入為單一 `db::batch` 原子交易。forecast 遮罩（第 1 段收齊才吐全文）、F6 兩段式（第 2 段僅 occurred 後、一次性、situation 鎖定）；F4 情境輸入（2026-09-11）：generate 必帶五領域強度 0–3、閘門強度 ≥1、love 領域上線（`rules-2`）、D2-A 已推廣為 floor 語意；web `我的命格` PredictionsCard（§5.4.1 措辭回饋；可於同週再次預測）。
 
+**星座配對** (2026-11-20): `/zodiac` 公開頁——規則版在瀏覽器內算（`ft_schema::zodiac_match`，免登入零 API）；登入有出生資料者可產生 AI 解讀 `POST /api/zodiac/match/interpret`（user 3 次／24h、失敗一律退次、只有成功才寫入 `zodiac_match_readings`）。細節見 docs/ARCHITECTURE.md §星座配對。
+
 ### AI Integration ✅
 
 | Priority | Provider | Model | 特點 |
