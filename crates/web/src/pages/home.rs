@@ -26,7 +26,7 @@ pub fn HomePage() -> impl IntoView {
                     }
                 >
                     <div class="hero-actions">
-                        <A href="/divination/ziwei" attr:class="cta">"紫微斗數"</A>
+                        <A href="/ziwei" attr:class="cta">"紫微斗數"</A>
                         <A href="/divination/western" attr:class="cta-alt">"西洋占星"</A>
                         <A href="/personality" attr:class="cta-alt">"人格測驗"</A>
                         <A href="/naming" attr:class="cta-alt">"姓名學"</A>
@@ -39,7 +39,7 @@ pub fn HomePage() -> impl IntoView {
                     <h3>
                         <FeatureIcon kind="tarot"/>" 塔羅"
                     </h3>
-                    <p>"今日抽牌免登入；三張牌陣解牌需登入，當下問題的反思工具"</p>
+                    <p>"今日抽牌免登入；綜合、感情、事業三張牌陣需登入，當下問題的反思工具"</p>
                 </A>
                 <A href="/palm" attr:class="feature">
                     <h3>
@@ -53,7 +53,7 @@ pub fn HomePage() -> impl IntoView {
                         <FeatureIcon kind="fengshui"/>" 空間風水"
                         <span class="feature-new">"NEW"</span>
                     </h3>
-                    <p>"臥室或書房的擺設，並列風水的說法與相關研究；先猜研究做到哪了再翻卡（免登入）"</p>
+                    <p>"臥室、書房或辦公室座位的擺設，並列風水的說法與相關研究；先猜研究站在哪一邊再翻卡（免登入）"</p>
                 </A>
                 <A href="/zodiac" attr:class="feature">
                     <h3>
@@ -62,10 +62,10 @@ pub fn HomePage() -> impl IntoView {
                     </h3>
                     <p>"點選對方的太陽星座，看你們的互動傾向（免登入）；登入後再加入你的月亮、上升"</p>
                 </A>
-                <div class="feature">
+                <A href="/ziwei" attr:class="feature">
                     <h3><FeatureIcon kind="ziwei"/>" 紫微斗數"</h3>
-                    <p>"傳統中國命理學，精準分析命盤格局與人生運勢"</p>
-                </div>
+                    <p>"命盤、流年大運、今年運勢三個角度，看命盤格局與這幾年的關注主題"</p>
+                </A>
                 <div class="feature">
                     <h3><FeatureIcon kind="western"/>" 西洋占星"</h3>
                     <p>"星座與行星位置分析，探索性格傾向與成長方向"</p>
