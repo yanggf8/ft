@@ -75,6 +75,27 @@ pub static TERMS: &[Term] = &[
         category: Category::Ziwei,
         def: "十年一階段的運勢區間，類似西洋占星的十年大運。",
     },
+    // 紫微子單元（2026-11-21 流年大運／今年運勢；GLOSSARY_VERSION 由整合時一次 bump）
+    Term {
+        term: "童限",
+        category: Category::Ziwei,
+        def: "還沒起大限的幼年期，傳統上依虛歲輪流看命宮、財帛、疾厄、夫妻、福德、官祿。",
+    },
+    Term {
+        term: "流年",
+        category: Category::Ziwei,
+        def: "以農曆年為單位的觀察層：依當年地支定出流年命宮，再重新排出這一年的十二宮。是傳統的觀察框架，不是預測。",
+    },
+    Term {
+        term: "小限",
+        category: Category::Ziwei,
+        def: "依年齡每年移動一宮的輔助參考，和流年並看。",
+    },
+    Term {
+        term: "流年四化",
+        category: Category::Ziwei,
+        def: "由當年天干帶出的化祿、化權、化科、化忌，標示這一年可以多留意的面向；和出生時的四化分開看。",
+    },
     Term {
         term: "借星",
         category: Category::Ziwei,

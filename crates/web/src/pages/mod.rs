@@ -10,10 +10,11 @@ mod personality;
 mod profile;
 mod story;
 mod tarot;
+mod ziwei;
 mod zodiac;
 
 pub use admin::AdminPage;
-pub use divination::DivinationPage;
+pub use divination::{DivinationPage, DivinationParamPage};
 pub use fengshui::FengshuiPage;
 pub use glossary::GlossaryPage;
 pub use home::HomePage;
@@ -26,4 +27,5 @@ pub use profile::ProfilePage;
 pub use story::StoryPage;
 pub use tarot::TarotPage;
 pub use tarot::TarotSpreadPage;
+pub use ziwei::{ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage};
 pub use zodiac::ZodiacMatchPage;

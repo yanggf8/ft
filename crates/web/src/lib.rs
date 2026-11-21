@@ -17,9 +17,9 @@ use leptos_router::path;
 use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
 use crate::pages::{
-    AdminPage, DivinationPage, FengshuiPage, GlossaryPage, HomePage, LoginPage, NamingPage,
-    PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, StoryPage, TarotPage,
-    TarotSpreadPage, ZodiacMatchPage,
+    AdminPage, DivinationPage, DivinationParamPage, FengshuiPage, GlossaryPage, HomePage,
+    LoginPage, NamingPage, PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, StoryPage,
+    TarotPage, TarotSpreadPage, ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage, ZodiacMatchPage,
 };
 
 #[component]
@@ -50,7 +50,14 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>
-                    <Route path=path!("/divination/:type") view=|| view! { <Protected><DivinationPage/></Protected> }/>
+                    // 紫微子單元（spec 2026-11-21 §A.2）：/ziwei 選單公開，子單元 Protected
+                    <Route path=path!("/ziwei") view=ZiweiHubPage/>
+                    <Route path=path!("/ziwei/chart") view=|| view! { <Protected><DivinationPage chart_type="ziwei".to_string()/></Protected> }/>
+                    <Route path=path!("/ziwei/luck") view=|| view! { <Protected><ZiweiLuckPage/></Protected> }/>
+                    <Route path=path!("/ziwei/year") view=|| view! { <Protected><ZiweiYearPage/></Protected> }/>
+                    // 舊網址轉址：必須宣告在 /divination/:type 之前（先宣告者優先）
+                    <Route path=path!("/divination/ziwei") view=|| view! { <Redirect path="/ziwei/chart"/> }/>
+                    <Route path=path!("/divination/:type") view=|| view! { <Protected><DivinationParamPage/></Protected> }/>
                     <Route path=path!("/story") view=|| view! { <Protected><StoryPage/></Protected> }/>
                     <Route path=path!("/admin") view=|| view! { <Protected><AdminPage/></Protected> }/>
                 </Routes>
