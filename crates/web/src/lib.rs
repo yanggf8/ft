@@ -18,8 +18,9 @@ use crate::auth::{use_auth, AuthCtx};
 use crate::components::Layout;
 use crate::pages::{
     AdminPage, DivinationPage, DivinationParamPage, FengshuiPage, GlossaryPage, HomePage,
-    LoginPage, NamingPage, PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, StoryPage,
-    TarotPage, TarotSpreadPage, ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage, ZodiacMatchPage,
+    LoginPage, NamingPage, PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, ShopPage,
+    StoryPage, TarotPage, TarotSpreadPage, ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage,
+    ZodiacMatchPage,
 };
 
 #[component]
@@ -51,6 +52,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/fengshui") view=FengshuiPage/>
                     <Route path=path!("/fengshui/:room") view=FengshuiPage/>
                     <Route path=path!("/zodiac") view=ZodiacMatchPage/>
+                    // 開運小物 v1（公開；匿名以 localStorage anonId 登記）
+                    <Route path=path!("/shop") view=ShopPage/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>
