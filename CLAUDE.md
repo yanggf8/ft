@@ -136,6 +136,16 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   必 bump；快取鍵＝(user, target, sign_key, corpus_version, prompt_version)；**失敗不落庫、
   任何 AI 失敗（含輸出檢查不過）都退兩把次數**（與 tarot 不同）；migration 先於 API 部署；AIMutexDO 專屬實例 `id_from_name("zodiac-match")`；配對資料永不寫入
   predictions/prediction_feedback/f8_assignments。
+- **紫微今年運勢（2026-11-21）**：流年引擎 `ft_ziwei::horoscope` 輸出**子=0**（x-iztro 是寅=0），
+  改語意或 x-iztro divide 設定必 bump `ENGINE_VERSION_ZIWEI_HOROSCOPE`；禁用 `horoscope_now()`。
+  生辰一律走 `resolve_ziwei_birth`（**不可**用 `resolve_chart`、不可預設午時）——沒時辰回 400
+  `NO_BIRTH_HOUR`。AI 解讀 `POST /api/ziwei/year/interpret`（chartType `ziwei_year`，
+  `ZIWEI_YEAR_PROMPT_VERSION` 改 prompt 必 bump）；快取鍵＝(user, luck_year, engine_version_ziwei,
+  horoscope_version, prompt_version)；**任何 AI 失敗（含 `output_ok` 不過）不落庫、退兩把、503
+  `AI_UNAVAILABLE`**；結尾提醒句由 route 附加；migration 先於 API 部署；生辰 PUT 刪
+  `ziwei_year_readings`；AIMutexDO 專屬實例 `id_from_name("ziwei-year")`；資料永不寫入
+  predictions/prediction_feedback/f8_assignments。`/divination/ziwei` 轉址 Route 必須在
+  `/divination/:type` 之前。
 - **Workers AI 呼叫一律走 `providers.rs run_plain_json`**：workers-rs `Ai::run` 會把
   `serde_json::Value` 物件序列化成 JS `Map`，binding 讀不到欄位（2026-11-20 正式站 AI 全滅事故）。
 
