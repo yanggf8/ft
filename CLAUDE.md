@@ -60,6 +60,7 @@ gwebcdb-mint turso --tier write --db fortunet --export
 ./scripts/verify-deployment.sh              # production health + new-route sanity
 ./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
 python3 -I scripts/subunits-selftest.py      # 子單元正式站自測（紫微流年/今年運勢、塔羅主題；自造帳號、預設硬清）
+python3 -I scripts/shop-selftest.py          # 開運小物正式站自測（匿名／登入登記、轉登入不重算、me 聯集、取消、錯誤碼；結束硬清）
 ./scripts/f8-acceptance.sh [--cleanup]      # F8 對照組驗收全自動（DB 自造 login token 登入、
                                             #   測驗自舉、事前盲/遮罩/解盲、turso 帳本交叉比對）
 ```
@@ -151,6 +152,11 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   `ziwei_year_readings`；AIMutexDO 專屬實例 `id_from_name("ziwei-year")`；資料永不寫入
   predictions/prediction_feedback/f8_assignments。`/divination/ziwei` 轉址 Route 必須在
   `/divination/:type` 之前。
+- **開運小物（2026-11-22）**：目錄 `ft_schema::shop`——品項 `id` 是 wire／儲存鍵**不可改名**
+  （下架＝自 CATALOG 移除＋bump），改文字或增刪品項必 bump `SHOP_CATALOG_VERSION`；文案受禁字／
+  價格測試守門，**不得宣稱任何改運效果**。`routes/shop.rs` 登入可選（`auth_user_opt`）＋`anonId`；
+  migration 先於 API 部署；資料永不寫入 predictions/prediction_feedback/f8_assignments；
+  日後加帳號刪除路由須一併刪 `shop_interest`。細節見 docs/ARCHITECTURE.md §開運小物。
 - **Workers AI 呼叫一律走 `providers.rs run_plain_json`**：workers-rs `Ai::run` 會把
   `serde_json::Value` 物件序列化成 JS `Map`，binding 讀不到欄位（2026-11-20 正式站 AI 全滅事故）。
 

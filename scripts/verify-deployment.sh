@@ -256,6 +256,31 @@ else
   FAILED=1
 fi
 
+# Test 8e: 開運小物 interest endpoints are routed and validate before any write
+# (spec 2026-11-22-shop-interest §6). Neither probe inserts a row: an unknown itemId is
+# rejected before the DB, and /me with no token and no anonId is rejected as NO_IDENTITY.
+# (the POST probe counts once against the caller IP's 30/hour shop limit)
+echo -n "8e. Shop interest endpoints (validation, no writes)... "
+SHOP_OK=1
+BODY=$(hcurl -X POST "$API_URL/api/shop/interest" -H "Content-Type: application/json" -d '{"itemId":"nope"}' -w "|%{http_code}") || true
+if [ "${BODY##*|}" != "400" ] || ! echo "${BODY%|*}" | grep -q '"INVALID_ITEM"'; then
+  echo ""
+  echo "   ✗ POST /api/shop/interest {itemId:nope} -> ${BODY##*|} (expected 400 INVALID_ITEM)"
+  SHOP_OK=0
+fi
+BODY=$(hcurl "$API_URL/api/shop/interest/me" -w "|%{http_code}") || true
+if [ "${BODY##*|}" != "400" ] || ! echo "${BODY%|*}" | grep -q '"NO_IDENTITY"'; then
+  echo ""
+  echo "   ✗ GET /api/shop/interest/me (no identity) -> ${BODY##*|} (expected 400 NO_IDENTITY)"
+  SHOP_OK=0
+fi
+if [ "$SHOP_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 echo ""
 if [ "$FAILED" -ne 0 ]; then
   echo -e "${RED}❌ Verification FAILED${NC} (see ✗ above)"

@@ -93,6 +93,12 @@ pub async fn auth_user(req: &Request, ctx: &RouteContext<()>) -> Result<String, 
     Ok(session.userId)
 }
 
+/// 選擇性登入（開運小物 spec §4）：有效 session → `Some(userId)`；缺 token、無效／過期、
+/// SessionDO 故障一律 `None`（呼叫端視同匿名，不回 401）。
+pub async fn auth_user_opt(req: &Request, ctx: &RouteContext<()>) -> Option<String> {
+    auth_user(req, ctx).await.ok()
+}
+
 #[derive(Debug, serde::Deserialize)]
 #[allow(non_snake_case)]
 struct SessionInfo {

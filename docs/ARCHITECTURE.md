@@ -23,8 +23,8 @@
   (exact-hostname allowlist), x-request-id, JSON 404 normalization.
 - **Routes** (`routes/`): `auth.rs`, `users.rs`, `charts.rs`, `personality.rs` (F1 + F3
   overlay + 資格矩陣), `predictions.rs`, `tarot.rs`, `palm.rs`, `zodiac.rs`, `ziwei.rs`
-  （紫微流年大運／今年運勢）, `admin_invites.rs`, `oauth.rs`
-  (+ `common.rs` shared helpers: `auth_user`, rate limit, `body_too_large` 64 KiB cap,
+  （紫微流年大運／今年運勢）, `shop.rs`（開運小物登記）, `admin_invites.rs`, `oauth.rs`
+  (+ `common.rs` shared helpers: `auth_user`, `auth_user_opt`, rate limit, `body_too_large` 64 KiB cap,
   `embed_meta`, `extracted_version`, `page_query` 歷史分頁 query 解析（tarot／palm 共用）).
 - **Durable Objects** (`durable_objects/`):
   - `SessionDO` — key `"session"`, 7-day TTL. `get` deletes expired; `refresh` extends.
@@ -250,6 +250,36 @@ spec：`docs/superpowers/specs/2026-11-21-sub-units-design.md` §A（推翻 2026
 - 順帶修正：ziwei／story prompt 的性別比對原本只認 `male`／`female`，盤面存「男／女」→ 永遠送
   「未知」；改 `gender_zh` 兩種都認（不 bump，舊快取不追溯）。
 - **部署順序**：Turso migration → engine → api → web。
+
+## 開運小物 v1（2026-11-22：展示＋「我有興趣」登記，無金流）
+
+spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記數決定做不做、先做哪件；
+不顯示價格與登記人數、不接 AI／命盤、不宣稱改運效果。
+
+- **目錄**：`ft_schema::shop`（`CATALOG` 6 件、`find`、`SHOP_CATALOG_VERSION`，改文字或增刪品項必 bump）。
+  `id` 是 wire／儲存鍵，**不可改名**；下架＝自 CATALOG 移除＋bump（舊列保留）。禁字／價格測試守門。
+- **身分**：登入可選（`common.rs auth_user_opt`；無效／過期 token、SessionDO 故障都視同匿名，不回 401）
+  ＋瀏覽器 `anonId`（localStorage `shop_interest_v1` 的隨機 UUID；8–64 字 `[A-Za-z0-9-]`，不合 400
+  `INVALID_ANON_ID`）。兩者皆無 → 400 `NO_IDENTITY`。不記 IP／UA（IP 只做限流 key）。
+- **路由**（`routes/shop.rs`）：
+  - `POST /api/shop/interest` `{itemId, anonId?}`：64 KiB → `rate_limit`（fail-open）`shop:ip:{ip}`
+    30／小時（429 `RATE_LIMITED`）→ 不在 CATALOG 400 `INVALID_ITEM` → 去重：`item_id` 且
+    （`user_id` 或 `anon_id`）相符 → `already:true`，若命中列皆無本人 user_id 而本次有登入就 `UPDATE`
+    補上第一個匿名列的 user_id（匿名轉登入不重算）→ 否則插一列（存 `SHOP_CATALOG_VERSION`）。
+  - `GET /api/shop/interest/me?anonId=`：登入者 ∪ anonId 的品項，去重、只留目前 CATALOG（目錄順序）。
+  - `DELETE /api/shop/interest/:itemId`（body `{"anonId"}` 可省略，itemId 以路徑為準）：刪符合身分的列
+    → `registered:false`。
+  - DB 錯誤一律 500 `"db error"`。
+- **表** `shop_interest`（migration `scripts/migrations/2026-11-22-shop-interest.sql`，除 PRIMARY KEY
+  外無 constraint；INDEX item／(user,item)／(anon,item)）。**部署順序**：migration → api → web。
+- **判讀**：決策看去重人數（清 localStorage／換瀏覽器／免費註冊都能灌，只當方向參考；並發雙擊可能多一列，
+  去重數不受影響）：
+  `SELECT item_id, COUNT(*), COUNT(DISTINCT COALESCE(user_id, anon_id)) FROM shop_interest GROUP BY item_id;`
+- **帳號刪除**：目前沒有帳號刪除路由；**日後新增帳號刪除時必須一併刪 `shop_interest`**（`user_id` 列；
+  匿名列無法對應帳號）。
+- 紅線：小物資料永不寫入 predictions／prediction_feedback／f8_assignments；不 import `symbolic`。
+- 驗證：`verify-deployment.sh` 8e（不寫列的 INVALID_ITEM／NO_IDENTITY 探測）、
+  `python3 -I scripts/shop-selftest.py`（自造帳號、結束硬清）。
 
 ## Kawaii light theme (2026-11-19)
 
