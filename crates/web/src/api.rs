@@ -498,6 +498,27 @@ pub async fn zodiac_match_interpret(target: &str) -> Result<ZodiacMatchInterpret
     .await
 }
 
+/// `GET /api/ziwei/horoscope?year=Y` — 紫微流年大運（省略 year＝台北今天；春節前屬前一年）。
+pub async fn ziwei_horoscope(
+    year: Option<i32>,
+) -> Result<ft_schema::ziwei_luck::ZiweiHoroscopeResponse, ApiErr> {
+    let path = match year {
+        Some(y) => format!("/api/ziwei/horoscope?year={y}"),
+        None => "/api/ziwei/horoscope".to_string(),
+    };
+    get_json(&path, false).await
+}
+
+/// `GET /api/ziwei/year` — 今年運勢摘要＋已有的 AI 解讀（沒有則 null）。
+pub async fn ziwei_year() -> Result<ft_schema::ziwei_luck::ZiweiYearResponse, ApiErr> {
+    get_json("/api/ziwei/year", true).await
+}
+
+/// `POST /api/ziwei/year/interpret`（無 body）— 今年運勢 AI 解讀；24h 每人 3 次。
+pub async fn ziwei_year_interpret() -> Result<ft_schema::ziwei_luck::ZiweiYearReading, ApiErr> {
+    post_ai::<(), _>(Request::post(&url("/api/ziwei/year/interpret")), None).await
+}
+
 /// `DELETE /api/tarot/readings` — 整批刪除，回刪除筆數。
 pub async fn tarot_delete_all() -> Result<i64, ApiErr> {
     #[derive(Deserialize)]

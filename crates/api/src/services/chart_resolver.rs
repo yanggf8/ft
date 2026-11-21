@@ -324,9 +324,123 @@ pub(crate) async fn resolve_western_chart(
     })
 }
 
+/// 紫微流年大運／今年運勢（spec 2026-11-21 §A.4–A.5）專用的生辰解析。**不可**用
+/// [`resolve_chart`]——它缺紫微時退回西洋、缺性別時默默略過；流年也不能用
+/// `birth_hour.unwrap_or(12)` 的預設午時排（R04：沒填時辰就擋）。
+pub(crate) struct ZiweiBirth {
+    pub engine: engine::EngineBirth,
+    birth_hash: String,
+    row: BirthRow,
+}
+
+/// 錯誤分類（route 對映：NoBirthData／NoGender／NoBirthHour 400、Db 500）。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ZiweiBirthError {
+    NoBirthData,
+    NoGender,
+    NoBirthHour,
+    Db,
+}
+
+/// 純函式：生辰齊備檢查（順序＝日期→性別→時辰）。
+pub(crate) fn check_ziwei_birth(
+    has_date: bool,
+    gender: Option<&str>,
+    hour: Option<i64>,
+) -> Result<(), ZiweiBirthError> {
+    if !has_date {
+        return Err(ZiweiBirthError::NoBirthData);
+    }
+    if gender.map(str::trim).filter(|g| !g.is_empty()).is_none() {
+        return Err(ZiweiBirthError::NoGender);
+    }
+    match hour {
+        Some(h) if (0..=23).contains(&h) => Ok(()),
+        _ => Err(ZiweiBirthError::NoBirthHour),
+    }
+}
+
+pub(crate) async fn resolve_ziwei_birth(
+    ctx: &RouteContext<()>,
+    user_id: &str,
+) -> Result<ZiweiBirth, ZiweiBirthError> {
+    let db = db::Turso::from_env(&ctx.env).map_err(|_| ZiweiBirthError::Db)?;
+    let birth: Option<BirthRow> = db::first(
+        &db,
+        "SELECT birth_year, birth_month, birth_day, birth_hour, gender, timezone, \
+         latitude, longitude, birth_data_hash FROM users WHERE id = ?1",
+        &[&db::text(user_id)],
+    )
+    .await
+    .map_err(|_| ZiweiBirthError::Db)?;
+    let Some(row) = birth else {
+        return Err(ZiweiBirthError::NoBirthData);
+    };
+    let has_date = row.birth_year.is_some() && row.birth_month.is_some() && row.birth_day.is_some();
+    check_ziwei_birth(has_date, row.gender.as_deref(), row.birth_hour)?;
+    let engine = engine::EngineBirth {
+        year: row.birth_year,
+        month: row.birth_month,
+        day: row.birth_day,
+        hour: row.birth_hour.unwrap_or_default(),
+        gender: row.gender.clone(),
+        // charts.rs 對 ziwei 不帶經緯度——同款
+        latitude: None,
+        longitude: None,
+        timezone: row.timezone.clone(),
+    };
+    Ok(ZiweiBirth {
+        engine,
+        birth_hash: row.birth_data_hash.clone().unwrap_or_default(),
+        row,
+    })
+}
+
+/// 今年運勢要送 AI 的本命盤：新鮮快取 → 否則引擎現算（不落快取，與 overlay 同款）。
+/// `Ok(None)`＝引擎不可用；`Err`＝DB 失敗。
+pub(crate) async fn resolve_ziwei_natal(
+    ctx: &RouteContext<()>,
+    user_id: &str,
+    birth: &ZiweiBirth,
+) -> Result<Option<ZiWeiChartV3>, worker::Error> {
+    let db = db::Turso::from_env(&ctx.env)?;
+    let fetcher = ctx.env.service("FT_ENGINE")?;
+    resolve_one::<ZiWeiChartV3>(
+        &db,
+        &fetcher,
+        user_id,
+        "ziwei",
+        "engineVersionZiwei",
+        engine_version::ENGINE_VERSION_ZIWEI,
+        &birth.birth_hash,
+        &birth.row,
+        ziwei_chart_structurally_valid,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ziwei_birth_check_order() {
+        use ZiweiBirthError::*;
+        assert_eq!(check_ziwei_birth(true, Some("male"), Some(12)), Ok(()));
+        assert_eq!(check_ziwei_birth(true, Some("female"), Some(0)), Ok(()));
+        assert_eq!(check_ziwei_birth(false, None, None), Err(NoBirthData));
+        assert_eq!(check_ziwei_birth(true, None, Some(12)), Err(NoGender));
+        assert_eq!(check_ziwei_birth(true, Some(" "), Some(12)), Err(NoGender));
+        // R04：沒填時辰不得用預設午時排流年
+        assert_eq!(
+            check_ziwei_birth(true, Some("male"), None),
+            Err(NoBirthHour)
+        );
+        assert_eq!(
+            check_ziwei_birth(true, Some("male"), Some(24)),
+            Err(NoBirthHour)
+        );
+    }
 
     #[test]
     fn usable_requires_hash_and_versions_aligned() {

@@ -21,8 +21,8 @@ pub fn get_system_prompt(chart_type: &str, language: Option<&str>) -> String {
 
     // 與 base_system_prompt 的語言分支一致：西洋盤預設英文，其餘預設中文
     let english = match chart_type {
-        // zodiac_match 一律中文（前端只送 zh；未帶 language 也不得落入英文分支）
-        "ziwei" | "story" | "zodiac_match" => language == Some("en"),
+        // zodiac_match／ziwei_year 一律中文（route 只送 zh；未帶 language 也不得落入英文分支）
+        "ziwei" | "story" | "zodiac_match" | "ziwei_year" => language == Some("en"),
         _ => language != Some("zh"),
     };
     let base = base_system_prompt(chart_type, language);
@@ -48,6 +48,10 @@ fn base_system_prompt(chart_type: &str, language: Option<&str>) -> String {
         // plan 2026-11-19 §2.4／§6.4：對方只知太陽星座；不斷言關係成敗、不建議交往／分手
         return "你是溫和的西洋占星配對解讀者。你根據「以星座為單位」的簡化相位，描述兩個人互動時可能出現的傾向與相處提示，作為娛樂與自我反思的素材。對方可能是伴侶、朋友、同事或家人：不得預設是戀愛或曖昧關係，不得預設任何一方的性別，不使用「吸引力」「來電」「感情升溫」「心動」等戀愛用語，改用「相處」「互動」「合作」等中性說法。你不得斷言關係的成敗、未來或結局，不得建議交往、分手或任何關係決定，不得打分數或給百分比，不得說兩人「合」或「不合」。對方只提供太陽星座：不得推測或描述對方太陽以外的任何星盤資訊。全程使用台灣繁體中文。".to_string();
     }
+    if chart_type == "ziwei_year" {
+        // spec 2026-11-21 §A.5：今年運勢＝本命＋大限＋流年三層的年度主題；流年不是預測
+        return "你是溫和的紫微斗數解讀者。你根據同一個人的本命盤、目前所在的大限與今年的流年三層資料，寫一篇今年的年度主題解讀，作為自我反思的素材。流年是傳統的觀察框架，不是預測：不得預告任何具體事件，不得提到任何月份或給月份的好壞，不得使用「一定」「注定」「必然」「保證」，不得出現「預測」「本週」等字眼。請以「今年可以多留意的主題」與「可以怎麼用」的框架來寫。全程使用台灣繁體中文。".to_string();
+    }
     if chart_type == "ziwei" {
         return if language == Some("en") {
             "You are an expert in 紫微斗數 (Zi Wei Dou Shu). Provide insightful interpretations in English.".to_string()
@@ -70,6 +74,16 @@ fn base_system_prompt(chart_type: &str, language: Option<&str>) -> String {
     }
 }
 
+/// 盤面性別 → 中文。引擎 `ZiWeiChartV3.birthInfo.gender` 存「男／女」，舊資料可能是
+/// `male`／`female`；兩種都要認（2026-11-21 修：原本只比對英文，永遠送「未知」）。
+fn gender_zh(g: Option<&str>) -> &'static str {
+    match g {
+        Some("男") | Some("male") => "男",
+        Some("女") | Some("female") => "女",
+        _ => "未知",
+    }
+}
+
 /// `buildPrompt(req)` — builds the user message from chart data.
 pub fn build_prompt(
     chart_type: &str,
@@ -86,18 +100,16 @@ pub fn build_prompt(
     if chart_type == "zodiac_match" {
         return build_zodiac_match_prompt(chart);
     }
+    if chart_type == "ziwei_year" {
+        return build_ziwei_year_prompt(chart);
+    }
 
     if chart_type == "ziwei" {
         let five_element = chart
             .pointer("/fiveElement")
             .and_then(|v| v.as_str())
             .unwrap_or("未知");
-        let gender = chart.pointer("/birthInfo/gender").and_then(|v| v.as_str());
-        let gender_cn = match gender {
-            Some("male") => "男",
-            Some("female") => "女",
-            _ => "未知",
-        };
+        let gender_cn = gender_zh(chart.pointer("/birthInfo/gender").and_then(|v| v.as_str()));
         let palaces: Vec<String> = chart
             .get("palaces")
             .and_then(|v| v.as_array())
@@ -146,12 +158,7 @@ pub fn build_prompt(
             .get("western")
             .cloned()
             .unwrap_or(serde_json::Value::Null);
-        let z_gender = z.pointer("/birthInfo/gender").and_then(|v| v.as_str());
-        let z_gender_cn = match z_gender {
-            Some("male") => "男",
-            Some("female") => "女",
-            _ => "未知",
-        };
+        let z_gender_cn = gender_zh(z.pointer("/birthInfo/gender").and_then(|v| v.as_str()));
         let z_five = z
             .pointer("/fiveElement")
             .and_then(|v| v.as_str())
@@ -832,6 +839,136 @@ fn build_zodiac_match_prompt(chart: &serde_json::Value) -> String {
     out
 }
 
+/// 今年運勢 AI prompt（spec 2026-11-21 §A.5）。chartData 由 route 組裝：
+/// `{ natal:{fiveElement, gender, palaces:[{branch,name,stars:[{name,brightness?,sihua?}]}]},
+///    decadal:{isChildhood, stem, branch, startAge?, endAge?, natalPalace},
+///    yearly:{stem, branch, natalPalace, palaceNames:[{branch,name}],
+///            mutagen:[{label, star, natalPalace}]} }`；
+/// 不含生日、出生地、時辰、虛歲。結尾提醒句由 route 附加，這裡要求模型**不要**寫。
+fn build_ziwei_year_prompt(chart: &serde_json::Value) -> String {
+    let g = |v: &serde_json::Value, k: &str| {
+        v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
+    };
+    let null = serde_json::Value::Null;
+    let natal = chart.get("natal").unwrap_or(&null);
+    let decadal = chart.get("decadal").unwrap_or(&null);
+    let yearly = chart.get("yearly").unwrap_or(&null);
+
+    let mut out = String::from("【本命盤】\n");
+    out.push_str(&format!(
+        "五行局：{}\n性別：{}\n十二宮（地支・宮名：主星與亮度、生年四化）：\n",
+        natal
+            .get("fiveElement")
+            .and_then(|v| v.as_str())
+            .unwrap_or("未知"),
+        gender_zh(natal.get("gender").and_then(|v| v.as_str())),
+    ));
+    if let Some(ps) = natal.get("palaces").and_then(|v| v.as_array()) {
+        for p in ps {
+            let stars: Vec<String> = p
+                .get("stars")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|st| {
+                            let mut t = g(st, "name");
+                            let b = g(st, "brightness");
+                            if !b.is_empty() {
+                                t.push_str(&format!("（{b}）"));
+                            }
+                            t.push_str(match g(st, "sihua").as_str() {
+                                "lu" => "化祿",
+                                "quan" => "化權",
+                                "ke" => "化科",
+                                "ji" => "化忌",
+                                _ => "",
+                            });
+                            t
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let stars = if stars.is_empty() {
+                "無主星".to_string()
+            } else {
+                stars.join("、")
+            };
+            out.push_str(&format!(
+                "{}・{}：{}\n",
+                g(p, "branch"),
+                g(p, "name"),
+                stars
+            ));
+        }
+    }
+
+    out.push_str("\n【目前的大限】\n");
+    if decadal
+        .get("isChildhood")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        out.push_str(&format!(
+            "還在童限（尚未起大限），童限落在本命{}（{}）\n",
+            g(decadal, "natalPalace"),
+            g(decadal, "branch"),
+        ));
+    } else {
+        let range = match (
+            decadal.get("startAge").and_then(|v| v.as_u64()),
+            decadal.get("endAge").and_then(|v| v.as_u64()),
+        ) {
+            (Some(s), Some(e)) => format!("{s}–{e} 歲，"),
+            _ => String::new(),
+        };
+        out.push_str(&format!(
+            "{}大限干支 {}{}，落在本命{}（{}）\n",
+            range,
+            g(decadal, "stem"),
+            g(decadal, "branch"),
+            g(decadal, "natalPalace"),
+            g(decadal, "branch"),
+        ));
+    }
+
+    out.push_str("\n【今年的流年】\n");
+    out.push_str(&format!(
+        "流年干支：{}{}年\n流年命宮：{}，落在本命{}\n",
+        g(yearly, "stem"),
+        g(yearly, "branch"),
+        g(yearly, "branch"),
+        g(yearly, "natalPalace"),
+    ));
+    if let Some(names) = yearly.get("palaceNames").and_then(|v| v.as_array()) {
+        let list: Vec<String> = names
+            .iter()
+            .map(|n| format!("{}＝流年{}", g(n, "branch"), g(n, "name")))
+            .collect();
+        out.push_str(&format!("流年十二宮：{}\n", list.join("、")));
+    }
+    if let Some(ms) = yearly.get("mutagen").and_then(|v| v.as_array()) {
+        let list: Vec<String> = ms
+            .iter()
+            .map(|m| {
+                let at = g(m, "natalPalace");
+                if at.is_empty() {
+                    format!("{}：{}（本命盤上沒有這顆星）", g(m, "label"), g(m, "star"))
+                } else {
+                    format!("{}：{}（在本命{}）", g(m, "label"), g(m, "star"), at)
+                }
+            })
+            .collect();
+        out.push_str(&format!("流年四化：{}\n", list.join("、")));
+    }
+
+    out.push_str("\n【寫作要求】\n");
+    out.push_str("1. 用 Markdown 二級標題，依序只輸出四節：## 今年的主題、## 這十年的底色、## 流年四化帶來的提醒、## 可以怎麼用。不要加開場白或其他標題。\n");
+    out.push_str("2. 「今年的主題」從流年命宮落在本命哪一宮談起；「這十年的底色」談目前的大限（還在童限就談童限）；「流年四化帶來的提醒」逐一談四顆流年四化星落在本命的宮位；「可以怎麼用」給兩三個日常做得到的方向。\n");
+    out.push_str("3. 全文 400–600 字；用「可能」「傾向」「可以多留意」等語氣。不得預告具體事件，不得提到任何月份或季節的好壞，不得使用「一定」「注定」「必然」「保證」，不得出現「預測」「本週」。\n");
+    out.push_str("4. 不要寫結尾提醒或免責聲明（系統會另外附上）。\n");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -909,6 +1046,8 @@ mod tests {
             ("western", Some("zh")),
             ("zodiac_match", None),
             ("zodiac_match", Some("zh")),
+            ("ziwei_year", None),
+            ("ziwei_year", Some("zh")),
         ] {
             let p = get_system_prompt(ct, lang);
             assert!(p.ends_with(GUARDRAIL_ZH), "{ct} {lang:?}");
@@ -1099,5 +1238,71 @@ mod tests {
             build_prompt("palm", &missing, None, None),
             "請依系統指示抽取這張手掌照片的手相特徵"
         );
+    }
+
+    #[test]
+    fn gender_from_chart_is_recognised_in_ziwei_and_story() {
+        for (g, want) in [("男", "男"), ("女", "女"), ("male", "男"), ("female", "女")] {
+            let chart = serde_json::json!({ "birthInfo": { "gender": g }, "palaces": [] });
+            let p = build_prompt("ziwei", &chart, Some("zh"), None);
+            assert!(p.contains(&format!("性別：{want}")), "ziwei {g}");
+            // story 走同一個 gender_zh（story 全路徑含 console 呼叫，native 測不到）
+            assert_eq!(gender_zh(Some(g)), want, "story {g}");
+        }
+        assert_eq!(gender_zh(Some("其他")), "未知");
+        assert_eq!(gender_zh(None), "未知");
+        let none = serde_json::json!({ "palaces": [] });
+        assert!(build_prompt("ziwei", &none, None, None).contains("性別：未知"));
+    }
+
+    fn zy_chart(childhood: bool) -> serde_json::Value {
+        serde_json::json!({
+            "natal": {
+                "fiveElement": "土五局",
+                "gender": "男",
+                "palaces": [
+                    { "branch": "亥", "name": "命宮", "stars": [{ "name": "天梁", "brightness": "陷" }] },
+                    { "branch": "巳", "name": "遷移", "stars": [{ "name": "天同", "brightness": "廟", "sihua": "ji" }] },
+                ],
+            },
+            "decadal": if childhood {
+                serde_json::json!({ "isChildhood": true, "stem": "丁", "branch": "亥", "natalPalace": "命宮" })
+            } else {
+                serde_json::json!({ "isChildhood": false, "stem": "戊", "branch": "寅", "startAge": 35, "endAge": 44, "natalPalace": "田宅" })
+            },
+            "yearly": {
+                "stem": "丙", "branch": "午", "natalPalace": "疾厄",
+                "palaceNames": [{ "branch": "午", "name": "命宮" }],
+                "mutagen": [
+                    { "label": "流祿", "star": "天同", "natalPalace": "遷移" },
+                    { "label": "流權", "star": "天機", "natalPalace": "夫妻" },
+                    { "label": "流科", "star": "文昌", "natalPalace": "僕役" },
+                    { "label": "流忌", "star": "廉貞", "natalPalace": "田宅" },
+                ],
+            },
+        })
+    }
+
+    #[test]
+    fn ziwei_year_prompt_layers_and_rules() {
+        let p = build_prompt("ziwei_year", &zy_chart(false), Some("zh"), None);
+        assert!(p.contains("性別：男"));
+        assert!(p.contains("亥・命宮：天梁（陷）"));
+        assert!(p.contains("天同（廟）化忌"));
+        assert!(p.contains("35–44 歲，大限干支 戊寅，落在本命田宅"));
+        assert!(p.contains("流年干支：丙午年"));
+        assert!(p.contains("流年命宮：午，落在本命疾厄"));
+        assert!(p.contains("流祿：天同（在本命遷移）"));
+        assert!(p.contains("## 今年的主題、## 這十年的底色、## 流年四化帶來的提醒、## 可以怎麼用"));
+        assert!(p.contains("不要寫結尾提醒"));
+        for banned in ["出生年", "生日", "出生地", "時辰", "虛歲"] {
+            assert!(!p.contains(banned), "prompt 不得含 {banned}");
+        }
+        let c = build_prompt("ziwei_year", &zy_chart(true), Some("zh"), None);
+        assert!(c.contains("還在童限"));
+        assert!(!c.contains("大限干支"));
+        let sys = get_system_prompt("ziwei_year", None);
+        assert!(sys.contains("不是預測") && sys.contains("不得提到任何月份"));
+        assert!(sys.ends_with(GUARDRAIL_ZH));
     }
 }

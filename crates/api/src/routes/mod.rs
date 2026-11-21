@@ -19,6 +19,7 @@ mod personality;
 mod predictions;
 mod tarot;
 mod users;
+mod ziwei;
 mod zodiac;
 
 type R<'a> = Router<'a, ()>;
@@ -33,7 +34,8 @@ pub fn router(_env: Env) -> R<'static> {
     let t: R<'static> = tarot::register(f);
     let pa: R<'static> = palm::register(t);
     let zm: R<'static> = zodiac::register(pa);
-    let ai: R<'static> = admin_invites::register(zm);
+    let zw: R<'static> = ziwei::register(zm);
+    let ai: R<'static> = admin_invites::register(zw);
 
     ai.get_async("/health", |_, ctx: RouteContext<()>| async move {
         let env_label = ctx

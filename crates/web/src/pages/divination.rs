@@ -23,10 +23,20 @@ use crate::api;
 use crate::auth::use_auth;
 use crate::components::{hide_broken_img, sign_art_src, sign_glyph_path, ZiWeiPalaceGrid};
 
+/// `/divination/:type` 薄 wrapper：讀 `:type` 交給 [`DivinationPage`]（western 與非法
+/// type 轉 /profile 的行為不變）。`/divination/ziwei` 由 lib.rs 靜態轉址到 `/ziwei/chart`。
 #[component]
-pub fn DivinationPage() -> impl IntoView {
-    let auth = use_auth();
+pub fn DivinationParamPage() -> impl IntoView {
     let params = use_params_map();
+    let chart_type = Signal::derive(move || params.get().get("type").unwrap_or_default());
+    view! { <DivinationPage chart_type=chart_type/> }
+}
+
+/// 命盤＋AI 解讀頁。`chart_type`＝`ziwei`／`western`（紫微子單元 `/ziwei/chart` 直接傳
+/// `"ziwei"`，spec 2026-11-21 §A.2 R11）。
+#[component]
+pub fn DivinationPage(#[prop(into)] chart_type: Signal<String>) -> impl IntoView {
+    let auth = use_auth();
 
     let chart = RwSignal::new(None::<serde_json::Value>);
     let ziwei = RwSignal::new(None::<ZiWeiChartV3>);
@@ -36,8 +46,8 @@ pub fn DivinationPage() -> impl IntoView {
     let interpreting = RwSignal::new(false);
     let error = RwSignal::new(String::new());
 
-    // Reactive param; `??` gives "" for missing so the guard below can react.
-    let param_type = Memo::new(move |_| params.get().get("type").unwrap_or_default());
+    // Reactive type; "" for missing so the guard below can react.
+    let param_type = Memo::new(move |_| chart_type.get());
 
     // Load whenever the :type param changes (re-runs after log-in via auth gate).
     Effect::new(move |_| {
@@ -136,7 +146,11 @@ pub fn DivinationPage() -> impl IntoView {
         </Show>
 
         <div class="page">
-            <button class="back-link" on:click={let nav=leptos_router::hooks::use_navigate(); move |_| nav("/profile", Default::default())}>
+            <button class="back-link" on:click={let nav=leptos_router::hooks::use_navigate(); move |_| {
+                // 紫微命盤屬紫微子單元，返回子單元選單；西洋維持回 /profile
+                let back = if param_type.get_untracked() == "ziwei" { "/ziwei" } else { "/profile" };
+                nav(back, Default::default())
+            }}>
                 "← 返回"
             </button>
             <h1 style="margin-bottom:1.5rem">{title()}</h1>

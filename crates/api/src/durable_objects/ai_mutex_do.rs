@@ -254,7 +254,14 @@ mod tests {
         // palm 帶 image
         assert_eq!(validate_entry("palm", true), Ok(()));
         // 既有 chartType：不帶 image 全綠、帶 image 全擋（→ INVALID_IMAGE）
-        for ct in ["ziwei", "western", "story", "tarot", "zodiac_match"] {
+        for ct in [
+            "ziwei",
+            "western",
+            "story",
+            "tarot",
+            "zodiac_match",
+            "ziwei_year",
+        ] {
             assert_eq!(validate_entry(ct, false), Ok(()), "{ct} without image");
             assert_eq!(
                 validate_entry(ct, true),
@@ -279,7 +286,7 @@ mod tests {
         // llama story 2048／其他 1536（palm 不經此路）
         assert_eq!(max_tokens_for(GEMMA_MODEL, "story"), 3072);
         assert_eq!(max_tokens_for(LLAMA_MODEL, "story"), 2048);
-        for ct in ["ziwei", "western", "tarot", "zodiac_match"] {
+        for ct in ["ziwei", "western", "tarot", "zodiac_match", "ziwei_year"] {
             assert_eq!(max_tokens_for(GEMMA_MODEL, ct), 2048, "{ct}");
             assert_eq!(max_tokens_for(LLAMA_MODEL, ct), 1536, "{ct}");
         }
@@ -765,7 +772,7 @@ fn validate_entry(chart_type: &str, has_image: bool) -> Result<(), &'static str>
                 Err("INVALID_IMAGE")
             }
         }
-        "ziwei" | "western" | "story" | "tarot" | "zodiac_match" => {
+        "ziwei" | "western" | "story" | "tarot" | "zodiac_match" | "ziwei_year" => {
             if has_image {
                 Err("INVALID_IMAGE")
             } else {

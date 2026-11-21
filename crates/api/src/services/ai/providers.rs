@@ -1,7 +1,7 @@
 //! AI provider calls — all on Cloudflare Workers AI（`[ai]` binding、免 key、
 //! 不出站）。
 //!
-//! - 文字解讀（ziwei／western／story／tarot／zodiac_match）：`call_workers_ai_text`，
+//! - 文字解讀（ziwei／western／story／tarot／zodiac_match／ziwei_year）：`call_workers_ai_text`，
 //!   鏈與模型在 `ai_mutex_do.rs TEXT_CHAIN`（2026-11-20 起；取代 Groq→Cerebras，
 //!   後者備援已 402 失效）。
 //! - 手相影像抽取：`call_workers_ai`（palm 專用，契約不變）。

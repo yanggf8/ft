@@ -22,7 +22,8 @@
 - **Entry**: `lib.rs` — `#[event(fetch)]`, OPTIONS preflight, security headers, CORS
   (exact-hostname allowlist), x-request-id, JSON 404 normalization.
 - **Routes** (`routes/`): `auth.rs`, `users.rs`, `charts.rs`, `personality.rs` (F1 + F3
-  overlay + 資格矩陣), `predictions.rs`, `tarot.rs`, `palm.rs`, `admin_invites.rs`, `oauth.rs`
+  overlay + 資格矩陣), `predictions.rs`, `tarot.rs`, `palm.rs`, `zodiac.rs`, `ziwei.rs`
+  （紫微流年大運／今年運勢）, `admin_invites.rs`, `oauth.rs`
   (+ `common.rs` shared helpers: `auth_user`, rate limit, `body_too_large` 64 KiB cap,
   `embed_meta`, `extracted_version`, `page_query` 歷史分頁 query 解析（tarot／palm 共用）).
 - **Durable Objects** (`durable_objects/`):
@@ -55,7 +56,8 @@
 
 ## Engine Worker (crates/worker/src/lib.rs)
 
-`fortunet-engine` — `#[event(fetch)]` routing `/engine/ziwei` + `/engine/western`. `jd_utc` is
+`fortunet-engine` — `#[event(fetch)]` routing `/engine/ziwei` + `/engine/ziwei/horoscope`
+（流年大運，回應 key `horoscope`）+ `/engine/western`. `jd_utc` is
 validated as finite (a bad JD would panic the ephemeris math). Emits `engineVersionZiwei="4.0.0"`
 (decorative — see Engine Versions below).
 
@@ -199,6 +201,55 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
   - chartData 只含星座與規則層判讀（`rules[].pair` 明寫「你的月亮（水瓶座）× 對方的太陽（獅子座）」），不含生日／出生地／時辰；未填時辰不送 rising。prompt（`prompts.rs` `zodiac_match`）預設中文＋`GUARDRAIL_ZH`；有上升輸出四節（核心價值／情感需求／第一印象／小提醒）、無上升去第一印象、無月亮去情感需求；各節「本節談什麼」只供模型理解、明令不得抄進內文；禁「你們的月亮／上升」、禁斷言成敗與建議交往分手。**關係中立**（v2）：對方可能是伴侶／朋友／同事／家人，不預設戀愛／曖昧與性別，不用吸引力／來電／感情升溫等戀愛詞。`ZODIAC_MATCH_PROMPT_VERSION`（現為 "2"）改 prompt 必 bump。
   - 前端：只對「登入＋星盤 Loaded＋已選對方」顯示「產生 AI 解讀」，按鈕前揭露「星座組合會傳送至第三方 AI 服務生成，僅供娛樂與自我反思」；在途請求以 `ai_gen` 世代綁定——換對方／星盤即世代 +1、清結果、`ai_loading=false`（按鈕立即可用），舊回應世代不符整包丟棄（不碰 loading）；只有 `AI_DAILY_LIMIT` 顯示 3 次上限文案，其他 429 走通用「請求太頻繁」；AI 區不進 live region。
   - 實測（2026-11-20，gemma-4 不思考）：3 組 prompt 3–7 秒、約 17–21 neurons／次。
+
+## 紫微子單元（2026-11-21：命盤／流年大運／今年運勢）
+
+spec：`docs/superpowers/specs/2026-11-21-sub-units-design.md` §A（推翻 2026-08-26 spec 的流年非目標，
+只開放大限＋小限＋流年＋流年四化；流月以下仍不做）。
+
+- **網址**：`/ziwei` 子單元選單（公開；未登入卡片連 `/login?next=/ziwei/…`）；`/ziwei/chart`
+  ＝`DivinationPage chart_type="ziwei"`；`/ziwei/luck`、`/ziwei/year`（Protected）。
+  `DivinationPage` 改吃 `chart_type` prop，`/divination/:type` 走 `DivinationParamPage` wrapper；
+  `/divination/ziwei` 靜態轉址 `/ziwei/chart`，**必須宣告在 `/divination/:type` 之前**。
+- **引擎**：`ft_ziwei::horoscope(birth…, target)` → `ft_schema::ziwei_luck::ZiWeiHoroscopeV1`。
+  x-iztro horoscope 索引是 **寅=0**，輸出一律重編為 **子=0**（與 `ZiWeiChartV3` 一致）並帶地支；
+  干支／宮名／四化星轉 zh-TW；目標時辰固定午；`luckYear`＝出生農曆年＋虛歲−1（僅
+  `AgeDivide::Normal` 成立，測試 `config_default_divides_pinned` 釘住三個 divide）；起運前
+  `decadal.isChildhood=true`、無年齡區間。**禁用 `horoscope_now()`**（讀本機時鐘）。
+  golden：1990-05-15 午時男 2026 丙午（流年命宮午、天同祿／天機權／文昌科／廉貞忌、虛歲 37、
+  大限寅 35–44、小限辰）、春節前日期、春節前出生、童限年。
+- **API**（`routes/ziwei.rs`）：生辰一律經 `chart_resolver::resolve_ziwei_birth`（**不可**用
+  `resolve_chart`：缺紫微退西洋、缺性別略過；也不可用 `birth_hour.unwrap_or(12)`）→ 400
+  `NO_BIRTH_DATA`／`NO_GENDER`／`NO_BIRTH_HOUR`。
+  - `GET /api/ziwei/horoscope?year=Y`：省略＝台北今天（春節前屬前一年）；Y 以 `Y-7-1` 算；
+    範圍出生農曆年～+100（400 `INVALID_YEAR`）；引擎失敗 502 `ENGINE_ERROR`（不 echo 細節）；
+    不落庫，`private, max-age=300`＋`Vary: Authorization`；外層蓋 `engineVersionZiweiHoroscope`
+    （`ENGINE_VERSION_ZIWEI_HOROSCOPE`，api 權威常數）。
+  - `GET /api/ziwei/year` → `{summary, reading|null}`（no-store）。
+  - `POST /api/ziwei/year/interpret`（無 body）：auth → 每分鐘 IP 20 次預限流 → 生辰 → 今天流年
+    → 查快取（命中不計次）→ 本命盤（`resolve_ziwei_natal`）→ `rate_limit_strict_refundable`
+    IP 10／user 3 per 24h（user 上限 429 `AI_DAILY_LIMIT`）→ AIMutexDO 專屬實例
+    `id_from_name("ziwei-year")`，chartType `ziwei_year`、`language` 一律 `zh`。
+    **任何失敗（stub、空字串、`output_ok` 不過、佇列滿／逾時、DO 例外）不落庫、退兩把、
+    503 `AI_UNAVAILABLE`**。`output_ok`：禁「一定／注定／必然／保證」、`[一二…十０-９0-9]+月`、
+    「預測」「本週」，去空白後 ≥200 字。結尾提醒「流年是傳統的觀察框架，不是預測。」由
+    route 附加（AI 原文入庫，回應時附加）。
+  - chartData：本命十二宮主星＋亮度＋生年四化、五行局、性別、目前大限（或童限）、流年命宮、
+    流年十二宮名、流年四化（含落在本命哪宮）；**不送**生日、出生地、時辰、虛歲。資料在 routes
+    層組裝，`services::ai` 不 import `symbolic`。`ZIWEI_YEAR_PROMPT_VERSION`（schema）改 prompt 必 bump。
+  - 表 `ziwei_year_readings`（migration `scripts/migrations/2026-11-21-ziwei-year.sql`，只有
+    PRIMARY KEY＋`(user_id, luck_year)` INDEX）；快取鍵＝(user, luck_year, engine_version_ziwei,
+    horoscope_version, prompt_version)，先查後插、讀最新。`PUT /api/users/me/birth` 一併刪除
+    （快取鍵不含生辰，刪除失敗回 500）。**不讀寫** predictions／prediction_feedback／f8_assignments／F4 strengths。
+- **前端**：`pages/ziwei.rs`。流年大運＝大限時間軸（童限年前置「童限」段）、年份切換（預設 API
+  回的今天 luckYear，範圍出生農曆年～+100）、`ZiWeiPalaceGrid` 選用 `overlay: LuckOverlay`（大限
+  命宮／童限、流年命宮、小限徽章以地支定位；流祿／流權／流科／流忌小標；中心格年干支・虛歲・
+  大限・流年四化）、規則說明（`ft_schema::ziwei_luck::RULE_*`，禁字測試）。今年運勢＝摘要 chips
+  ＋AI 卡。`NO_BIRTH_HOUR` → 擋板＋前往 /profile；API 404 → 「服務準備中」。樣式 `zw-*`
+  （style.css，色值全走 token；徽章配對在 `contrast-check.py` PAIRS「紫微流年」段）。
+- 順帶修正：ziwei／story prompt 的性別比對原本只認 `male`／`female`，盤面存「男／女」→ 永遠送
+  「未知」；改 `gender_zh` 兩種都認（不 bump，舊快取不追溯）。
+- **部署順序**：Turso migration → engine → api → web。
 
 ## Kawaii light theme (2026-11-19)
 
@@ -365,7 +416,9 @@ changing any colour.**
 
 The authoritative constants live in `crates/api/src/services/engine_version.rs`:
 `ENGINE_VERSION_ZIWEI = "3.0.0"`, `ENGINE_VERSION_WESTERN = "4.0.0"` (real ephemeris +
-top-level `sunSign`/`moonSign`), `CHART_SCHEMA_VERSION = 3`. Cache freshness is judged by
+top-level `sunSign`/`moonSign`), `CHART_SCHEMA_VERSION = 3`,
+`ENGINE_VERSION_ZIWEI_HOROSCOPE = "1"`（紫微流年；改 `ft_ziwei::horoscope` 語意或任一 x-iztro
+divide 設定必 bump，今年運勢快取以它為鍵）. Cache freshness is judged by
 these: stored charts whose `meta.engineVersion*` differs are stale and recalculated. The
 engine worker's own response field `engineVersionZiwei` says `"4.0.0"` but is decorative —
 the api side stamps and compares against its own constant. The `engine_version.rs` module

@@ -13,6 +13,7 @@ pub mod predict;
 pub mod storage;
 pub mod symbolic;
 pub mod tarot;
+pub mod ziwei_luck;
 pub mod zodiac;
 pub mod zodiac_match;
 

@@ -1627,3 +1627,74 @@ input[type="range"]:disabled { opacity: 0.6; }
 .zm-ai { margin-top: 1.25rem; }
 .zm-ai .zm-note { margin-bottom: 0.75rem; }
 .zm-ai-btn { margin-top: 0.25rem; }
+
+/* ═══ 紫微子單元（2026-11-21 spec §A；/ziwei 選單、/ziwei/luck 流年大運、/ziwei/year 今年運勢）═══
+   色值全走既有 token。徽章配對（contrast-check.py PAIRS「紫微流年」段）：
+   --ink-on-primary on --primary 5.70／on --primary-deep、--primary-deep on --surface-tint、
+   流年四化小標 --rose on --rose-soft 5.06；徽章外形（非文字）--primary／--primary-deep on
+   白（.palace.life）與 --surface-tint（一般宮位）≥3:1。 */
+.zw-crumb { font-size: 0.85rem; color: var(--silver-faint); margin-bottom: 0.5rem; }
+.zw-crumb a { color: var(--silver-dim); }
+.zw-intro { color: var(--silver-dim); margin: -0.25rem 0 1.5rem; }
+.feature-grid.zw-sub { margin-top: 1rem; gap: 1.25rem; }
+.zw-go { margin-top: 0.75rem; font-size: 0.85rem; color: var(--primary-deep); font-weight: 700; }
+.zw-note { font-size: 0.85rem; margin-bottom: 0.75rem; }
+.zw-gate { text-align: center; display: grid; gap: 0.75rem; justify-items: center; }
+
+/* 宮格疊層：徽章與流年宮名撐高，取消正方形 */
+.palace-grid.zw-luck { aspect-ratio: auto; grid-template-rows: repeat(4, minmax(92px, auto)); }
+.zw-yname { font-size: 0.7rem; color: var(--primary-deep); font-weight: 700; }
+.zw-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.zw-badge {
+  font-size: 0.68rem; font-weight: 800; padding: 0.05rem 0.4rem; border-radius: 999px;
+  color: var(--ink-on-primary); background: var(--primary); white-space: nowrap;
+}
+.zw-badge.dec { background: var(--primary-deep); }
+.zw-badge.age { background: var(--surface-tint); color: var(--primary-deep); border: 1px solid var(--metal-lo); }
+.zw-flow {
+  font-size: 0.62rem; font-weight: 800; padding: 0.05rem 0.3rem; border-radius: 6px;
+  color: var(--rose); background: var(--rose-soft); align-self: center;
+}
+.zw-center {
+  grid-row: 2 / 4; grid-column: 2 / 4; background: var(--surface-tint);
+  border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.75rem;
+  font-size: 0.85rem; color: var(--text); display: flex; flex-direction: column;
+  justify-content: center; gap: 0.3rem; text-align: center;
+}
+.zw-center-big { font-size: 1.4rem; font-weight: 800; color: var(--heading); }
+
+/* 大限時間軸 */
+.zw-timeline { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 0.25rem; margin: 0.5rem 0 1rem; }
+.zw-seg {
+  flex: 1 0 78px; text-align: center; border-radius: 10px; padding: 0.45rem 0.25rem;
+  background: var(--surface-tint); font: inherit; font-size: 0.78rem; color: var(--silver-dim);
+  border: 2px solid transparent; cursor: pointer;
+}
+.zw-seg b { display: block; color: var(--heading); font-size: 0.85rem; }
+.zw-seg.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-deep); }
+.zw-seg:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+
+/* 年份切換 */
+.zw-year { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 0.5rem 0 1rem; }
+.zw-year button {
+  width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 2px solid var(--metal-lo);
+  background: var(--surface); font-size: 1.1rem; cursor: pointer; color: var(--primary-deep);
+}
+.zw-year button:disabled { opacity: 0.45; cursor: default; }
+.zw-year-label { font-size: 1.3rem; font-weight: 800; color: var(--heading); min-width: 9rem; text-align: center; }
+
+/* 規則說明 */
+.zw-legend { display: grid; gap: 0.5rem; font-size: 0.88rem; color: var(--text); }
+.zw-legend .zw-badge, .zw-legend .zw-flow { margin-right: 0.4rem; }
+
+/* 今年運勢摘要 */
+.zw-sum { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.zw-chip { background: var(--surface-tint); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.85rem; color: var(--text); }
+.zw-chip b { color: var(--primary-deep); }
+
+@media (max-width: 639px) {
+  .palace-grid.zw-luck { grid-template-rows: repeat(4, minmax(72px, auto)); }
+  .zw-badge { font-size: 0.6rem; padding: 0.02rem 0.25rem; }
+  .zw-center { padding: 0.4rem; font-size: 0.72rem; }
+  .zw-center-big { font-size: 1rem; }
+}

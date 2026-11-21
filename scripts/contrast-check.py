@@ -77,6 +77,14 @@ PAIRS = [
   (["--text", "--primary-deep"], ["--surface-tint"], "text",
    "zodiac match aspect badge / line key chip"),
   (["--primary-deep"], ["--sign-pisces-light"], "nontext", "home fi-match icon stroke"),
+  # 紫微流年（/ziwei/luck 宮格疊層、/ziwei/year 摘要；ziwei.rs／palace_grid.rs）
+  (["--ink-on-primary"], ["--primary", "--primary-deep"], "text",
+   "ziwei badges 流年命宮 / 大限命宮・童限"),
+  (["--primary-deep"], ["--surface-tint", "--primary-soft", "#fff"], "text",
+   "ziwei 小限 badge, 流年宮名, timeline seg on, summary chip value"),
+  (["--rose"], ["--rose-soft"], "text", "ziwei 流祿／流權／流科／流忌 tag"),
+  (["--primary", "--primary-deep", "--metal-lo"], ["#fff", "--surface-tint"], "nontext",
+   "ziwei badge shapes on .palace.life (white) and normal palace (tint)"),
 ]
 # ==========================================================================
 
