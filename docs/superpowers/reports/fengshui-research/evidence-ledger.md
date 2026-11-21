@@ -409,3 +409,37 @@ Zijlstra 2024 的現有寫法經核對成立。建議：「線上虛擬病房」
 - 親讀 Sweeney 2023（Sister Study）全文 Table 2；讀 Bonin 2023（HAL 開放版）全文。兩者決定 `bed_light` 與 `bed_door_view` 能否升級。
 - 取得 Fich 2014、Stevenson 2018、Roster 2016、Vohs 2013 全文（需圖書館管道）。
 - 研究報告 §2 提到但本輪未核的：Frontiers 2025 圖書館座位研究、KAIST 閱覽室研究、Kryžanowski 2019 的 118 條明細。
+
+---
+
+## 6. 辦公室座位（2026-11-21，sub-units spec §C；語料 v4）
+
+本輪**沒有新增文獻**：辦公室題組全部沿用已核對的帳本條目；找不到能原文核對的研究就標「沒人測過」。
+
+### 6.1 本輪重核
+
+- `sailer2021`：以 Europe PMC REST 直接下載全文 XML（`https://www.ebi.ac.uk/europepmc/webservices/rest/PMC8081188/fullTextXML`），親自比對下列段落，未經 WebFetch 代讀：
+  - 座位類型：mid row 71、next to main corridor 47、next to window 38、next to a wall or a partition 11（「Only 7% of desks were positioned next to a wall or a partition (n = 11)」）。
+  - 「workers seated next to a wall are significantly less satisfied with their ability to work productively than those seated next to a window ... (OR = 0.230)」；同一座位類型對「專注」OR 0.255、p=0.054，**未達顯著**——卡片只寫「能有效率工作」，不寫專注。
+  - Outdegree（面前 170° 看得到的桌數）對「Concentrating」OR 0.982、對「Working productively」OR 0.977（皆 p<0.01）：看得到的桌子越多，自評越差。
+  - Control（面前 170° 可見面積／四周 360° 可見面積）對「Concentrating」OR 31.935（p<0.01，以 0–1 全距計）：越像「面向整個房間」、身後可見空間越小，自評越能專注。
+  - H5a（靠走道座位在團隊合作上評價較好）未達顯著、被拒絕；文中沒有「背後是走道」這個變項。
+  - 限制（作者自述）：單一公司、平面同質、橫斷面自評。
+- 嘗試補讀 `vohs2013`（整齊 vs 凌亂辦公室）：Carlson School 與 UPenn 兩個 PDF 連結都回 Cloudflare 驗證頁，**仍未讀到全文**，維持 §3.2 狀態，不引用、不加進 `evidence.rs`。
+
+### 6.2 逐卡依據
+
+| 卡 | stance | reach | refs | 依據重點 |
+|---|---|---|---|---|
+| `office_back` ok／aisle | mixed | related | psathiti2017、sailer2021 | 休息室觀察：背向走道最常被坐（相反）；辦公室：control 越高自評越能專注（同方向）。兩者都不是「背後是走道」本身 |
+| `office_back` low | mixed | related | dosen2016、sailer2021 | 庇護一半在室內多為中性；control 同上；沒有研究測過隔板高度 |
+| `office_door` ok | mixed | related | psathiti2017、sailer2021 | 同 `seat_door_view` ok：測使用率與自評，不是門或主管 |
+| `office_door` entrance | same | related | psathiti2017 | 正面直視主要走道的座位較少人坐；對象是走道、場所是休息室 |
+| `office_door` boss | untested | none | — | 搜尋後未找到測「座位正對主管」的研究 |
+| `office_front` ok／close | mixed | related | sailer2021 | 緊鄰牆或隔板（11 人）自評有效率工作低於靠窗（同方向）；面前看得到的桌子越多越難專注（與「前方開闊」相反） |
+| `office_overhead` ok／beam／lamp | untested | none | —（延伸：meyerslevy2007、fich2014） | 同 `seat_overhead`；燈管位置也沒有研究 |
+| `office_corner` ok／flag | mixed | related | barneta2006、chuquichambi2022、chuquichambi2025 | 同 `seat_corner` |
+| `office_light` ok／dim | same | related | boubekri2014 | 研究本身就在辦公室做；測睡眠、光照與 SF-36 活力，不是專心 |
+| `office_clutter` ok／mild／flag | same | related | saxbe2010 | 研究在家裡做；只有相關；沒有測辦公桌面 |
+
+另：`seat_light`（書房）限制句改為「研究是在辦公室做的；測睡眠與自評，不是專心」（甲案：在家書房的卡照實寫研究場所）。
