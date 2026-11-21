@@ -226,6 +226,11 @@ pub fn register(router: R<'static>) -> R<'static> {
             if db::exec(&db, "DELETE FROM zodiac_match_readings WHERE user_id = ?1", &[&du_t]).await.is_err() {
                 console_error!("zodiac match cache cleanup failed");
             }
+            // 今年運勢快取鍵不含生辰（spec 2026-11-21 §A.5 R13）——不刪就會把舊生辰的
+            // 解讀給新生辰看，所以刪除失敗與 interpretations 同樣回 500。
+            if db::exec(&db, "DELETE FROM ziwei_year_readings WHERE user_id = ?1", &[&du_t]).await.is_err() {
+                return Ok(error::error("db error", 500));
+            }
             let mut res = ok_json(&serde_json::json!({ "success": true, "birth_data_hash": hash }), 200);
             apply_cache_headers(&mut res, 0, false);
             Ok(res)

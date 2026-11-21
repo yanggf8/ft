@@ -83,6 +83,43 @@ pub async fn fetch_engine_chart(
     Ok(chart)
 }
 
+/// 紫微流年大運（spec 2026-11-21 §A.4）：呼叫 `/engine/ziwei/horoscope`，回應 key 是
+/// `horoscope`（不是 `chart`，所以不能用 [`fetch_engine_chart`]）。`target` 為陽曆
+/// `YYYY-M-D`。錯誤訊息只給 log 用，route 不得 echo 給前端。
+pub async fn fetch_engine_horoscope(
+    fetcher: &Fetcher,
+    birth: &EngineBirth,
+    target: &str,
+) -> Result<ft_schema::ziwei_luck::ZiWeiHoroscopeV1> {
+    let (Some(y), Some(m), Some(d), Some(gender)) =
+        (birth.year, birth.month, birth.day, birth.gender.as_deref())
+    else {
+        return Err(worker::Error::from("incomplete birth for horoscope"));
+    };
+    let date = format!("{}-{:02}-{:02}", y, m, d);
+    let url = format!(
+        "https://ft-engine/engine/ziwei/horoscope?date={}&hour={}&gender={}&fixLeap=true&target={}",
+        urlencode(&date),
+        birth.hour,
+        urlencode(gender),
+        urlencode(target)
+    );
+    let mut res = fetcher.fetch(url, None).await?;
+    let status = res.status_code();
+    if status != 200 {
+        return Err(worker::Error::from(format!(
+            "ft-engine horoscope failed: {}",
+            status
+        )));
+    }
+    let mut data: serde_json::Value = res.json().await?;
+    let h = data
+        .get_mut("horoscope")
+        .map(serde_json::Value::take)
+        .ok_or_else(|| worker::Error::from("ft-engine horoscope: no horoscope in response"))?;
+    serde_json::from_value(h).map_err(|_| worker::Error::from("ft-engine horoscope: bad shape"))
+}
+
 /// `jdFromBirth` — converts local civil date + hour + IANA timezone to a Julian Day (UT)
 /// via `Intl` tz-offset reversal, then Fliegel–Van Flandern. Reproduces charts.ts.
 pub fn jd_from_birth(birth: &EngineBirth) -> f64 {
