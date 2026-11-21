@@ -19,7 +19,7 @@ use super::R;
 use ft_schema::tarot::{
     assemble_interpretation, card_by_id, shuffle_three, valid_tarot_request_id, validate_question,
     QuestionTooLong, TarotCardView, TarotDrawRequest, TarotHistoryPage, TarotReadingView,
-    MIN_ENTROPY_BYTES, TAROT_CORPUS_VERSION, TAROT_PROMPT_VERSION,
+    TarotTopic, MIN_ENTROPY_BYTES, TAROT_CORPUS_VERSION, TAROT_PROMPT_VERSION,
 };
 
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,9 @@ struct ReadingRow {
     id: String,
     question: Option<String>,
     spread: String,
+    /// sub-units spec §B.4：NULL（舊列）≡ general；新寫入一律存 wire 字串。
+    #[serde(default)]
+    topic: Option<String>,
     cards: String, // JSON 字串（wire 形狀 [TarotCardView]，站上 TEXT 存 JSON 慣例）
     interpretation: String,
     corpus_version: String,
@@ -104,12 +107,22 @@ fn wire_cards(drawn: &[ft_schema::tarot::DrawnCard]) -> Vec<TarotCardView> {
         .collect()
 }
 
+/// 列的主題：NULL → general；未知字串 → `None`（非本程式寫入的值，視為壞列）。
+fn row_topic(row: &ReadingRow) -> Option<TarotTopic> {
+    match row.topic.as_deref() {
+        None => Some(TarotTopic::General),
+        Some(s) => TarotTopic::from_wire(s),
+    }
+}
+
 fn row_view(row: &ReadingRow) -> Result<TarotReadingView> {
     let cards: Vec<TarotCardView> = serde_json::from_str(&row.cards)?;
+    let topic = row_topic(row).ok_or_else(|| Error::RustError("invalid tarot topic".into()))?;
     Ok(TarotReadingView {
         id: row.id.clone(),
         question: row.question.clone(),
         spread: row.spread.clone(),
+        topic,
         cards,
         interpretation: row.interpretation.clone(),
         corpus_version: row.corpus_version.clone(),
@@ -364,6 +377,7 @@ async fn build_tarot_chart_data(
     Ok((
         serde_json::json!({
             "cards": cards_json,
+            "topic": row_topic(row).unwrap_or_default().wire(),
             "question": row.question,
             "chartSummary": summary,
         }),
@@ -371,9 +385,14 @@ async fn build_tarot_chart_data(
     ))
 }
 
-/// 冪等比對：spread＋正規化後 question（設計定稿）。
-fn matches_reading(row: &ReadingRow, spread: &str, question: Option<&str>) -> bool {
-    row.spread == spread && row.question.as_deref() == question
+/// 冪等比對：spread＋正規化後 question（設計定稿）＋topic（NULL ≡ general）。
+fn matches_reading(
+    row: &ReadingRow,
+    spread: &str,
+    question: Option<&str>,
+    topic: TarotTopic,
+) -> bool {
+    row.spread == spread && row.question.as_deref() == question && row_topic(row) == Some(topic)
 }
 
 pub fn register(router: R<'static>) -> R<'static> {
@@ -395,10 +414,12 @@ pub fn register(router: R<'static>) -> R<'static> {
       if body.spread != "three" || !valid_tarot_request_id(&body.request_id) {
         return Ok(error::error_code("Invalid tarot draw", "INVALID_TAROT", 400));
       }
+      // topic：省略＝general；非法值在 parse 階段即 400（serde 列舉）
+      let topic = body.topic.unwrap_or_default();
       let db = match db::Turso::from_env(&ctx.env) { Ok(d) => d, Err(_) => return Ok(db_error()) };
       // 冪等查詢（在 uid 限流之前——重放回原結果，不受 429 擋）
       match reading_by_request(&db, &user, &body.request_id).await {
-        Ok(Some(existing)) => return Ok(if matches_reading(&existing, &body.spread, question.as_deref()) {
+        Ok(Some(existing)) => return Ok(if matches_reading(&existing, &body.spread, question.as_deref(), topic) {
           match row_view(&existing) { Ok(v) => json(&v, 200), Err(_) => db_error() }
         } else { conflict("IDEMPOTENCY_CONFLICT") }),
         Ok(None) => {}, Err(_) => return Ok(db_error())
@@ -415,7 +436,7 @@ pub fn register(router: R<'static>) -> R<'static> {
         Some(d) => d,
         None => return Ok(error::error_code("Internal error", "INTERNAL", 500)),
       };
-      let interpretation = match assemble_interpretation(&drawn) {
+      let interpretation = match assemble_interpretation(&drawn, topic) {
         Some(i) => i,
         None => return Ok(error::error_code("Internal error", "INTERNAL", 500)),
       };
@@ -427,21 +448,22 @@ pub fn register(router: R<'static>) -> R<'static> {
       let id = uuid::random_uuid();
       let now = clock::now_iso();
       let n = db::exec_changes(&db,
-        "INSERT INTO tarot_readings (id,user_id,request_id,question,spread,cards,interpretation,corpus_version,created_at) \
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+        "INSERT INTO tarot_readings (id,user_id,request_id,question,spread,cards,interpretation,corpus_version,created_at,topic) \
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         &[&db::text(&id),&db::text(&user),&db::text(&body.request_id),
           &db::opt_text(question.as_deref()),&db::text(&body.spread),&db::text(&cards_json),
-          &db::text(&interpretation),&db::text(TAROT_CORPUS_VERSION),&db::text(&now)]).await;
+          &db::text(&interpretation),&db::text(TAROT_CORPUS_VERSION),&db::text(&now),
+          &db::text(topic.wire())]).await;
       match n {
         Ok(1) => Ok(json(&TarotReadingView {
-          id, question, spread: body.spread, cards, interpretation, corpus_version: TAROT_CORPUS_VERSION.into(), created_at: now,
+          id, question, spread: body.spread, topic, cards, interpretation, corpus_version: TAROT_CORPUS_VERSION.into(), created_at: now,
           ai_interpretation: None, ai_status: None, ai_provider: None, ai_model: None,
           ai_chart_context: None,
         }, 201)),
         failed => {
           // UNIQUE 衝突或傳輸錯誤後的回查（先讀冪等鍵再分類）
           match reading_by_request(&db, &user, &body.request_id).await {
-            Ok(Some(existing)) => return Ok(if matches_reading(&existing, &body.spread, question.as_deref()) {
+            Ok(Some(existing)) => return Ok(if matches_reading(&existing, &body.spread, question.as_deref(), topic) {
               match row_view(&existing) { Ok(v) => json(&v, 200), Err(_) => db_error() }
             } else { conflict("IDEMPOTENCY_CONFLICT") }),
             Err(_) => return Ok(db_error()), Ok(None) => {}
@@ -609,6 +631,7 @@ mod tests {
             id: "x".repeat(36),
             question: question.map(|s| s.to_string()),
             spread: "three".into(),
+            topic: None,
             cards: "[]".into(),
             interpretation: "i".into(),
             corpus_version: "1".into(),
@@ -623,14 +646,65 @@ mod tests {
 
     #[test]
     fn idempotency_matches_spread_and_normalized_question() {
+        let g = TarotTopic::General;
         let r = row(Some("我想問事業"));
-        assert!(matches_reading(&r, "three", Some("我想問事業")));
+        assert!(matches_reading(&r, "three", Some("我想問事業"), g));
         assert!(
-            !matches_reading(&r, "three", Some("我想問感情")),
+            !matches_reading(&r, "three", Some("我想問感情"), g),
             "question 不同 → 409"
         );
-        assert!(!matches_reading(&r, "single", None), "spread 不同 → 409");
-        assert!(matches_reading(&row(None), "three", None), "皆空 → 重放");
+        assert!(!matches_reading(&r, "single", None, g), "spread 不同 → 409");
+        assert!(matches_reading(&row(None), "three", None, g), "皆空 → 重放");
+    }
+
+    #[test]
+    fn idempotency_topic_null_equals_general() {
+        let legacy = row(None); // 舊列 topic NULL
+        assert!(matches_reading(&legacy, "three", None, TarotTopic::General));
+        assert!(
+            !matches_reading(&legacy, "three", None, TarotTopic::Love),
+            "NULL ≢ love → 409"
+        );
+        let mut love = row(None);
+        love.topic = Some("love".into());
+        assert!(matches_reading(&love, "three", None, TarotTopic::Love));
+        assert!(!matches_reading(&love, "three", None, TarotTopic::Career));
+        assert!(!matches_reading(&love, "three", None, TarotTopic::General));
+        let mut general = row(None);
+        general.topic = Some("general".into());
+        assert!(matches_reading(
+            &general,
+            "three",
+            None,
+            TarotTopic::General
+        ));
+        let mut bad = row(None);
+        bad.topic = Some("money".into());
+        assert!(!matches_reading(&bad, "three", None, TarotTopic::General));
+    }
+
+    #[test]
+    fn row_view_maps_null_topic_to_general() {
+        assert_eq!(row_view(&row(None)).unwrap().topic, TarotTopic::General);
+        let mut career = row(None);
+        career.topic = Some("career".into());
+        assert_eq!(row_view(&career).unwrap().topic, TarotTopic::Career);
+        let mut bad = row(None);
+        bad.topic = Some("money".into());
+        assert!(row_view(&bad).is_err(), "未知 topic 不默默當 general");
+    }
+
+    #[test]
+    fn reading_row_without_topic_column_deserializes() {
+        // migration 前的列（無 topic 欄）→ None ≡ general
+        let r: ReadingRow = serde_json::from_value(serde_json::json!({
+            "id": "a", "question": null, "spread": "three", "cards": "[]",
+            "interpretation": "i", "corpus_version": "2", "created_at": "t",
+            "ai_interpretation": null, "ai_status": null, "ai_provider": null,
+            "ai_model": null, "ai_chart_context": null,
+        }))
+        .unwrap();
+        assert_eq!(row_topic(&r), Some(TarotTopic::General));
     }
 
     #[test]
