@@ -18,25 +18,28 @@ pub use ruleset::{question, questions, QuestionDef, QuestionOption, QUESTIONS};
 use std::collections::BTreeMap;
 
 /// 題目、選項、判定改動 → bump（spec §2.7）。
-pub const FENGSHUI_ROOM_RULESET_VERSION: &str = "1";
+pub const FENGSHUI_ROOM_RULESET_VERSION: &str = "2";
 
 /// 使用者看得到的卡片文字、徽章、limitation、文獻語意改動 → bump（spec §2.7）。
-pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "3";
+pub const FENGSHUI_ROOM_CORPUS_VERSION: &str = "4";
 
-/// 房型。
+/// 房型。2026-11-21（sub-units spec §C 甲案）：`Study` 是在家的書房，
+/// `Office` 是公司的辦公室座位，各有完整題組。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Room {
     Bedroom,
     Study,
+    Office,
 }
 
 impl Room {
-    pub const ALL: [Room; 2] = [Room::Bedroom, Room::Study];
+    pub const ALL: [Room; 3] = [Room::Bedroom, Room::Study, Room::Office];
 
     pub fn wire(&self) -> &'static str {
         match self {
             Room::Bedroom => "bedroom",
             Room::Study => "study",
+            Room::Office => "office",
         }
     }
 
@@ -47,7 +50,8 @@ impl Room {
     pub fn label(&self) -> &'static str {
         match self {
             Room::Bedroom => "臥室",
-            Room::Study => "書房／工作位",
+            Room::Study => "書房（在家）",
+            Room::Office => "辦公室座位",
         }
     }
 }
@@ -294,6 +298,37 @@ mod tests {
     }
 
     #[test]
+    fn t5_office_room_is_separate_from_study() {
+        let a = answers(&[
+            ("office_back", "aisle"),
+            ("office_door", "boss"),
+            ("office_clutter", "some"),
+            ("office_light", "enough"),
+            ("seat_back", "passage"), // 書房的題目不進辦公室
+        ]);
+        let cards = assess(Room::Office, &a);
+        assert_eq!(cards.len(), 7);
+        assert!(cards.iter().all(|c| c.item_id.starts_with("office_")));
+        let got: Vec<(&str, Status, Option<&str>)> = cards
+            .iter()
+            .take(4)
+            .map(|c| (c.item_id, c.status, c.variant))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("office_back", Status::Flag, Some("aisle")),
+                ("office_door", Status::Flag, Some("boss")),
+                ("office_clutter", Status::Mild, None),
+                ("office_light", Status::Ok, None),
+            ]
+        );
+        assert!(cards.iter().take(4).all(|c| c.text.is_some()));
+        assert_eq!(Room::Study.label(), "書房（在家）");
+        assert_eq!(Room::Office.label(), "辦公室座位");
+    }
+
+    #[test]
     fn wire_round_trips() {
         for r in Room::ALL {
             assert_eq!(Room::from_wire(r.wire()), Some(r));
@@ -302,5 +337,7 @@ mod tests {
             assert_eq!(Reach::from_wire(r.wire()), Some(r));
         }
         assert_eq!(Reach::NoResearch.wire(), "none");
+        assert_eq!(Room::from_wire("office"), Some(Room::Office));
+        assert_eq!(Room::from_wire("Office"), None);
     }
 }
