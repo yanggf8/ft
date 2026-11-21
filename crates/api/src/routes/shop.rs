@@ -59,6 +59,17 @@ fn upgrade_target<'a>(rows: &'a [MatchRow], user: Option<&str>) -> Option<&'a st
         .map(|r| r.id.as_str())
 }
 
+/// 去重命中是否算「此身分已登記」：匿名時任一命中即是；登入時須有本人列或可補的匿名列——
+/// 共用瀏覽器下 anonId 只命中**別人**的列時，本人仍要新增一列。
+fn covered(rows: &[MatchRow], user: Option<&str>) -> bool {
+    match user {
+        None => !rows.is_empty(),
+        Some(uid) => rows
+            .iter()
+            .any(|r| r.user_id.is_none() || r.user_id.as_deref() == Some(uid)),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct ItemRow {
     item_id: Option<String>,
@@ -162,7 +173,7 @@ pub fn register(router: R<'static>) -> R<'static> {
                 Ok(r) => r,
                 Err(_) => return Ok(db_error()),
             };
-            if !rows.is_empty() {
+            if covered(&rows, user.as_deref()) {
                 if let Some(id) = upgrade_target(&rows, user.as_deref()) {
                     if db::exec(
                         &db,
@@ -338,6 +349,14 @@ mod tests {
         assert_eq!(upgrade_target(&mine, Some("u1")), None, "已有本人列不動");
         let other = [row("r1", Some("u2"))];
         assert_eq!(upgrade_target(&other, Some("u1")), None, "他人列不改");
+        assert!(
+            !covered(&other, Some("u1")),
+            "共用瀏覽器：只命中他人列 → 本人要新增"
+        );
+        assert!(covered(&other, None), "匿名命中任何列即算已登記");
+        assert!(covered(&anon_only, Some("u1")));
+        assert!(covered(&mine, Some("u1")));
+        assert!(!covered(&[], Some("u1")));
     }
 
     #[test]

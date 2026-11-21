@@ -117,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_shop_interest_anon ON shop_interest(anon_id, item
 
 - `cargo test`（schema 新測試）、fmt、clippy wasm32、wasm build 全過。
 - `verify-deployment.sh` 新探測：`POST /api/shop/interest {"itemId":"nope"}` → 400 `INVALID_ITEM`；
-  `GET /api/shop/interest/me` 無 token → 401。（不在正式站插真列。）
+  `GET /api/shop/interest/me` 無 token 無 anonId → 400 `NO_IDENTITY`。（不在正式站插真列。）
 - 正式站自測腳本 `scripts/shop-selftest.py`：匿名登記、登入登記／重複 already／me／取消、INVALID_ITEM，
   結束 SQL 硬清測試列。
 - 瀏覽器自玩：首頁卡→/shop→匿名按→重整仍顯示已登記；登入後按、取消。
