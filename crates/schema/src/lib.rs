@@ -10,6 +10,7 @@ pub mod items;
 pub mod naming;
 pub mod palm;
 pub mod predict;
+pub mod shop;
 pub mod storage;
 pub mod symbolic;
 pub mod tarot;

@@ -682,3 +682,33 @@ impl std::fmt::Display for ApiError {
         }
     }
 }
+
+// ── 開運小物 v1（spec docs/superpowers/specs/2026-11-22-shop-interest-design.md §4）──
+
+/// `POST /api/shop/interest` body；`DELETE /api/shop/interest/:itemId` 也用同形 body 帶 `anonId`。
+/// `anon_id`：瀏覽器 localStorage 的隨機 UUID（匿名去重／取消用；非 PII）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShopInterestRequest {
+    pub item_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anon_id: Option<String>,
+}
+
+/// `POST`／`DELETE /api/shop/interest…` 回應。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShopInterestResponse {
+    pub item_id: String,
+    pub registered: bool,
+    /// POST 時：此身分已登記過（未新增列）
+    #[serde(default)]
+    pub already: bool,
+}
+
+/// `GET /api/shop/interest/me?anonId=…` 回應：此身分（登入者 ∪ anonId）目前登記的品項。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShopInterestMeResponse {
+    pub item_ids: Vec<String>,
+}
