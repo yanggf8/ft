@@ -17,6 +17,7 @@ use leptos_router::components::A;
 use serde::{Deserialize, Serialize};
 
 use crate::api::{self, ApiErr};
+use crate::components::SpriteStack;
 
 const STORE_KEY: &str = "shop_interest_v1";
 
@@ -201,8 +202,17 @@ fn ShopCard(
 
     view! {
         <article class="card shop-card">
-            {match stack_layers(item.id) {
-                Some(n) => view! { <SpriteStack id=item.id layers=n label=item.name/> }.into_any(),
+            {match stack_of(item.id) {
+                Some((n, g)) => view! {
+                    <SpriteStack
+                        base=format!("/assets/shop/stack/{}", item.id)
+                        layers=n
+                        grid=g
+                        label=item.name
+                        class="shop-img"
+                    />
+                }
+                    .into_any(),
                 None => view! {
                     <img
                         class="shop-img"
@@ -238,34 +248,13 @@ fn ShopCard(
     }
 }
 
-/// sprite stacking 品項：id → 層數。切片由 `scripts/sprite-stack/<id 底線版>.py` 產生，
+/// sprite stacking 品項：(id, 層數, 切片格數)。切片由 `scripts/sprite-stack/desk_plant.py` 產生，
 /// 放在 `assets/shop/stack/<id>/NN.webp`（由下而上）；層數改了要同步這裡。
-const STACKS: &[(&str, usize)] = &[("desk-plant", 24)];
+const STACKS: &[(&str, usize, usize)] = &[("desk-plant", 24, 48)];
 
-fn stack_layers(id: &str) -> Option<usize> {
-    STACKS.iter().find(|(k, _)| *k == id).map(|(_, n)| *n)
-}
-
-/// 把橫切片由下而上疊起、整疊一起旋轉的偽 3D（sprite stacking）。
-/// 每層畫兩次（整格＋半格位移）補層間縫；`--i` 是層高，位移與壓扁比例在 CSS。
-/// 減少動態效果時停在固定角度（CSS）。
-#[component]
-fn SpriteStack(id: &'static str, layers: usize, label: &'static str) -> impl IntoView {
-    let slices = (0..layers * 2)
-        .map(|k| {
-            let z = k / 2;
-            let pos = z as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
-            let src = format!("/assets/shop/stack/{id}/{z:02}.webp");
-            view! {
-                <div class="stack-layer" style=format!("--i:{pos}")>
-                    <img src=src alt="" loading="lazy" decoding="async"/>
-                </div>
-            }
-        })
-        .collect_view();
-    view! {
-        <div class="shop-img stack-stage" role="img" aria-label=label>
-            {slices}
-        </div>
-    }
+fn stack_of(id: &str) -> Option<(usize, usize)> {
+    STACKS
+        .iter()
+        .find(|(k, _, _)| *k == id)
+        .map(|(_, n, g)| (*n, *g))
 }

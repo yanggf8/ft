@@ -30,6 +30,8 @@ use leptos::prelude::*;
 use leptos_router::components::{Redirect, A};
 use leptos_router::hooks::{use_navigate, use_params_map};
 
+use crate::components::SpriteStack;
+
 // ═══ localStorage ═══
 
 fn storage() -> Option<web_sys::Storage> {
@@ -944,6 +946,7 @@ pub fn FengshuiPage() -> impl IntoView {
                     };
                     view! {
                         <button class="fs-room" on:click=move |_| go_room(r)>
+                            {room_stack(r)}
                             <span class="fs-room-name">
                                 {r.label()}
                                 // 2026-11-21 新房型標記（沿用首頁 .feature-new 徽章）
@@ -1186,5 +1189,29 @@ pub fn FengshuiPage() -> impl IntoView {
                 (_, Stage::Result) => result().into_any(),
             }}
         </div>
+    }
+}
+
+/// 房型縮景切片：(層數, 切片格數)。由 `scripts/sprite-stack/rooms.py` 產生於
+/// `assets/stack/room-<wire>/NN.webp`；重跑後層數變了要同步這裡。
+fn room_stack_dims(r: Room) -> (usize, usize) {
+    match r {
+        Room::Bedroom => (13, 36),
+        Room::Study => (16, 36),
+        Room::Office => (16, 36),
+    }
+}
+
+/// 選房間按鈕上方的自轉縮景（裝飾：按鈕文字已是房型名稱）。
+fn room_stack(r: Room) -> impl IntoView {
+    let (layers, grid) = room_stack_dims(r);
+    view! {
+        <SpriteStack
+            base=format!("/assets/stack/room-{}", r.wire())
+            layers=layers
+            grid=grid
+            label=""
+            class="fs-room-stack"
+        />
     }
 }

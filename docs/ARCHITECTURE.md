@@ -280,11 +280,13 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
 - 紅線：小物資料永不寫入 predictions／prediction_feedback／f8_assignments；不 import `symbolic`。
 - 驗證：`verify-deployment.sh` 8e（不寫列的 INVALID_ITEM／NO_IDENTITY 探測）、
   `python3 -I scripts/shop-selftest.py`（自造帳號、結束硬清）。
-- **Sprite stacking（2026-11-22，桌面小盆栽）**：`pages/shop.rs` `STACKS`（id→層數）命中的品項不畫插圖，
-  改畫 `SpriteStack`：`assets/shop/stack/<id>/NN.webp` 由下而上每層兩張（整格＋半格位移補縫），
-  CSS `.stack-layer` 位移 1.77%／層、`scaleY(.62)` 壓成俯視角、`stack-spin` 14s 自轉；減少動態效果時
-  停在 30°。切片由 `scripts/sprite-stack/desk_plant.py` 程式化體素模型產生（AI 產圖無法產出互相對齊的切片）；
-  改模型後重跑並同步 `STACKS` 層數。切片是點陣圖內容，不受 `:root` token 規則管。
+- **Sprite stacking（2026-11-22）**：共用元件 `components/sprite_stack.rs` `SpriteStack{base, layers, grid, label, class}`，
+  把 `<base>/NN.webp`（00＝最底）每層畫兩張（整格＋半格位移補縫），`--step`＝0.85 格換算成層寬 %，
+  CSS `.stack-layer` 位移＋`scaleY(.62)` 壓成俯視角、`stack-spin` 自轉；減少動態效果時停在 30°。
+  用處：開運小物桌面小盆栽（`pages/shop.rs` `STACKS`；切片 `scripts/sprite-stack/desk_plant.py` →
+  `assets/shop/stack/desk-plant/`）、空間風水選房間三個房型縮景（`pages/fengshui.rs` `room_stack_dims`；
+  `scripts/sprite-stack/rooms.py` → `assets/stack/room-<wire>/`，裝飾用 aria-hidden）。切片由程式化體素模型
+  產生（AI 產圖無法產出互相對齊的切片）；重跑後層數變了要同步各處常數。切片是點陣圖內容，不受 `:root` token 規則管。
 
 ## Kawaii light theme (2026-11-19)
 

@@ -1027,6 +1027,11 @@ input[type="range"]:disabled { opacity: 0.6; }
 .fs-rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; margin-bottom: 1rem; }
 @media (min-width: 720px) { .fs-rooms { grid-template-columns: repeat(3, 1fr); } }
 .fs-room-new { margin-left: 0.5rem; vertical-align: middle; }
+/* 房型縮景（sprite stacking，2026-11-22）：按鈕上方的自轉小模型，慢轉 24s */
+.fs-room-stack { width: 100%; max-width: 180px; aspect-ratio: 1 / 1; align-self: center; margin: -0.25rem 0 0.25rem; }
+.fs-room-stack .stack-layer { top: 30%; }
+.fs-room-stack .stack-layer img { animation-duration: 24s; }
+
 .fs-office-note { font-size: 0.85rem; margin: 0 0 0.4rem; }
 .fs-room {
   display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem;
@@ -1719,13 +1724,14 @@ input[type="range"]:disabled { opacity: 0.6; }
   display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover;
   border-radius: 16px; background: var(--surface-tint); margin-bottom: 0.85rem;
 }
-/* sprite stacking（桌面小盆栽）：切片由下而上疊，每層往上 0.85 格、整疊壓扁成俯視角後一起轉。
-   切片 48 格寬 → 1 格 = 層寬 2.083%；translateY 的 % 以層自身高度（= 寬）計。 */
+/* sprite stacking（components/sprite_stack.rs）：切片由下而上疊，每層往上 0.85 格（--step＝層寬 %，
+   由元件依切片格數算好行內帶入）、整疊壓扁成俯視角後一起轉。translateY 的 % 以層自身高度（= 寬）計。 */
 .stack-stage { position: relative; overflow: hidden; }
 .stack-layer {
-  --i: 0; /* 層高，由 shop.rs 行內 style 覆寫 */
+  --i: 0; /* 層高，元件行內覆寫 */
+  --step: 1.77; /* 每層位移（層寬 %），元件行內覆寫 */
   position: absolute; left: 9%; top: 24%; width: 82%; aspect-ratio: 1 / 1;
-  transform: translateY(calc(var(--i) * -1.77%)) scaleY(0.62);
+  transform: translateY(calc(var(--i) * var(--step) * -1%)) scaleY(0.62);
   pointer-events: none;
 }
 .stack-layer img {
