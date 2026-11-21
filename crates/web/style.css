@@ -803,6 +803,8 @@ input[type="range"]:disabled { opacity: 0.6; }
   margin-top: -0.35rem;
   font-size: 0.75rem;
   line-height: 1.35;
+  /* 手機寬度下副標會折成 1～2 行；固定保留兩行高，三張牌才會對齊（2026-11-21 自玩發現） */
+  min-height: calc(2em * 1.35);
   text-align: center;
   color: var(--silver-dim);
 }
