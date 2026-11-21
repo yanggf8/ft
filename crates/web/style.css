@@ -797,6 +797,33 @@ input[type="range"]:disabled { opacity: 0.6; }
 .tarot-card--sm {
   width: min(150px, 28vw);
 }
+/* 塔羅子單元（感情／事業）：牌位副標、歷史主題標籤、/tarot 主題選單 */
+.tarot-slot-sub {
+  max-width: min(150px, 28vw);
+  margin-top: -0.35rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--silver-dim);
+}
+.tarot-topic-tag {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+}
+.feature-grid.tarot-topics {
+  margin-top: 1rem;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.tarot-topics .feature {
+  padding: 1.25rem 1.5rem;
+}
 
 /* ═══ 塔羅首頁主打卡 NEW 徽章（2026-10-27，最新功能標記）═══ */
 .feature-new {
