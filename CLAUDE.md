@@ -59,6 +59,7 @@ gwebcdb-mint turso --tier write --db fortunet --export
 ```bash
 ./scripts/verify-deployment.sh              # production health + new-route sanity
 ./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
+python3 -I scripts/subunits-selftest.py      # 子單元正式站自測（紫微流年/今年運勢、塔羅主題；自造帳號、預設硬清）
 ./scripts/f8-acceptance.sh [--cleanup]      # F8 對照組驗收全自動（DB 自造 login token 登入、
                                             #   測驗自舉、事前盲/遮罩/解盲、turso 帳本交叉比對）
 ```
