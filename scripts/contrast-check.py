@@ -77,6 +77,10 @@ PAIRS = [
   (["--text", "--primary-deep"], ["--surface-tint"], "text",
    "zodiac match aspect badge / line key chip"),
   (["--primary-deep"], ["--sign-pisces-light"], "nontext", "home fi-match icon stroke"),
+  # 開運小物 /shop（shop.rs；卡內字已由 TEXT_TOKENS on #fff 涵蓋）
+  (["--primary-deep"], ["--sign-aries-light"], "nontext", "home fi-shop icon stroke"),
+  (["--success"], ["--success-soft"], "text", "shop 已登記 button label"),
+  (["--success"], ["#fff"], "nontext", "shop 已登記 button inset border on white card"),
   # 紫微流年（/ziwei/luck 宮格疊層、/ziwei/year 摘要；ziwei.rs／palace_grid.rs）
   (["--ink-on-primary"], ["--primary", "--primary-deep"], "text",
    "ziwei badges 流年命宮 / 大限命宮・童限"),

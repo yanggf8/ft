@@ -609,3 +609,29 @@ pub async fn post_prediction_feedback(
     )
     .await
 }
+
+// ── 開運小物 v1（spec 2026-11-22-shop-interest-design §4）──
+// 公開端點：匿名靠 `anonId`；有 session 時 `with_auth` 會一併帶 Bearer。
+
+/// `GET /api/shop/interest/me?anonId=…` — 此身分（登入者 ∪ anonId）目前登記的品項。
+/// anonId 只含 `[A-Za-z0-9-]`（前端自產），不需 percent-encode。
+pub async fn shop_interest_me(anon_id: Option<&str>) -> Result<ShopInterestMeResponse, ApiErr> {
+    let path = match anon_id {
+        Some(a) => format!("/api/shop/interest/me?anonId={a}"),
+        None => "/api/shop/interest/me".to_string(),
+    };
+    get_json(&path, true).await
+}
+
+/// `POST /api/shop/interest` — 登記「我有興趣」（重複登記回 `already:true`）。
+pub async fn shop_interest_add(body: &ShopInterestRequest) -> Result<ShopInterestResponse, ApiErr> {
+    send_json(Request::post(&url("/api/shop/interest")), body).await
+}
+
+/// `DELETE /api/shop/interest/:itemId` — 取消登記；body 帶同形 `{itemId, anonId}`。
+pub async fn shop_interest_remove(
+    body: &ShopInterestRequest,
+) -> Result<ShopInterestResponse, ApiErr> {
+    let path = format!("/api/shop/interest/{}", body.item_id);
+    send_json(Request::delete(&url(&path)), body).await
+}

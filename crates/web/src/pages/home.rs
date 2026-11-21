@@ -1,5 +1,6 @@
 //! Landing page — port of `HomePage.tsx`.
 
+use ft_schema::shop::HOME_CARD_BLURB;
 use leptos::prelude::*;
 use leptos_router::components::A;
 
@@ -40,6 +41,13 @@ pub fn HomePage() -> impl IntoView {
                         <FeatureIcon kind="tarot"/>" 塔羅"
                     </h3>
                     <p>"今日抽牌免登入；綜合、感情、事業三張牌陣需登入，當下問題的反思工具"</p>
+                </A>
+                <A href="/shop" attr:class="feature">
+                    <h3>
+                        <FeatureIcon kind="shop"/>" 開運小物"
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>{HOME_CARD_BLURB}</p>
                 </A>
                 <A href="/palm" attr:class="feature">
                     <h3>
@@ -159,6 +167,11 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
     "glossary" => (
       "M12 7.2C10 5.8 7 5.3 4 5.7v12.5c3-.4 6 .1 8 1.5 2-1.4 5-1.9 8-1.5V5.7c-3-.4-6 .1-8 1.5z",
       "M12 7.2C10 5.8 7 5.3 4 5.7v12.5c3-.4 6 .1 8 1.5 2-1.4 5-1.9 8-1.5V5.7c-3-.4-6 .1-8 1.5zM12 7.2v12.5",
+    ),
+    // 開運小物：禮物盒（盒身＋盒蓋＋中央緞帶＋蝴蝶結）
+    "shop" => (
+      "M5 11h14v8.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5z",
+      "M5 11h14v8.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5zM4 7.5h16a1 1 0 0 1 1 1V11H3V8.5a1 1 0 0 1 1-1zM12 7.5V21M12 7.5c-1.2-2.6-4.6-3.6-5-1.6-.3 1.4 2.4 1.6 5 1.6zM12 7.5c1.2-2.6 4.6-3.6 5-1.6.3 1.4-2.4 1.6-5 1.6z",
     ),
     _ => ("", ""),
   }
