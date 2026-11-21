@@ -46,6 +46,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/palm/capture") view=|| view! { <Protected><PalmCapturePage/></Protected> }/>
                     // 空間風水 v1（公開、純前端；答案只存 localStorage）
                     <Route path=path!("/fengshui") view=FengshuiPage/>
+                    <Route path=path!("/fengshui/:room") view=FengshuiPage/>
                     <Route path=path!("/zodiac") view=ZodiacMatchPage/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>

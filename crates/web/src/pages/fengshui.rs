@@ -1,6 +1,9 @@
 //! 空間風水 v1 Batch 2 — `/fengshui`（公開、純前端、零 API）。
 //! spec：docs/superpowers/specs/2026-11-17-fengshui-room-v1-design.md §2.5、§3、§5。
 //!
+//! 網址：`/fengshui` 是選房型的開場；`/fengshui/:room`（`bedroom|study|office`，即
+//! `Room::wire`）直達該房型的問答，非法 room 轉址回 `/fengshui`（sub-units spec §C.3）。
+//!
 //! 流程：開場（選房型）→ 問答（一題一頁、俯視示意圖可點）→ 結果（flag／mild 蓋牌、
 //! 翻卡先猜 → ok／unknown 折疊 → 說明卡）。
 //! - 答案只存 localStorage `fengshui_room_v1_{room}`；猜的結果只存在頁面狀態。
@@ -14,16 +17,18 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ft_schema::fengshui::corpus::{
     reveal_miss_line, reveal_score_line, EXPLAINER, EXPLAINER_TITLE, LABEL_ADJUSTMENTS,
-    LABEL_CLEAR_ANSWERS, LABEL_FENGSHUI, LABEL_LOCAL_ONLY, LABEL_OK_TAG, LABEL_RESEARCH,
-    LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP, OPENING, REVEAL_ALL_OK, REVEAL_CHANCE, REVEAL_FLIP,
-    REVEAL_HIT, REVEAL_HOWTO, REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
+    LABEL_CLEAR_ANSWERS, LABEL_CLEAR_CONFIRM, LABEL_FENGSHUI, LABEL_LOCAL_ONLY, LABEL_NEW,
+    LABEL_OK_TAG, LABEL_PICK_ROOM, LABEL_RESEARCH, LABEL_SEE_RESEARCH, LABEL_UNKNOWN_GROUP,
+    OFFICE_SEAT_NOTE, OPENING, REVEAL_ALL_OK, REVEAL_CHANCE, REVEAL_FLIP, REVEAL_HIT, REVEAL_HOWTO,
+    REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
 };
 use ft_schema::fengshui::{
     assess, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Room, Stance,
     Status, FENGSHUI_ROOM_CORPUS_VERSION, FENGSHUI_ROOM_RULESET_VERSION,
 };
 use leptos::prelude::*;
-use leptos_router::components::A;
+use leptos_router::components::{Redirect, A};
+use leptos_router::hooks::{use_navigate, use_params_map};
 
 // ═══ localStorage ═══
 
@@ -221,6 +226,57 @@ fn sharp_corner(cx: i32, cy: i32) -> AnyView {
     view! { <polygon class="fs-furn fs-hl" points=pts/> }.into_any()
 }
 
+// ── 辦公室座位圖元（規則集 v2）──
+
+/// 隔板（俯視為粗線）；`low` 為矮隔板（虛線）。
+fn partition(x1: i32, y1: i32, x2: i32, y2: i32, low: bool, hl: bool) -> AnyView {
+    let base = if low {
+        "fs-partition fs-dash"
+    } else {
+        "fs-partition"
+    };
+    seg(&cls(base, hl), x1, y1, x2, y2)
+}
+
+/// 鄰座：桌子＋只畫頭的人（不強調）。`chair_above` 為人坐在桌子上方（面朝下）。
+fn neighbour_desk(x: i32, y: i32, chair_above: bool) -> AnyView {
+    let cy = if chair_above { y - 6 } else { y + 16 };
+    view! {
+      <g class="fs-furn">
+        <rect x=x.to_string() y=y.to_string() width="28" height="10"/>
+        <circle cx=(x + 14).to_string() cy=cy.to_string() r="4"/>
+      </g>
+    }
+    .into_any()
+}
+
+/// 主管座位：較大的桌子、人面朝你（坐在桌子上方），旁註「主管」。
+fn boss_seat(x: i32, y: i32, hl: bool) -> AnyView {
+    view! {
+      <g class=cls("fs-furn", hl)>
+        <rect x=x.to_string() y=y.to_string() width="36" height="11"/>
+        <circle cx=(x + 18).to_string() cy=(y - 6).to_string() r="4"/>
+      </g>
+      <text class="fs-label" x=(x + 44).to_string() y=(y + 8).to_string()>"主管"</text>
+    }
+    .into_any()
+}
+
+/// 走道：一條虛線＋經過的人（強調）＋「走道」字樣。
+fn aisle_h(y: i32, walker_x: i32) -> AnyView {
+    view! {
+      <line class="fs-dash fs-hl" x1="12" y1=y.to_string() x2="108" y2=y.to_string()/>
+      <circle class="fs-furn fs-hl" cx=walker_x.to_string() cy=(y + 8).to_string() r="4"/>
+      <text class="fs-label" x="16" y=(y + 11).to_string()>"走道"</text>
+    }
+    .into_any()
+}
+
+/// 頭頂的長條燈管（細長虛線框）。
+fn lamp_tube(x: i32, y: i32, w: i32) -> AnyView {
+    rect_at("fs-band fs-hl", x, y, w, 4)
+}
+
 fn boxes(pts: &[(i32, i32)], class: &str) -> Vec<AnyView> {
     pts.iter()
         .map(|&(x, y)| rect_at(class, x, y, 5, 5))
@@ -364,7 +420,7 @@ fn figure(qid: &str, oid: &str) -> Vec<AnyView> {
                 v.extend(boxes(&[(50, 38), (64, 28), (62, 46)], "fs-band fs-hl"));
             }
         }
-        // ── 書房／工作位 ──
+        // ── 書房（在家）──
         ("seat_back", "wall") => {
             v.push(desk(38, 40, 44, 14));
             v.push(chair(60, 64));
@@ -463,6 +519,120 @@ fn figure(qid: &str, oid: &str) -> Vec<AnyView> {
             };
             v.extend(boxes(pts, "fs-box fs-hl"));
         }
+        // ── 辦公室座位 ──
+        ("office_back", "wall") => {
+            v.push(neighbour_desk(12, 30, false));
+            v.push(desk(42, 30, 40, 14));
+            v.push(chair(62, 56));
+            v.push(rect_at("fs-furn", 44, 68, 36, 11));
+            v.push(wall_mark(36, 80, 88, 80));
+        }
+        ("office_back", "aisle") => {
+            v.push(neighbour_desk(12, 18, false));
+            v.push(desk(42, 18, 40, 14));
+            v.push(chair(62, 44));
+            v.push(aisle_h(60, 88));
+        }
+        ("office_back", "low") => {
+            v.push(desk(42, 14, 40, 12));
+            v.push(chair(62, 37));
+            v.push(partition(30, 50, 94, 50, true, true));
+            v.push(neighbour_desk(48, 66, true));
+        }
+        ("office_door", "none") => {
+            v.push(sight("60,48 28,12 108,12 108,30"));
+            v.push(desk(40, 30, 40, 12));
+            v.push(chair(60, 54));
+            v.push(door_vert(110, 46, true, false));
+        }
+        ("office_door", "entrance") => {
+            v.push(sight("60,50 40,12 80,12"));
+            v.push(desk(40, 34, 40, 12));
+            v.push(chair(60, 58));
+            v.push(door_top(44, true));
+            v.push(door_top(60, true));
+        }
+        ("office_door", "boss") => {
+            v.push(sight("60,58 42,34 78,34"));
+            v.push(desk(40, 42, 40, 12));
+            v.push(chair(60, 66));
+            v.push(boss_seat(42, 22, true));
+        }
+        ("office_front", "open") => {
+            v.push(sight("60,62 36,12 84,12"));
+            v.push(desk(40, 44, 40, 12));
+            v.push(chair(60, 68));
+            v.push(win_h(36, 84, 10, true));
+        }
+        ("office_front", "close") => {
+            v.push(partition(30, 16, 90, 16, false, true));
+            v.push(desk(40, 18, 40, 12));
+            v.push(chair(60, 40));
+            v.push(partition(30, 16, 30, 46, false, false));
+            v.push(partition(90, 16, 90, 46, false, false));
+        }
+        ("office_overhead", "none") => {
+            v.push(desk(40, 26, 40, 14));
+            v.push(chair(60, 52));
+        }
+        ("office_overhead", "beam") => {
+            v.push(desk(40, 26, 40, 14));
+            v.push(chair(60, 52));
+            v.push(beam_h(46, true));
+        }
+        ("office_overhead", "lamp") => {
+            v.push(desk(40, 26, 40, 14));
+            v.push(chair(60, 52));
+            v.push(lamp_tube(28, 49, 64));
+        }
+        ("office_corner", "none") => {
+            v.push(desk(40, 26, 40, 14));
+            v.push(chair(60, 52));
+            v.push(view! { <circle class="fs-furn" cx="94" cy="56" r="7"/> }.into_any());
+        }
+        ("office_corner", "present") => {
+            v.push(desk(40, 26, 40, 14));
+            v.push(chair(60, 52));
+            v.push(sharp_corner(84, 56));
+            v.push(seg("fs-dash fs-hl", 76, 56, 67, 54));
+        }
+        ("office_light", "enough") => {
+            v.push(neighbour_desk(14, 30, false));
+            v.push(desk(62, 30, 34, 14));
+            v.push(chair(79, 56));
+            v.push(win_v(110, 16, 60, true));
+            v.push(seg("fs-dash fs-hl", 104, 20, 86, 26));
+            v.push(seg("fs-dash fs-hl", 104, 50, 86, 48));
+        }
+        ("office_light", "dim") => {
+            v.push(win_v(110, 62, 76, false));
+            v.push(neighbour_desk(70, 30, false));
+            v.push(desk(14, 30, 34, 14));
+            v.push(chair(31, 56));
+            v.push(rect_at("fs-band fs-hl", 12, 22, 44, 46));
+        }
+        ("office_clutter", lvl) => {
+            v.push(partition(34, 22, 34, 48, false, false));
+            v.push(partition(86, 22, 86, 48, false, false));
+            v.push(desk(38, 26, 44, 14));
+            v.push(chair(60, 52));
+            let pts: &[(i32, i32)] = match lvl {
+                "little" => &[(42, 29)],
+                "some" => &[(42, 29), (70, 30), (44, 62)],
+                _ => &[
+                    (42, 29),
+                    (50, 32),
+                    (62, 29),
+                    (72, 32),
+                    (40, 60),
+                    (48, 68),
+                    (72, 64),
+                    (78, 56),
+                    (62, 70),
+                ],
+            };
+            v.extend(boxes(pts, "fs-box fs-hl"));
+        }
         _ => {}
     }
     v
@@ -544,7 +714,7 @@ impl RevealState {
 }
 
 /// 每張作答過的卡（flag／mild／ok，Batch 2.1）：蓋牌 → 先猜研究站在哪一邊 → 翻開。
-fn flip_card(c: Card, rs: RevealState) -> Option<AnyView> {
+fn flip_card(c: Card, room: Room, rs: RevealState) -> Option<AnyView> {
     let t = c.text?;
     let badge = t.badge;
     let actual = badge.stance;
@@ -664,6 +834,9 @@ fn flip_card(c: Card, rs: RevealState) -> Option<AnyView> {
                 {(!t.adjustments.is_empty()).then(|| view! {
                     <div class="fs-adj">
                         <h4 class="fs-adj-title">{LABEL_ADJUSTMENTS}</h4>
+                        {(room == Room::Office).then(|| view! {
+                            <p class="muted fs-office-note">{OFFICE_SEAT_NOTE}</p>
+                        })}
                         <ul>
                             {t.adjustments.iter().map(|a| view! { <li>{a.text}</li> }).collect_view()}
                         </ul>
@@ -677,8 +850,20 @@ fn flip_card(c: Card, rs: RevealState) -> Option<AnyView> {
 
 // ═══ 頁面 ═══
 
+/// `/fengshui` 與 `/fengshui/:room` 共用。沒有 `:room` → 開場選房型；合法 → 直達該房型；
+/// 非法 → 轉址 `/fengshui`。
 #[component]
 pub fn FengshuiPage() -> impl IntoView {
+    let params = use_params_map();
+    // None：沒帶 :room；Some(None)：帶了但不合法；Some(Some(r))：合法房型。
+    let route_room = Memo::new(move |_| params.get().get("room").map(|w| Room::from_wire(&w)));
+    // StoredValue 讓下面的 closure 保持 Copy（按鈕多處共用）。
+    let nav = StoredValue::new_local(use_navigate());
+    let go_picker = move || nav.with_value(|n| n("/fengshui", Default::default()));
+    let go_room = move |r: Room| {
+        nav.with_value(|n| n(&format!("/fengshui/{}", r.wire()), Default::default()))
+    };
+
     let stage = RwSignal::new(Stage::Intro);
     let room = RwSignal::new(Room::Bedroom);
     let answers = RwSignal::new(BTreeMap::<String, String>::new());
@@ -710,6 +895,13 @@ pub fn FengshuiPage() -> impl IntoView {
         }
     };
 
+    // 網址 → 畫面：每次 :room 變動（含首次掛載）都重新開始該房型；回到 /fengshui 就是開場。
+    Effect::new(move |_| match route_room.get() {
+        Some(Some(r)) => start_room(r),
+        None => stage.set(Stage::Intro),
+        Some(None) => {}
+    });
+
     let do_clear = move || {
         if armed_clear.get_untracked() {
             clear_all_answers();
@@ -718,13 +910,14 @@ pub fn FengshuiPage() -> impl IntoView {
             armed_clear.set(false);
             store_tick.update(|n| *n += 1);
             stage.set(Stage::Intro);
+            go_picker();
         } else {
             armed_clear.set(true);
         }
     };
     let clear_label = move || {
         if armed_clear.get() {
-            "確定清除兩個房型的答案？再點一次"
+            LABEL_CLEAR_CONFIRM
         } else {
             LABEL_CLEAR_ANSWERS
         }
@@ -737,7 +930,7 @@ pub fn FengshuiPage() -> impl IntoView {
         view! {
             <p class="fs-opening">{OPENING}</p>
             <p class="muted fs-local">{format!("{LABEL_LOCAL_ONLY}。")}</p>
-            <h2 class="fs-h2">"選一個房間"</h2>
+            <h2 class="fs-h2">{LABEL_PICK_ROOM}</h2>
             <div class="fs-rooms">
                 {Room::ALL.into_iter().map(|r| {
                     let total = questions(r).count();
@@ -750,8 +943,14 @@ pub fn FengshuiPage() -> impl IntoView {
                         "已回答完，看結果".to_string()
                     };
                     view! {
-                        <button class="fs-room" on:click=move |_| start_room(r)>
-                            <span class="fs-room-name">{r.label()}</span>
+                        <button class="fs-room" on:click=move |_| go_room(r)>
+                            <span class="fs-room-name">
+                                {r.label()}
+                                // 2026-11-21 新房型標記（沿用首頁 .feature-new 徽章）
+                                {(r == Room::Office).then(|| view! {
+                                    <span class="feature-new fs-room-new">{LABEL_NEW}</span>
+                                })}
+                            </span>
                             <span class="fs-room-note">{note}</span>
                         </button>
                     }
@@ -798,6 +997,9 @@ pub fn FengshuiPage() -> impl IntoView {
                 <div class="quiz-progress-bar"><span style=format!("width:{pct}%")></span></div>
                 <h2 class="fs-q-prompt">{q.prompt}</h2>
                 <p class="muted fs-q-hint">"點圖或文字選一個；俯視示意，不必完全一樣。"</p>
+                {(r == Room::Office).then(|| view! {
+                    <p class="muted fs-q-hint">{OFFICE_SEAT_NOTE}</p>
+                })}
                 <div class="fs-opts">
                     {q.options.iter().map(|o| {
                         let is_sel = selected.as_deref() == Some(o.id);
@@ -818,7 +1020,7 @@ pub fn FengshuiPage() -> impl IntoView {
                 </div>
                 <div class="fs-quiz-nav">
                     <button class="btn-link" on:click=move |_| {
-                        if i == 0 { stage.set(Stage::Intro) } else { idx.set(i - 1) }
+                        if i == 0 { go_picker() } else { idx.set(i - 1) }
                     }>
                         {if i == 0 { "← 換房間" } else { "← 上一題" }}
                     </button>
@@ -907,7 +1109,7 @@ pub fn FengshuiPage() -> impl IntoView {
                         idx.set(0);
                         stage.set(Stage::Quiz);
                     }>"修改答案"</button>
-                    <button class="btn-link" on:click=move |_| stage.set(Stage::Intro)>"換房間"</button>
+                    <button class="btn-link" on:click=move |_| go_picker()>"換房間"</button>
                 </div>
             </div>
 
@@ -927,7 +1129,7 @@ pub fn FengshuiPage() -> impl IntoView {
                             }
                         }>{REVEAL_SKIP_ALL}</button>
                     </Show>
-                    {answered.into_iter().filter_map(|c| flip_card(c, rs)).collect_view()}
+                    {answered.into_iter().filter_map(|c| flip_card(c, r, rs)).collect_view()}
                 }
             })}
 
@@ -977,10 +1179,11 @@ pub fn FengshuiPage() -> impl IntoView {
         <div class="page fs-page">
             <A href="/" attr:class="back-link">"← 返回"</A>
             <h1 style="margin-bottom:0.5rem">"空間風水"</h1>
-            {move || match stage.get() {
-                Stage::Intro => intro().into_any(),
-                Stage::Quiz => quiz().into_any(),
-                Stage::Result => result().into_any(),
+            {move || match (route_room.get(), stage.get()) {
+                (Some(None), _) => view! { <Redirect path="/fengshui"/> }.into_any(),
+                (_, Stage::Intro) => intro().into_any(),
+                (_, Stage::Quiz) => quiz().into_any(),
+                (_, Stage::Result) => result().into_any(),
             }}
         </div>
     }
