@@ -1719,6 +1719,23 @@ input[type="range"]:disabled { opacity: 0.6; }
   display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover;
   border-radius: 16px; background: var(--surface-tint); margin-bottom: 0.85rem;
 }
+/* sprite stacking（桌面小盆栽）：切片由下而上疊，每層往上 0.85 格、整疊壓扁成俯視角後一起轉。
+   切片 48 格寬 → 1 格 = 層寬 2.083%；translateY 的 % 以層自身高度（= 寬）計。 */
+.stack-stage { position: relative; overflow: hidden; }
+.stack-layer {
+  --i: 0; /* 層高，由 shop.rs 行內 style 覆寫 */
+  position: absolute; left: 9%; top: 24%; width: 82%; aspect-ratio: 1 / 1;
+  transform: translateY(calc(var(--i) * -1.77%)) scaleY(0.62);
+  pointer-events: none;
+}
+.stack-layer img {
+  display: block; width: 100%; height: 100%; image-rendering: pixelated;
+  animation: stack-spin 14s linear infinite;
+}
+@keyframes stack-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .stack-layer img { animation: none; transform: rotate(30deg); }
+}
 .shop-name { font-size: 1.1rem; margin-bottom: 0.25rem; }
 .shop-tagline { color: var(--silver-dim); font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }
 .shop-body { color: var(--text); font-size: 0.9rem; line-height: 1.7; margin-bottom: 0.75rem; }
