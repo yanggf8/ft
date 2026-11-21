@@ -119,6 +119,8 @@ const R_CLUTTER: &[&str] = &["saxbe2010"];
 const R_VIEW: &[&str] = &["stevenson2018", "ulrich1984"];
 const R_DAYLIGHT: &[&str] = &["boubekri2014"];
 const R_NIGHT_LIGHT: &[&str] = &["mason2022", "sweeney2023"];
+const R_OFFICE_LOW: &[&str] = &["dosen2016", "sailer2021"];
+const R_SAILER: &[&str] = &["sailer2021"];
 
 const F_NONE: &[&str] = &[];
 const F_BONIN: &[&str] = &["bonin2023"];
@@ -140,10 +142,30 @@ const RESEARCH_SEAT_BACK: &str = "瞭望－庇護研究測的是空間偏好評�
 const RESEARCH_SEAT_BACK_WINDOW: &str = "瞭望－庇護理論認為人偏好背後有遮蔽的位置。整理 34 篇研究的文獻彙整認為結果不一致，「背後有遮蔽」在室內研究多為中性；這些研究測的是空間偏好評分。目前沒有研究測過座位背後是窗，也沒有測壓力或專注。";
 const RESEARCH_SEAT_FRONT: &str = "注意力恢復研究的統合分析顯示，接觸自然環境後，部分認知測驗有小到中度的改善；另一項病歷研究中，窗外看到樹的術後病人比看到磚牆的住院略短。這些研究都沒有測過書桌直接面牆。";
 
+const RESEARCH_OFFICE_BACK: &str = "一項休息室觀察研究中，背向走道的座位反而最常被坐，和風水方向相反；另一項 167 人的辦公室研究中，座位越像「面向整個房間」、身後可見的空間越小，員工自評越能專注。測的是使用率與自評，不是壓力。";
+const RESEARCH_OFFICE_FRONT: &str = "一項 167 人的辦公室研究中，緊鄰牆或隔板的座位（11 人）自評「能有效率工作」比靠窗座位低；但同一研究中，面前看得到的桌子越多，自評越難專注。單一公司、自評，沒有直接測過桌前緊貼隔板。";
+const RESEARCH_OFFICE_OVERHEAD: &str = "目前沒有研究直接測過橫樑或頭頂燈管。延伸閱讀：天花板高度的實驗中，低天花板加上頭頂吊燈籠，情緒與舒適感評分沒有差異；另一篇虛擬實境研究操弄的是牆面開口，不是頭頂。";
+const RESEARCH_OFFICE_LIGHT: &str = "一項 49 人的研究比較有窗與無窗辦公室的員工，有窗的人工作時光照較多、睡得較長，活力自評也較好；樣本小、不是隨機分組。目前沒有研究直接測過座位採光與專心。";
+const RESEARCH_OFFICE_CLUTTER: &str = "有研究分析 30 對夫妻導覽自家時的用語，把家說得較雜亂、待整修的妻子，一天中的壓力荷爾蒙型態與情緒較差，丈夫沒有這個現象。研究是在家裡做的，只有相關，也沒有測過辦公桌面。";
+
 const LIM_BED_BACK_PLACEMENT: &str = "測的是空間偏好與平面圖擺床偏好，不是睡眠";
 const LIM_CORNER: &str = "測的是看圖片的喜歡評分；室內空間類效果為零";
 const LIM_CLUTTER: &str = "測的是導覽用字與妻子的壓力荷爾蒙、情緒，只有相關";
 const LIM_SEAT_BACK: &str = "測的是座位使用率與偏好評分，不是壓力或專注";
+const LIM_OFFICE_BACK: &str = "測的是座位使用率與自評專注，不是壓力；方向不一";
+const LIM_OFFICE_FRONT: &str = "單一公司的自評研究；兩項結果方向不一";
+const LIM_OFFICE_CLUTTER: &str = "研究在家裡做；測壓力荷爾蒙、情緒，只有相關";
+const LIM_OFFICE_LIGHT: &str = "研究是在辦公室做的；測睡眠與自評，不是專心";
+
+// 辦公室座位的調整：公司座位通常不能自己換，只給桌面與椅子上做得到的事（不用 `move_`）。
+const ADJ_COAT_CHAIR: Adjustment = adj(
+    "coat_chair",
+    "在椅背掛上自己的外套或披肩，讓身後多一層遮擋。",
+);
+const ADJ_ASK_SEAT: Adjustment = adj(
+    "ask_seat",
+    "如果公司有調整座位的機會，可以提出想要背後靠牆的位置。",
+);
 
 pub static CARDS: &[CardText] = &[
   // ═══ 臥室 ═══
@@ -429,7 +451,7 @@ pub static CARDS: &[CardText] = &[
       adj("clear_path", "先清出從房門走到床邊的一條路。"),
     ],
   },
-  // ═══ 書房／工作位 ═══
+  // ═══ 書房（在家）═══
 
   // ── seat_back ──
   CardText {
@@ -596,7 +618,7 @@ pub static CARDS: &[CardText] = &[
     variant: None,
     fengshui: "風水師常建議書桌要採光充足、明亮。你的座位白天自然光夠，符合這個常見建議。",
     research: RESEARCH_SEAT_LIGHT,
-    badge: related(Same, "測的是睡眠與自評生活品質，不是專心"),
+    badge: related(Same, "研究是在辦公室做的；測睡眠與自評，不是專心"),
     refs: R_DAYLIGHT,
     further: F_NONE,
     adjustments: NO_ADJ,
@@ -607,7 +629,7 @@ pub static CARDS: &[CardText] = &[
     variant: None,
     fengshui: "風水師常建議書桌要採光充足、明亮，認為光線昏暗讓人精神不振、不易專心。",
     research: RESEARCH_SEAT_LIGHT,
-    badge: related(Same, "測的是睡眠與自評生活品質，不是專心"),
+    badge: related(Same, "研究是在辦公室做的；測睡眠與自評，不是專心"),
     refs: R_DAYLIGHT,
     further: F_NONE,
     adjustments: &[
@@ -656,6 +678,238 @@ pub static CARDS: &[CardText] = &[
       adj("tidy_floor", "座位腳邊的東西先移開，不用一次整理完。"),
     ],
   },
+  // ═══ 辦公室座位（語料 v4，2026-11-21）═══
+
+  // ── office_back ──
+  CardText {
+    item_id: "office_back",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水的說法是座位背後要有實牆或高櫃，稱為「有靠」，坐得比較安心。你的座位背後有靠，符合這個常見建議。",
+    research: RESEARCH_OFFICE_BACK,
+    badge: related(Mixed, LIM_OFFICE_BACK),
+    refs: R_SEAT_VIEW,
+    further: F_NONE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_back",
+    status: Status::Flag,
+    variant: Some("aisle"),
+    fengshui: "風水的說法是座位背後是走道、常有人經過，等於「背後無靠」，容易分心、心神不寧。",
+    research: RESEARCH_OFFICE_BACK,
+    badge: related(Mixed, LIM_OFFICE_BACK),
+    refs: R_SEAT_VIEW,
+    further: F_NONE,
+    adjustments: &[ADJ_COAT_CHAIR, ADJ_ASK_SEAT],
+  },
+  CardText {
+    item_id: "office_back",
+    status: Status::Flag,
+    variant: Some("low"),
+    fengshui: "風水的說法是背後只有矮隔板、後面坐著別人，靠得不夠穩，容易覺得被看著、不易放鬆。隔板要多高才算有靠，各家說法不一。",
+    research: "瞭望－庇護研究測的是空間偏好評分，「背後有遮蔽」在室內研究多為中性。一項 167 人的辦公室研究中，座位越像「面向整個房間」，員工自評越能專注。目前沒有研究測過隔板高度。",
+    badge: related(Mixed, "測的是偏好評分與自評專注；沒有測隔板高度"),
+    refs: R_OFFICE_LOW,
+    further: F_NONE,
+    adjustments: &[ADJ_COAT_CHAIR, ADJ_ASK_SEAT],
+  },
+  // ── office_door ──
+  CardText {
+    item_id: "office_door",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水師常建議座位不要正對出入口，也不要正對主管座位。你的座位都沒有正對，符合這個常見建議。",
+    research: "相近的研究測的是座位使用率與「面向整個房間」的自評專注，不是出入口或主管；一項休息室觀察研究中，正面對著主要走道的座位較少人坐。結果方向不一。",
+    badge: related(Mixed, "測的是座位使用率與自評專注，不是門或主管"),
+    refs: R_SEAT_VIEW,
+    further: F_NONE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_door",
+    status: Status::Flag,
+    variant: Some("entrance"),
+    fengshui: "風水稱座位正對出入口為「門沖」，說法是進出的人直衝而來，容易分心、心神不寧。",
+    research: "唯一相近的是一項休息室觀察研究：正面直視主要走道的座位，比背向走道的少人坐。方向和風水說法一致，但對象是走道不是出入口，場所是休息室不是辦公室，測的是使用率，不是專注。",
+    badge: related(Same, "測的是休息室座位使用率，對象是走道"),
+    refs: R_PSATHITI,
+    further: F_NONE,
+    adjustments: &[
+      adj("block_front", "在桌面正前方放一個現有的書立或文件架，擋住一部分直衝的視線。"),
+      adj("angle_screen", "把螢幕稍微斜一點，讓視線不正對出入口。"),
+    ],
+  },
+  CardText {
+    item_id: "office_door",
+    status: Status::Flag,
+    variant: Some("boss"),
+    fengshui: "風水的說法是座位正對主管座位或主管辦公室的門，像一直被看著，容易緊繃、不易放鬆。各家說法不一。",
+    research: "目前沒有研究直接測過座位正對主管。",
+    badge: no_research("沒有研究測過座位與主管位置的關係"),
+    refs: R_NONE,
+    further: F_NONE,
+    adjustments: &[
+      adj("block_front_boss", "在桌面正前方放一個現有的書立或文件架，讓視線不直接對著主管座位。"),
+      adj("angle_screen_boss", "把螢幕稍微斜一點，讓視線不正對主管座位。"),
+    ],
+  },
+  // ── office_front ──
+  CardText {
+    item_id: "office_front",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水稱座位前方為「明堂」，說法是前方有空間、視野開闊，心情比較開朗。你的座位前方有空間，符合這個常見建議。",
+    research: RESEARCH_OFFICE_FRONT,
+    badge: related(Mixed, LIM_OFFICE_FRONT),
+    refs: R_SAILER,
+    further: F_NONE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_front",
+    status: Status::Flag,
+    variant: None,
+    fengshui: "風水稱座位前方為「明堂」，說法是桌前緊貼牆或高隔板，明堂太窄，容易覺得侷促、不易專心。",
+    research: RESEARCH_OFFICE_FRONT,
+    badge: related(Mixed, LIM_OFFICE_FRONT),
+    refs: R_SAILER,
+    further: F_NONE,
+    adjustments: &[
+      adj("clear_partition", "把貼在牆或隔板上的便條、文件收掉一些，留一點空白。"),
+      adj("clear_front_edge", "把桌面靠前的東西收掉一些，讓眼前多一點空間。"),
+    ],
+  },
+  // ── office_overhead ──
+  CardText {
+    item_id: "office_overhead",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水的說法是座位正上方不要有橫樑或燈管直壓。你的座位上方沒有這些，符合這個常見建議。",
+    research: RESEARCH_OFFICE_OVERHEAD,
+    badge: no_research("沒有研究測過橫樑或頭頂燈管"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_overhead",
+    status: Status::Flag,
+    variant: Some("beam"),
+    fengshui: "風水稱為「樑壓」，也有人叫「壓樑煞」，說法是坐在樑下讓人有壓迫感、容易分心。各家說法不一。",
+    research: RESEARCH_OFFICE_OVERHEAD,
+    badge: no_research("沒有研究測過橫樑；天花板高度研究沒測到舒適感差異"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
+    adjustments: &[adj("shift_chair", "把椅子往旁邊挪一點，坐的位置避開樑的正下方。")],
+  },
+  CardText {
+    item_id: "office_overhead",
+    status: Status::Flag,
+    variant: Some("lamp"),
+    fengshui: "風水的說法是長條燈管正對頭頂，和樑壓類似，讓人有壓迫感、不易專心。燈管要多正才算，各家說法不一。",
+    research: RESEARCH_OFFICE_OVERHEAD,
+    badge: no_research("沒有研究測過頭頂燈管的位置"),
+    refs: R_NONE,
+    further: F_OVERHEAD,
+    adjustments: &[
+      adj("shift_chair_lamp", "把椅子往旁邊挪一點，讓燈管不在頭頂正上方。"),
+      adj("report_glare", "如果燈管太亮刺眼，可以向負責總務的同事反映。"),
+    ],
+  },
+  // ── office_corner ──
+  CardText {
+    item_id: "office_corner",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水的說法是柱角、櫃角的尖端不要朝著座位。你的座位旁邊沒有尖角朝著你，符合這個常見建議。",
+    research: RESEARCH_SEAT_CORNER,
+    badge: related(Mixed, LIM_CORNER),
+    refs: R_CURVE,
+    further: F_CURVE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_corner",
+    status: Status::Flag,
+    variant: None,
+    fengshui: "風水稱尖角朝人為「壁刀」或「角煞」，說法是柱角或櫃角對著座位，容易心神不寧、不易專心。",
+    research: RESEARCH_SEAT_CORNER,
+    badge: related(Mixed, LIM_CORNER),
+    refs: R_CURVE,
+    further: F_CURVE,
+    adjustments: &[
+      adj("shift_chair_corner", "把椅子挪一點，讓尖角不正對著你。"),
+      adj("block_corner_desk", "用桌上現有的文件架或盆栽擋在尖角前面。"),
+    ],
+  },
+  // ── office_light ──
+  CardText {
+    item_id: "office_light",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水師常建議座位要採光充足、明亮。你的座位看得到窗、光線夠，符合這個常見建議。",
+    research: RESEARCH_OFFICE_LIGHT,
+    badge: related(Same, LIM_OFFICE_LIGHT),
+    refs: R_DAYLIGHT,
+    further: F_NONE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_light",
+    status: Status::Flag,
+    variant: None,
+    fengshui: "風水師常建議座位要採光充足、明亮，認為光線昏暗讓人精神不振、不易專心。",
+    research: RESEARCH_OFFICE_LIGHT,
+    badge: related(Same, LIM_OFFICE_LIGHT),
+    refs: R_DAYLIGHT,
+    further: F_NONE,
+    adjustments: &[
+      adj("window_break", "休息時走到窗邊待一下。"),
+      adj("clear_light_side", "把桌上朝窗那一側的高東西移開，不擋住光線。"),
+    ],
+  },
+  // ── office_clutter ──
+  CardText {
+    item_id: "office_clutter",
+    status: Status::Ok,
+    variant: None,
+    fengshui: "風水師常建議桌面和腳邊保持清爽。你的座位雜物很少，符合這個常見建議。",
+    research: RESEARCH_OFFICE_CLUTTER,
+    badge: related(Same, LIM_OFFICE_CLUTTER),
+    refs: R_CLUTTER,
+    further: F_NONE,
+    adjustments: NO_ADJ,
+  },
+  CardText {
+    item_id: "office_clutter",
+    status: Status::Mild,
+    variant: None,
+    fengshui: "風水師常建議桌面和腳邊保持清爽，認為雜物堆積讓人容易分心、不易專心。你的座位有一些雜物。",
+    research: RESEARCH_OFFICE_CLUTTER,
+    badge: related(Same, LIM_OFFICE_CLUTTER),
+    refs: R_CLUTTER,
+    further: F_NONE,
+    adjustments: &[
+      adj("clear_desk_zone", "先清出桌面正前方一個手臂寬的空間。"),
+      adj("tidy_ten_min", "下班前花十分鐘，把桌面的東西歸位。"),
+    ],
+  },
+  CardText {
+    item_id: "office_clutter",
+    status: Status::Flag,
+    variant: None,
+    fengshui: "風水師常建議桌面和腳邊保持清爽，認為雜物堆積讓人容易分心、心神不寧。你的座位雜物很多。",
+    research: RESEARCH_OFFICE_CLUTTER,
+    badge: related(Same, LIM_OFFICE_CLUTTER),
+    refs: R_CLUTTER,
+    further: F_NONE,
+    adjustments: &[
+      adj("clear_desk_zone", "先清出桌面正前方一個手臂寬的空間。"),
+      adj("group_items", "把散在桌上的東西先集中到一個現有的盒子裡。"),
+      adj("tidy_floor", "座位腳邊的東西先移開，不用一次整理完。"),
+    ],
+  },
 ];
 
 // ═══ 固定文案 ═══
@@ -668,6 +922,11 @@ pub const LABEL_SEE_RESEARCH: &str = "看研究";
 pub const LABEL_UNKNOWN_GROUP: &str = "還不確定的項目";
 pub const LABEL_LOCAL_ONLY: &str = "答案只存在這個瀏覽器，不會上傳";
 pub const LABEL_CLEAR_ANSWERS: &str = "清除我的房間答案";
+pub const LABEL_CLEAR_CONFIRM: &str = "確定清除所有房型的答案？再點一次";
+pub const LABEL_PICK_ROOM: &str = "選一個房間";
+pub const LABEL_NEW: &str = "NEW";
+/// 辦公室座位的調整限制（sub-units spec §C.3）：顯示在辦公室問答與每張辦公室卡的「可以試試看」。
+pub const OFFICE_SEAT_NOTE: &str = "公司座位通常不能自己換，以桌面上能動的東西為主。";
 
 // ── §2.5 開場一句 ──
 pub const OPENING: &str = "每一項會並列風水的說法和相關研究。下面這些研究多數不是為了檢驗風水而做，有些項目根本沒有人研究過。";
@@ -784,6 +1043,10 @@ pub fn fixed_texts() -> Vec<String> {
         LABEL_UNKNOWN_GROUP,
         LABEL_LOCAL_ONLY,
         LABEL_CLEAR_ANSWERS,
+        LABEL_CLEAR_CONFIRM,
+        LABEL_PICK_ROOM,
+        LABEL_NEW,
+        OFFICE_SEAT_NOTE,
         OPENING,
         EXPLAINER_TITLE,
         REVEAL_PROMPT,
@@ -943,8 +1206,28 @@ mod tests {
 
     #[test]
     fn t2_card_count() {
-        // 臥室 21 張 + 書房 17 張
-        assert_eq!(CARDS.len(), 38);
+        // 臥室 21 張 + 書房 17 張 + 辦公室座位 18 張
+        assert_eq!(CARDS.len(), 56);
+        assert_eq!(
+            CARDS
+                .iter()
+                .filter(|c| c.item_id.starts_with("office_"))
+                .count(),
+            18
+        );
+    }
+
+    /// 辦公室座位（sub-units spec §C.3）：公司座位通常不能自己換，
+    /// 調整只給桌面與椅子上做得到的事——不得出現搬家具（`move_`）的調整。
+    #[test]
+    fn t2_office_adjustments_stay_on_the_desk() {
+        for c in CARDS.iter().filter(|c| c.item_id.starts_with("office_")) {
+            for a in c.adjustments {
+                assert!(!a.id.starts_with("move_"), "{}:{}", c.key(), a.id);
+                assert!(!a.text.contains("搬"), "{}:{}", c.key(), a.id);
+            }
+        }
+        assert!(OFFICE_SEAT_NOTE.contains("公司座位通常不能自己換，以桌面上能動的東西為主"));
     }
 
     // ── T3 禁用詞、白名單、「煞」位置 ──
@@ -1242,12 +1525,29 @@ mod tests {
             ("seat_door_view", Status::Flag, Some("hidden"), Mixed),
             ("seat_corner", Status::Ok, None, Mixed),
             ("seat_corner", Status::Flag, None, Mixed),
+            ("office_back", Status::Ok, None, Mixed),
+            ("office_back", Status::Flag, Some("aisle"), Mixed),
+            ("office_back", Status::Flag, Some("low"), Mixed),
+            ("office_door", Status::Ok, None, Mixed),
+            ("office_door", Status::Flag, Some("entrance"), Same),
+            ("office_door", Status::Flag, Some("boss"), Untested),
+            ("office_front", Status::Ok, None, Mixed),
+            ("office_front", Status::Flag, None, Mixed),
+            ("office_corner", Status::Ok, None, Mixed),
+            ("office_corner", Status::Flag, None, Mixed),
         ];
         for (item, st, v, stance) in expect {
             let c = card_text(item, *st, *v).unwrap();
             assert_eq!(c.badge.stance, *stance, "{}", c.key());
         }
-        for item in ["bed_clutter", "seat_clutter", "seat_front", "seat_light"] {
+        for item in [
+            "bed_clutter",
+            "seat_clutter",
+            "seat_front",
+            "seat_light",
+            "office_light",
+            "office_clutter",
+        ] {
             for c in CARDS.iter().filter(|c| c.item_id == item) {
                 assert_eq!(c.badge.stance, Same, "{}", c.key());
             }
@@ -1257,6 +1557,7 @@ mod tests {
             "bed_mirror",
             "bed_door_door",
             "seat_overhead",
+            "office_overhead",
         ] {
             for c in CARDS.iter().filter(|c| c.item_id == item) {
                 assert_eq!(c.badge.stance, Untested, "{}", c.key());
@@ -1293,6 +1594,16 @@ mod tests {
             ("seat_corner", None, Related),
             ("seat_light", None, Related),
             ("seat_clutter", None, Related),
+            ("office_back", Some("aisle"), Related),
+            ("office_back", Some("low"), Related),
+            ("office_door", Some("entrance"), Related),
+            ("office_door", Some("boss"), NoResearch),
+            ("office_front", None, Related),
+            ("office_overhead", Some("beam"), NoResearch),
+            ("office_overhead", Some("lamp"), NoResearch),
+            ("office_corner", None, Related),
+            ("office_light", None, Related),
+            ("office_clutter", None, Related),
         ];
         for (item, variant, reach) in expect {
             for c in CARDS

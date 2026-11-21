@@ -1,4 +1,5 @@
-//! 規則集（spec §1，`FENGSHUI_ROOM_RULESET_VERSION`）：兩房型 15 題。
+//! 規則集（spec §1，`FENGSHUI_ROOM_RULESET_VERSION`）：三房型 22 題（臥室 8、書房 7、
+//! 辦公室座位 7；辦公室題組見 sub-units spec §C，2026-11-21 規則集 v2）。
 //! 每題單選、必有「不確定」；變體只出現在 flag。改題目／選項／判定必 bump 規則集版本。
 
 use super::{Room, Status};
@@ -125,7 +126,7 @@ pub static QUESTIONS: &[QuestionDef] = &[
             UNSURE,
         ],
     },
-    // ── 書房／工作位 ──
+    // ── 書房（在家）──
     QuestionDef {
         id: "seat_back",
         room: Room::Study,
@@ -199,6 +200,92 @@ pub static QUESTIONS: &[QuestionDef] = &[
             UNSURE,
         ],
     },
+    // ── 辦公室座位（規則集 v2）──
+    // 只收有現代形家說法的題目（sub-units spec §C.3）；冷氣出風口、鄰座噪音這類沒有風水說法的不收。
+    QuestionDef {
+        id: "office_back",
+        room: Room::Office,
+        prompt: "你的座位背後是什麼？",
+        options: &[
+            opt("wall", "實牆或高櫃", Status::Ok, None),
+            opt("aisle", "走道，常有人經過", Status::Flag, Some("aisle")),
+            opt("low", "矮隔板，後面是別人的座位", Status::Flag, Some("low")),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_door",
+        room: Room::Office,
+        prompt: "坐著時，正對著出入口或主管座位嗎？",
+        options: &[
+            opt("none", "都沒有", Status::Ok, None),
+            opt(
+                "entrance",
+                "正對辦公室出入口",
+                Status::Flag,
+                Some("entrance"),
+            ),
+            opt(
+                "boss",
+                "正對主管座位或主管辦公室的門",
+                Status::Flag,
+                Some("boss"),
+            ),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_front",
+        room: Room::Office,
+        prompt: "桌子前方有多少空間？",
+        options: &[
+            opt("open", "前方有一段空間或窗", Status::Ok, None),
+            opt("close", "緊貼牆或高隔板", Status::Flag, None),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_overhead",
+        room: Room::Office,
+        prompt: "座位正上方有什麼？",
+        options: &[
+            opt("none", "沒有特別的東西", Status::Ok, None),
+            opt("beam", "外露的樑", Status::Flag, Some("beam")),
+            opt("lamp", "長條燈管正對頭頂", Status::Flag, Some("lamp")),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_corner",
+        room: Room::Office,
+        prompt: "座位旁邊有柱子或櫃子的尖角朝著你嗎？",
+        options: &[
+            opt("none", "沒有", Status::Ok, None),
+            opt("present", "有", Status::Flag, None),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_light",
+        room: Room::Office,
+        prompt: "白天坐在座位上，看得到窗、自然光夠嗎？",
+        options: &[
+            opt("enough", "看得到窗，光線夠", Status::Ok, None),
+            opt("dim", "離窗很遠或看不到窗", Status::Flag, None),
+            UNSURE,
+        ],
+    },
+    QuestionDef {
+        id: "office_clutter",
+        room: Room::Office,
+        prompt: "桌面和腳邊的雜物多嗎？",
+        options: &[
+            opt("little", "很少", Status::Ok, None),
+            opt("some", "有一些", Status::Mild, None),
+            opt("lots", "很多", Status::Flag, None),
+            UNSURE,
+        ],
+    },
 ];
 
 /// 某房型的題目（規則集順序）。
@@ -222,7 +309,8 @@ mod tests {
     fn t1_question_counts_match_spec() {
         assert_eq!(questions(Room::Bedroom).count(), 8);
         assert_eq!(questions(Room::Study).count(), 7);
-        assert_eq!(QUESTIONS.len(), 15);
+        assert_eq!(questions(Room::Office).count(), 7);
+        assert_eq!(QUESTIONS.len(), 22);
     }
 
     #[test]
@@ -233,6 +321,7 @@ mod tests {
             let prefix = match q.room {
                 Room::Bedroom => "bed_",
                 Room::Study => "seat_",
+                Room::Office => "office_",
             };
             assert!(q.id.starts_with(prefix), "{}", q.id);
         }
@@ -300,6 +389,7 @@ mod tests {
     #[test]
     fn t1_lookup() {
         assert_eq!(question("seat_light").map(|q| q.room), Some(Room::Study));
+        assert_eq!(question("office_back").map(|q| q.room), Some(Room::Office));
         assert!(question("nope").is_none());
     }
 }

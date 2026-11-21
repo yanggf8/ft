@@ -1020,7 +1020,11 @@ input[type="range"]:disabled { opacity: 0.6; }
 .fs-local { font-size: 0.875rem; margin: 0 0 1.5rem; }
 .fs-text { color: var(--text); line-height: 1.8; margin: 0 0 0.75rem; }
 .fs-text:last-child { margin-bottom: 0; }
-.fs-rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+/* 三個房型（2026-11-21 加辦公室座位）：寬螢幕固定三欄，窄螢幕自動換行 */
+.fs-rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; margin-bottom: 1rem; }
+@media (min-width: 720px) { .fs-rooms { grid-template-columns: repeat(3, 1fr); } }
+.fs-room-new { margin-left: 0.5rem; vertical-align: middle; }
+.fs-office-note { font-size: 0.85rem; margin: 0 0 0.4rem; }
 .fs-room {
   display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem;
   min-height: 88px; padding: 1.1rem 1.25rem; cursor: pointer; text-align: left;
@@ -1076,6 +1080,8 @@ input[type="range"]:disabled { opacity: 0.6; }
 .fs-fig .fs-hl path,
 .fs-fig .fs-hl rect { stroke: var(--starlight); }
 .fs-fig .fs-box.fs-hl { fill: var(--starlight); }
+.fs-fig .fs-partition { stroke-width: 3.5; }
+.fs-fig .fs-label { fill: currentColor; stroke: none; font-size: 8px; font-weight: 700; }
 .fs-fig .fs-qmark { fill: currentColor; stroke: none; font-size: 30px; font-weight: 700; }
 .fs-opt.selected .fs-fig { color: var(--ink-on-primary); }
 .fs-opt.selected .fs-fig .fs-hl,

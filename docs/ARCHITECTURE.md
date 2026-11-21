@@ -171,7 +171,10 @@ f8_assignments；抽取 prompt 含 P21 注入防線句、不附 GUARDRAIL（結�
 
 ## 空間風水 v1（2026-11-19，Batch 1＋2 上線）
 
-形勢派室內格局（臥室 8 題／書房 7 題），對照現代風水；spec：`docs/superpowers/specs/2026-11-17-fengshui-room-v1-design.md`。
+形勢派室內格局（臥室 8 題／書房（在家）7 題／辦公室座位 7 題），對照現代風水；spec：`docs/superpowers/specs/2026-11-17-fengshui-room-v1-design.md`；辦公室座位子單元見 `docs/superpowers/specs/2026-11-21-sub-units-design.md` §C。
+
+- **辦公室座位（2026-11-21，規則集 v2／語料 v4）**：甲案——`Room::Study` 標籤改「書房（在家）」，新增 `Room::Office`（wire `office`、題目前綴 `office_`、標籤「辦公室座位」）有自己完整題組（背後有靠、門沖／正對主管、明堂、樑壓／燈管、壁刀、採光、雜物），只收有現代形家說法的題目。研究欄共用既有文獻（`sailer2021` 是唯一在辦公室做、也直接量座位位置的研究），沒有研究的標「沒人測過」。辦公室卡的調整只給桌面與椅子上做得到的事（測試擋 `move_`），問答與「可以試試看」都顯示 `OFFICE_SEAT_NOTE`「公司座位通常不能自己換，以桌面上能動的東西為主」。
+- **網址**：`/fengshui` 是選房型開場（三欄，辦公室標 NEW）；`/fengshui/:room`（`bedroom|study|office`＝`Room::wire`）直達該房型問答，非法 room 以 `<Redirect>` 回 `/fengshui`。兩條路由共用 `FengshuiPage`，`:room` 變動由 Effect 重新開始該房型；「換房間」與清除答案都導回 `/fengshui`。
 
 - **全案純前端**：`/fengshui` 公開頁，無 API、無 DB、無 migration。答案只存 localStorage `fengshui_room_v1_{room}`；翻卡猜測只在頁面狀態。
 - 純邏輯與語料在 `crates/schema/src/fengshui/`（`ruleset`／`corpus`／`evidence`／`observe`／`date`）；版本常數 `FENGSHUI_ROOM_RULESET_VERSION`、`FENGSHUI_ROOM_CORPUS_VERSION`，使用者可見文字或判定改動必 bump。
