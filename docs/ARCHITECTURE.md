@@ -81,8 +81,8 @@ validated as finite (a bad JD would panic the ephemeris math). Emits `engineVers
 兩段式：v1a「今日抽牌」公開頁（`/tarot`，免登入零 API——決定性抽牌
 `ft_schema::tarot::daily_draw`，種子＝台北日期＋localStorage 32-hex 裝置種子，
 明文不防重擲）與 v1b 三張牌陣（`/tarot/spread`，登入）。`ft_schema::tarot` 是
-前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，`TAROT_CORPUS_VERSION="2"`
-經 Claude 校對 8 條修正）、注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋
+前後端共用契約：78 張 ZH-TW 語料（`catalog.rs`，v2 經 Claude 校對 8 條修正；
+v3 見下方子單元）、注入式洗牌 `shuffle_three`（fnv1a_64→SplitMix64＋
 拒絕取樣，演算法由 `TAROT_DRAW_ALGO_VERSION` 鎖定，golden test 釘死）、
 `taipei_today`（重用 cycle.rs UTC+8 純算術）。API 五個 `/api/tarot` 路由在
 `routes/tarot.rs`：draw 處理順序＝IP 限流→auth→body cap→parse→驗證→冪等
@@ -96,7 +96,8 @@ UPDATE first-wins 防雙分頁競態）；`?chart=0`＝純塔羅（紫微＋F4 �
 chartSummary 組裝在 route 層（isLifePalace 主星——wire 值 `main` 非 `major`）。
 AIMutexDO 佇列已從 `thread_local!` 遷 `QueueState` 實例欄位（per-DO-instance；
 thread_local 是 per-isolate 會跨實例共享）。`rate_limit_strict` 在 common.rs。
-DB：`tarot_readings`（migrations：2026-10-27-tarot / -tarot-ai / -tarot-ai-context）。
+DB：`tarot_readings`（migrations：2026-10-27-tarot / -tarot-ai / -tarot-ai-context、
+2026-11-21-tarot-topic）。
 **美術**：78 張卡面＋卡背在 `crates/web/assets/tarot/`（museimage 產製、
 cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製）；
 卡面 CSS 1:2 原生比例、逆位 180°、直向 ≤480px 斷點（RWD）。首頁 feature-grid
@@ -104,6 +105,26 @@ cosmic-silver 方向、PIL 降 1024/q82 WebP 約 12.7MB、`build-web.sh` 複製�
 原「紫微第一」決策。塔羅資料永不寫入 predictions／prediction_feedback／
 f8_assignments。完整設計與三家（Muse/Codex/Opus）七輪審查軌跡：
 `docs/superpowers/specs/2026-10-27-tarot-v1-design.md`。
+
+**子單元：感情／事業（2026-11-21，sub-units spec §B）**。`/tarot` 今日抽牌下方
+「選一個主題」三張 `.feature` 卡（綜合三張→`/tarot/spread`、感情→`/tarot/love`、
+事業→`/tarot/career`；未登入連 `/login?next=…`）。三路由共用 `TarotSpreadPage`
+（`topic` prop，預設 general）：標題／引導／提問 placeholder／牌位副標依主題，
+歷史清單三主題共用、顯示主題標籤。牌陣仍固定三張 現況／阻礙／建議。
+- `ft_schema::tarot::TarotTopic { General, Love, Career }`（wire `general|love|career`）；
+  `TarotDrawRequest.topic` 省略＝general（舊 web 相容）、`TarotReadingView.topic`
+  缺欄＝general（新 web 對舊 API 相容）。
+- 規則式：`position_intro(topic, pos, reversed)`——general 與 v2 逐字相同，love／career
+  各 6 段新引言；`TAROT_CORPUS_VERSION="3"`（`TAROT_DRAW_ALGO_VERSION` 不動）。
+  測試：引言 ≤40 字、塔羅禁字表（一定／注定／復合／分手／升職／錄取…）、三主題組裝 ≤600。
+- DB：`tarot_readings.topic TEXT`（migration `2026-11-21-tarot-topic.sql`，無 CHECK）；
+  新寫入一律存字串（含 `'general'`），舊列 NULL ≡ general（讀取與冪等比對皆然；
+  topic 不一致 → 409 `IDEMPOTENCY_CONFLICT`）。
+- AI：interpret 由 DB 列讀 topic 放進 chartData；`build_tarot_prompt` 對 love／career
+  加一行主題框架（不判定對方心意／關係結局；不判定升遷、錄取、收入）並換無提問預設句；
+  general 輸出與 v1 逐字相同（golden 測試 `tarot_general_prompt_frozen_v1_*`）。
+  `TAROT_PROMPT_VERSION="2"`（只寫進 `ai_prompt_version`，舊解讀不失效）。
+- 限流、AIMutexDO 實例 `"tarot"`、chartType `"tarot"`、純塔羅勾選不變；三主題共用次數。
 
 ## 手相（2026-10-28，v1 已上線）
 

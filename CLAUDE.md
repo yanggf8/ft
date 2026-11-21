@@ -120,6 +120,10 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   f8_assignments；星曜 type 的 wire 值是 `main`（非 iztro 的 `major`）；AI 路徑
   限流一律 `rate_limit_strict`（fail-closed）、AIMutexDO 走專屬實例
   `id_from_name("tarot")`；卡面在 `crates/web/assets/tarot/`（build-web.sh 複製）。
+  **子單元（2026-11-21）**：`tarot_readings.topic`（general|love|career，無 CHECK）
+  新寫入一律存字串、舊列 **NULL ≡ general**（讀取與冪等比對皆然）；語料 v3
+  （主題牌位引言）、prompt v2（love／career 框架行）——general prompt 輸出被
+  golden 測試凍結為 v1，改 general 必先改 golden 並 bump；migration 先於 API 部署。
 - `predict::GATE_ORDER`（work→money→love→family→health）同時決定 F4 `gated_domains()`
   槽位順序與 predictions list 的 SQL ORDER BY — 三處耦合，改動前先讀
   `crates/schema/src/predict.rs` 頂部 doc；generate **必帶** body

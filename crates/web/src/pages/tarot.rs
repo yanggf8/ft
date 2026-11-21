@@ -3,7 +3,9 @@
 //! （32 hex）；同裝置同日同牌、換日自動換牌。明文不防重擲——算命娛樂站定位，
 //! 抽牌是體驗不是契約（清儲存重抽屬使用者自由）。
 
-use ft_schema::tarot::{self, DrawnCard, TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION};
+use ft_schema::tarot::{
+    self, DrawnCard, TarotTopic, TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION,
+};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::components::A;
@@ -165,15 +167,87 @@ pub fn TarotPage() -> impl IntoView {
                 }
             }}
 
-            <div style="margin-top:1.5rem">
-                <Show when=move || auth.is_authed()>
-                    <A href="/tarot/spread" attr:class="cta-alt">"前往三張牌陣・完整解牌（存紀錄）"</A>
-                </Show>
-                <Show when=move || !auth.is_authed()>
-                    <A href="/login?next=/tarot/spread" attr:class="cta-alt">"登入後體驗三張牌陣解牌"</A>
-                </Show>
+            // 子單元選單（sub-units spec §B.2）：三主題共用三張牌陣頁；未登入
+            // 直接連 /login?next=…（Protected 轉址本身不帶 next）
+            <h2 style="margin:2.5rem 0 0.5rem 0">"選一個主題"</h2>
+            <p class="muted" style="margin:0">
+                {move || if auth.is_authed() {
+                    "抽「現況・阻礙・建議」三張牌，解牌會存進你的紀錄。"
+                } else {
+                    "三張牌陣需要登入，解牌會存進你的紀錄。"
+                }}
+            </p>
+            <div class="feature-grid tarot-topics">
+                {TarotTopic::ALL.into_iter().map(|t| {
+                    let copy = topic_copy(t);
+                    let path = topic_path(t);
+                    view! {
+                        <A
+                            href=move || if auth.is_authed() {
+                                path.to_string()
+                            } else {
+                                format!("/login?next={path}")
+                            }
+                            attr:class="feature"
+                        >
+                            <h3>{copy.card_title}</h3>
+                            <p>{copy.card_note}</p>
+                        </A>
+                    }
+                }).collect_view()}
             </div>
         </div>
+    }
+}
+
+// ═══ 子單元主題（sub-units spec §B.2）═══
+
+/// 各主題的頁面文案（選單卡、標題、引導、提問 placeholder、牌位副標）。
+#[derive(Clone, Copy)]
+struct TopicCopy {
+    card_title: &'static str,
+    card_note: &'static str,
+    title: &'static str,
+    intro: &'static str,
+    placeholder: &'static str,
+    /// 現況／阻礙／建議 標籤下的副標；general 不加（維持原畫面）
+    slot_subs: Option<[&'static str; 3]>,
+}
+
+fn topic_copy(topic: TarotTopic) -> TopicCopy {
+    match topic {
+        TarotTopic::General => TopicCopy {
+            card_title: "綜合三張",
+            card_note: "不限主題，看看當下的處境、課題與方向",
+            title: "三張牌陣",
+            intro: "輸入想問的事（可留空），抽「現況・阻礙・建議」三張牌，逐一翻開後閱讀整體解牌。抽牌由伺服器進行並存入你的紀錄。",
+            placeholder: "例如：最近的職涯選擇",
+            slot_subs: None,
+        },
+        TarotTopic::Love => TopicCopy {
+            card_title: "感情",
+            card_note: "看見關係裡的互動，和你自己的需要",
+            title: "感情三張",
+            intro: "想著一段關係抽三張牌，看看互動的樣子與你能照顧自己的方式；牌不判定對方心意或關係結局。",
+            placeholder: "例如：最近和他的相處",
+            slot_subs: Some(["這段關係現在的樣子", "在這段關係裡卡住的地方", "你可以照顧自己的方式"]),
+        },
+        TarotTopic::Career => TopicCopy {
+            card_title: "事業",
+            card_note: "整理工作上的狀態、卡點與下一步",
+            title: "事業三張",
+            intro: "想著工作上的事抽三張牌，整理現在的狀態、卡住的地方與下一步；牌不判定升遷、錄取或收入結果。",
+            placeholder: "例如：要不要接新專案",
+            slot_subs: Some(["工作現在的狀態", "讓你卡住的地方", "下一步可以怎麼做"]),
+        },
+    }
+}
+
+fn topic_path(topic: TarotTopic) -> &'static str {
+    match topic {
+        TarotTopic::General => "/tarot/spread",
+        TarotTopic::Love => "/tarot/love",
+        TarotTopic::Career => "/tarot/career",
     }
 }
 
@@ -215,10 +289,14 @@ fn draw_error_message(e: &crate::api::ApiErr) -> String {
     }
 }
 
+/// 三張牌陣頁；`/tarot/spread`（general，預設）、`/tarot/love`、`/tarot/career`
+/// 共用，以 `topic` 區分文案與抽牌請求的主題。歷史清單三主題共用、顯示主題標籤。
 #[component]
-pub fn TarotSpreadPage() -> impl IntoView {
+pub fn TarotSpreadPage(#[prop(optional)] topic: TarotTopic) -> impl IntoView {
     use crate::api;
     use ft_schema::tarot::{TarotDrawRequest, TarotReadingView};
+
+    let copy = topic_copy(topic);
 
     let question = RwSignal::new(String::new());
     let reading = RwSignal::new(None::<TarotReadingView>);
@@ -293,6 +371,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
             spread: "three".to_string(),
             question: (!trimmed.is_empty()).then_some(trimmed),
             request_id,
+            topic: Some(topic),
         };
         drawing.set(true);
         error.set(String::new());
@@ -316,10 +395,8 @@ pub fn TarotSpreadPage() -> impl IntoView {
     view! {
         <div class="page">
             <A href="/tarot" attr:class="back-link">"← 今日抽牌"</A>
-            <h1 style="margin-bottom:0.5rem">"三張牌陣"</h1>
-            <p class="muted" style="margin-bottom:1.5rem">
-                "輸入想問的事（可留空），抽「現況・阻礙・建議」三張牌，逐一翻開後閱讀整體解牌。抽牌由伺服器進行並存入你的紀錄。"
-            </p>
+            <h1 style="margin-bottom:0.5rem">{copy.title}</h1>
+            <p class="muted" style="margin-bottom:1.5rem">{copy.intro}</p>
 
             <div class="card">
                 <div class="field">
@@ -328,7 +405,7 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         prop:value=move || question.get()
                         on:input=move |ev| question.set(event_target_value(&ev))
                         maxlength="200"
-                        placeholder="例如：最近的職涯選擇"
+                        placeholder=copy.placeholder
                     />
                     <p class="muted" style="margin:0.35rem 0 0;font-size:0.85rem">
                         {move || format!("{}/200", question_count.get())}
@@ -369,6 +446,9 @@ pub fn TarotSpreadPage() -> impl IntoView {
                             view! {
                                 <div class="tarot-slot">
                                     <span class="tarot-slot-label">{SPREAD_LABELS[i]}</span>
+                                    {copy.slot_subs.map(|subs| view! {
+                                        <span class="tarot-slot-sub">{subs[i.min(2)]}</span>
+                                    })}
                                     <button
                                         class="tarot-card tarot-card--sm"
                                         class:flipped=is_revealed
@@ -591,9 +671,11 @@ pub fn TarotSpreadPage() -> impl IntoView {
                         .map(|q| format!("「{q}」"))
                         .unwrap_or_else(|| "無特定問題".to_string());
                     let date = item.created_at.split_once('T').map(|(d, _)| d.to_string()).unwrap_or_else(|| item.created_at.clone());
+                    let topic_label = item.topic.label();
                     view! {
                         <div class="card" style="margin-top:1rem">
                             <p class="muted" style="margin:0 0 0.25rem 0;font-size:0.85rem">
+                                <span class="tarot-topic-tag">{topic_label}</span>
                                 {format!("{} ・ {}", date, question_line)}
                             </p>
                             <p style="margin:0 0 0.5rem 0">{chips.join("　")}</p>

@@ -347,6 +347,9 @@ CREATE TABLE IF NOT EXISTS tarot_readings (
   ai_model          TEXT,
   ai_generated_at   TEXT,
   ai_chart_context  INTEGER,          -- 1=AI 解牌含命盤摘要；0=純塔羅
+  -- 子單元主題（2026-11-21-tarot-topic.sql 遷移同步）：general|love|career；
+  -- 新寫入一律存字串，舊列 NULL ≡ general（API 層處理）。無 CHECK。
+  topic             TEXT,
   UNIQUE(user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tarot_user_created ON tarot_readings(user_id, created_at);

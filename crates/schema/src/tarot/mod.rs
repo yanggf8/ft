@@ -12,14 +12,15 @@ pub use catalog::{TarotCard, CATALOG};
 
 use serde::{Deserialize, Serialize};
 
-/// 語料版本（改版 bump）。
-pub const TAROT_CORPUS_VERSION: &str = "2";
+/// 語料版本（改版 bump）。v3（2026-11-21）：新增感情／事業主題的牌位引言。
+pub const TAROT_CORPUS_VERSION: &str = "3";
 
 /// 種子編碼＋PRNG 演算法版本——改演算法必 bump，否則「同日同裝置同牌」會靜默改變。
 pub const TAROT_DRAW_ALGO_VERSION: &str = "1";
 
 /// v2 AI 解牌 prompt 版本（spec §Tarot v2-7；改 prompt 模板必 bump）。
-pub const TAROT_PROMPT_VERSION: &str = "1";
+/// v2（2026-11-21）：感情／事業主題框架行；general 輸出與 v1 逐字相同。
+pub const TAROT_PROMPT_VERSION: &str = "2";
 
 /// 洗牌熵下限（bytes）；不足即 `None`（fail-closed，不降級弱隨機）。
 pub const MIN_ENTROPY_BYTES: usize = 32;
@@ -43,6 +44,44 @@ impl Position {
     }
 }
 
+/// 三張牌陣的主題（sub-units spec §B）。wire `general|love|career`；
+/// 省略／DB 舊列 NULL ＝ `General`。牌位仍固定 現況／阻礙／建議，
+/// 主題只換牌位引言與 AI 框架。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TarotTopic {
+    #[default]
+    General,
+    Love,
+    Career,
+}
+
+impl TarotTopic {
+    pub const ALL: [TarotTopic; 3] = [TarotTopic::General, TarotTopic::Love, TarotTopic::Career];
+
+    /// wire 值（亦為 `tarot_readings.topic` 存值）。
+    pub fn wire(&self) -> &'static str {
+        match self {
+            TarotTopic::General => "general",
+            TarotTopic::Love => "love",
+            TarotTopic::Career => "career",
+        }
+    }
+
+    pub fn from_wire(s: &str) -> Option<TarotTopic> {
+        TarotTopic::ALL.into_iter().find(|t| t.wire() == s)
+    }
+
+    /// 顯示標籤（歷史清單主題標籤）。
+    pub fn label(&self) -> &'static str {
+        match self {
+            TarotTopic::General => "綜合",
+            TarotTopic::Love => "感情",
+            TarotTopic::Career => "事業",
+        }
+    }
+}
+
 /// 抽出的一張牌（位置由呼叫端按序指定）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrawnCard {
@@ -58,6 +97,9 @@ pub struct TarotDrawRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
     pub request_id: String,
+    /// 省略＝`General`（舊 web 不帶此欄仍可抽牌）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topic: Option<TarotTopic>,
 }
 
 /// v1b wire DTO — 單張牌檢視。
@@ -78,6 +120,9 @@ pub struct TarotReadingView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
     pub spread: String,
+    /// 舊 API 回應無此欄 → `General`（新 web 對舊 API 相容）。
+    #[serde(default)]
+    pub topic: TarotTopic,
     pub cards: Vec<TarotCardView>,
     pub interpretation: String,
     pub corpus_version: String,
@@ -192,29 +237,43 @@ pub fn daily_draw(entropy: &[u8]) -> Option<DrawnCard> {
     Some(DrawnCard { card, reversed })
 }
 
-/// 規則式解讀組裝：位置引言（3 位置×正逆，≤40 字）＋牌義（≤120 字）×3。
-/// 輸出 ≤600 字；輸入須為 3 張（position 序 0→2）。
 const POSITION_LABELS: [&str; 3] = ["現況", "阻礙", "建議"];
 
-/// 位置引言（3 位置×正逆，各 ≤40 字）。
-fn position_intro(pos: usize, reversed: bool) -> &'static str {
-    match (pos, reversed) {
-        (0, false) => "這是你當下的處境與基調。",
-        (0, true) => "當下的能量有些受阻或內向。",
-        (1, false) => "這是眼前主要的課題與阻礙。",
-        (1, true) => "阻礙來自內在的抗拒或失衡。",
-        (2, false) => "這是此刻可行動的方向。",
-        _ => "建議先停下來，調整後再前進。",
+/// 位置引言（主題×3 位置×正逆，各 ≤40 字）。general 與 v2 語料逐字相同；
+/// love／career 只談互動、自己的需要與可做的事——不裁決對方心意、關係結局、
+/// 升遷錄取或收入（測試 `topic_intros_avoid_verdict_words` 守門）。
+fn position_intro(topic: TarotTopic, pos: usize, reversed: bool) -> &'static str {
+    match (topic, pos, reversed) {
+        (TarotTopic::General, 0, false) => "這是你當下的處境與基調。",
+        (TarotTopic::General, 0, true) => "當下的能量有些受阻或內向。",
+        (TarotTopic::General, 1, false) => "這是眼前主要的課題與阻礙。",
+        (TarotTopic::General, 1, true) => "阻礙來自內在的抗拒或失衡。",
+        (TarotTopic::General, 2, false) => "這是此刻可行動的方向。",
+        (TarotTopic::General, _, _) => "建議先停下來，調整後再前進。",
+        (TarotTopic::Love, 0, false) => "這是這段關係此刻的樣貌與氛圍。",
+        (TarotTopic::Love, 0, true) => "關係裡的能量有些停滯，或彼此較少表達。",
+        (TarotTopic::Love, 1, false) => "這是在這段關係裡卡住的地方。",
+        (TarotTopic::Love, 1, true) => "卡住的地方可能來自你內在的擔心或拉扯。",
+        (TarotTopic::Love, 2, false) => "這是你可以照顧自己、經營互動的方式。",
+        (TarotTopic::Love, _, _) => "建議先照顧好自己的感受，再決定怎麼靠近。",
+        (TarotTopic::Career, 0, false) => "這是你目前工作的狀態與節奏。",
+        (TarotTopic::Career, 0, true) => "工作上的能量有些受阻，或動力偏向內收。",
+        (TarotTopic::Career, 1, false) => "這是工作上讓你卡住的課題。",
+        (TarotTopic::Career, 1, true) => "卡住的地方可能來自內在的猶豫或失衡。",
+        (TarotTopic::Career, 2, false) => "這是下一步可以著手的行動方向。",
+        (TarotTopic::Career, _, _) => "建議先停下來整理優先順序，再往前走。",
     }
 }
 
-pub fn assemble_interpretation(cards: &[DrawnCard]) -> Option<String> {
+/// 規則式解讀組裝：主題位置引言（≤40 字）＋牌義（≤120 字）×3。
+/// 輸出 ≤600 字；輸入須為 3 張（position 序 0→2）。
+pub fn assemble_interpretation(cards: &[DrawnCard], topic: TarotTopic) -> Option<String> {
     if cards.len() != 3 {
         return None;
     }
     let mut out = String::new();
     for (i, d) in cards.iter().enumerate() {
-        let intro = position_intro(i, d.reversed);
+        let intro = position_intro(topic, i, d.reversed);
         let (meaning, orientation) = if d.reversed {
             (d.card.reversed, "逆位")
         } else {
@@ -282,8 +341,9 @@ mod tests {
     // ── 版本常數 ──
     #[test]
     fn version_constants_are_pinned() {
-        assert_eq!(TAROT_CORPUS_VERSION, "2");
+        assert_eq!(TAROT_CORPUS_VERSION, "3");
         assert_eq!(TAROT_DRAW_ALGO_VERSION, "1");
+        assert_eq!(TAROT_PROMPT_VERSION, "2");
     }
 
     // ── taipei_today：台北 00:00 邊界（前後一秒）與 fail-closed ──
@@ -437,7 +497,7 @@ mod tests {
     #[test]
     fn interpretation_assembles_within_600_chars() {
         let cards = shuffle_three(&[3u8; 32]).expect("entropy 合法");
-        let text = assemble_interpretation(&cards).expect("3 張合法輸入");
+        let text = assemble_interpretation(&cards, TarotTopic::General).expect("3 張合法輸入");
         assert!(text.chars().count() <= 600, "解讀 >600 字");
         // 每張牌義須出現在組裝結果（快照可追溯）
         for c in &cards {
@@ -449,9 +509,175 @@ mod tests {
             assert!(text.contains(meaning), "{} 的牌義未進入解讀", c.card.id);
         }
         assert!(
-            assemble_interpretation(&cards[..2]).is_none(),
+            assemble_interpretation(&cards[..2], TarotTopic::General).is_none(),
             "非 3 張 → None"
         );
+    }
+
+    // ── 主題（sub-units spec §B.3）──
+    #[test]
+    fn topic_wire_roundtrip_and_default() {
+        for t in TarotTopic::ALL {
+            assert_eq!(TarotTopic::from_wire(t.wire()), Some(t));
+            let json = serde_json::to_string(&t).unwrap();
+            assert_eq!(json, format!("\"{}\"", t.wire()));
+        }
+        assert_eq!(TarotTopic::from_wire("money"), None);
+        assert_eq!(TarotTopic::default(), TarotTopic::General);
+        // 舊 web：不帶 topic → None（route 視為 general）
+        let req: TarotDrawRequest =
+            serde_json::from_str(r#"{"spread":"three","requestId":"x"}"#).unwrap();
+        assert_eq!(req.topic, None);
+        let req: TarotDrawRequest =
+            serde_json::from_str(r#"{"spread":"three","requestId":"x","topic":"love"}"#).unwrap();
+        assert_eq!(req.topic, Some(TarotTopic::Love));
+        assert!(serde_json::from_str::<TarotDrawRequest>(
+            r#"{"spread":"three","requestId":"x","topic":"money"}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn reading_view_without_topic_reads_as_general() {
+        // 新 web 對舊 API：回應無 topic 欄 → General
+        let v: TarotReadingView = serde_json::from_str(
+            r#"{"id":"a","spread":"three","cards":[],"interpretation":"i","corpusVersion":"2","createdAt":"t"}"#,
+        )
+        .unwrap();
+        assert_eq!(v.topic, TarotTopic::General);
+    }
+
+    /// general 引言與 v2 語料逐字相同（spec §B.3：general 輸出不變）。
+    #[test]
+    fn general_intros_unchanged_from_v2() {
+        let expected = [
+            "這是你當下的處境與基調。",
+            "當下的能量有些受阻或內向。",
+            "這是眼前主要的課題與阻礙。",
+            "阻礙來自內在的抗拒或失衡。",
+            "這是此刻可行動的方向。",
+            "建議先停下來，調整後再前進。",
+        ];
+        for pos in 0..3 {
+            for (k, reversed) in [false, true].into_iter().enumerate() {
+                assert_eq!(
+                    position_intro(TarotTopic::General, pos, reversed),
+                    expected[pos * 2 + k]
+                );
+            }
+        }
+    }
+
+    fn all_intros() -> Vec<(TarotTopic, usize, bool, &'static str)> {
+        let mut v = Vec::new();
+        for t in TarotTopic::ALL {
+            for pos in 0..3 {
+                for reversed in [false, true] {
+                    v.push((t, pos, reversed, position_intro(t, pos, reversed)));
+                }
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn topic_intros_within_40_chars_and_distinct() {
+        let intros = all_intros();
+        for (t, pos, rev, s) in &intros {
+            let n = s.chars().count();
+            assert!(n > 0 && n <= 40, "{t:?} {pos} {rev} 引言 {n} 字");
+        }
+        // love／career 不得沿用 general 的引言（主題化確實生效）
+        for (t, pos, rev, s) in &intros {
+            if *t != TarotTopic::General {
+                assert_ne!(*s, position_intro(TarotTopic::General, *pos, *rev));
+            }
+        }
+    }
+
+    /// 塔羅主題引言禁字：是非裁決語（對方心意、關係結局、升遷錄取收入）與
+    /// 吉凶／注定類（sub-units spec §B.3 R09）。
+    const TAROT_INTRO_BANNED_WORDS: &[&str] = &[
+        "一定",
+        "注定",
+        "必然",
+        "必定",
+        "保證",
+        "命中",
+        "吉",
+        "凶",
+        "復合",
+        "分手",
+        "離婚",
+        "結婚",
+        "挽回",
+        "會回來",
+        "回心轉意",
+        "他愛",
+        "她愛",
+        "對方心意",
+        "真心",
+        "劈腿",
+        "外遇",
+        "正緣",
+        "升職",
+        "升遷",
+        "加薪",
+        "錄取",
+        "失業",
+        "裁員",
+        "開除",
+        "收入",
+        "賺錢",
+        "財運",
+        "破財",
+        "成功",
+        "失敗",
+    ];
+
+    #[test]
+    fn topic_intros_avoid_verdict_words() {
+        for (t, pos, rev, s) in all_intros() {
+            for w in TAROT_INTRO_BANNED_WORDS {
+                assert!(!s.contains(w), "{t:?} {pos} {rev} 引言含禁字「{w}」：{s}");
+            }
+        }
+    }
+
+    /// 三主題組裝 ≤600 字：以每牌位「最長引言＋最長牌名＋最長牌義」的保守上界
+    /// 證明（不依賴抽樣），另以實際抽牌抽樣交叉驗證。
+    #[test]
+    fn assembled_interpretation_within_600_for_all_topics() {
+        for t in TarotTopic::ALL {
+            let mut bound = 2; // 兩個換行
+            for (pos, label) in POSITION_LABELS.iter().enumerate() {
+                let worst = CATALOG
+                    .iter()
+                    .flat_map(|c| [(c, false), (c, true)])
+                    .map(|(c, rev)| {
+                        let meaning = if rev { c.reversed } else { c.upright };
+                        format!(
+                            "【{}】{}\n{}（正位）：{}",
+                            label,
+                            position_intro(t, pos, rev),
+                            c.name,
+                            meaning
+                        )
+                        .chars()
+                        .count()
+                    })
+                    .max()
+                    .unwrap();
+                bound += worst;
+            }
+            assert!(bound <= 600, "{t:?} 上界 {bound} > 600");
+            for i in 0..200u8 {
+                let cards = shuffle_three(&[i; 32]).expect("entropy 合法");
+                let text = assemble_interpretation(&cards, t).expect("≤600 字");
+                assert!(text.chars().count() <= 600);
+                assert!(text.contains(position_intro(t, 0, cards[0].reversed)));
+            }
+        }
     }
 
     // ── 冪等輔助 ──

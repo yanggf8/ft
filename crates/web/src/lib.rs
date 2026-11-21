@@ -42,6 +42,9 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/naming") view=NamingPage/>
                     <Route path=path!("/tarot") view=TarotPage/>
                     <Route path=path!("/tarot/spread") view=|| view! { <Protected><TarotSpreadPage/></Protected> }/>
+                    // 塔羅子單元（sub-units spec §B.2）：同一頁、以 topic 區分
+                    <Route path=path!("/tarot/love") view=|| view! { <Protected><TarotSpreadPage topic=ft_schema::tarot::TarotTopic::Love/></Protected> }/>
+                    <Route path=path!("/tarot/career") view=|| view! { <Protected><TarotSpreadPage topic=ft_schema::tarot::TarotTopic::Career/></Protected> }/>
                     <Route path=path!("/palm") view=PalmL0Page/>
                     <Route path=path!("/palm/capture") view=|| view! { <Protected><PalmCapturePage/></Protected> }/>
                     // 空間風水 v1（公開、純前端；答案只存 localStorage）
