@@ -1,6 +1,7 @@
 //! ft-worker — Phase A engine Worker, exposed via service binding to the TS Worker.
 //! Entry points mirror what the TS charts.ts route needs:
 //!   GET /engine/ziwei   -> ft-ziwei.calculate()
+//!   GET /engine/ziwei/horoscope -> ft-ziwei.horoscope()（流年大運，回應 key `horoscope`）
 //!   GET /engine/western -> ft-western.calculate()
 
 use serde::Deserialize;
@@ -13,6 +14,17 @@ struct ZiweiQuery {
     gender: Option<String>,
     #[serde(rename = "fixLeap")]
     fix_leap: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct ZiweiHoroscopeQuery {
+    date: String,
+    hour: u8,
+    gender: Option<String>,
+    #[serde(rename = "fixLeap")]
+    fix_leap: Option<bool>,
+    /// 陽曆 `YYYY-M-D`
+    target: String,
 }
 
 #[derive(Deserialize)]
@@ -30,6 +42,7 @@ async fn fetch(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
     let path = url.path().replace("//", "/");
     match path.as_str() {
         "/engine/ziwei" => handle_ziwei(&req).await,
+        "/engine/ziwei/horoscope" => handle_ziwei_horoscope(&req).await,
         "/engine/western" => handle_western(&req).await,
         "/health" => {
             Response::from_json(&serde_json::json!({ "status": "ok", "engine": "ft-worker" }))
@@ -72,6 +85,33 @@ async fn handle_ziwei(req: &Request) -> Result<Response> {
             let mut r = Response::from_json(&serde_json::json!({ "error": e }))?;
             r = r.with_status(500);
             Ok(r)
+        }
+    }
+}
+
+async fn handle_ziwei_horoscope(req: &Request) -> Result<Response> {
+    let q: ZiweiHoroscopeQuery = match req.query() {
+        Ok(q) => q,
+        Err(_) => {
+            let r = Response::from_json(&serde_json::json!({
+                "error": "missing required params: date, hour, target",
+                "code": "MISSING_PARAMS"
+            }))?;
+            return Ok(r.with_status(400));
+        }
+    };
+    let gender = q.gender.unwrap_or_else(|| "male".to_string());
+    let fix_leap = q.fix_leap.unwrap_or(true);
+    let time_index = ft_ziwei::hour_to_time_index(q.hour);
+    match ft_ziwei::horoscope(&q.date, time_index, &gender, fix_leap, &q.target) {
+        Ok(horoscope) => {
+            let mut r = Response::from_json(&serde_json::json!({ "horoscope": horoscope }))?;
+            cors_headers(&mut r)?;
+            Ok(r)
+        }
+        Err(e) => {
+            let r = Response::from_json(&serde_json::json!({ "error": e }))?;
+            Ok(r.with_status(500))
         }
     }
 }
