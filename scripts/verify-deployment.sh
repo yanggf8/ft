@@ -179,6 +179,46 @@ else
   FAILED=1
 fi
 
+# Test 8z: 紫微子單元 endpoints are routed and auth-guarded (401 without a session),
+# plus an engine golden for the 流年 horoscope (spec 2026-11-21-sub-units §5).
+echo -n "8z. Ziwei sub-unit endpoints (401 without auth)... "
+ZW_OK=1
+for probe in \
+  "GET|/api/ziwei/horoscope" \
+  "GET|/api/ziwei/year" \
+  "POST|/api/ziwei/year/interpret"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    ZW_OK=0
+  fi
+done
+# golden: 1990-05-15 午時 男, target 2026-7-1 → 流年 丙午、流年命宮 午、虛歲 37、大限 寅、小限 辰
+HORO=$(hcurl "$ENGINE_URL/engine/ziwei/horoscope?date=1990-5-15&hour=12&gender=male&target=2026-7-1") || true
+if ! echo "$HORO" | python3 -c '
+import json,sys
+h=json.load(sys.stdin)["horoscope"]
+y=h["yearly"]
+assert (y["stem"],y["branch"])==("丙","午"), y
+assert h["nominalAge"]==37 and h["luckYear"]==2026, h
+assert h["decadal"]["branch"]=="寅" and h["age"]["branch"]=="辰", h
+assert [y["mutagen"][k] for k in ("lu","quan","ke","ji")]==["天同","天機","文昌","廉貞"], y["mutagen"]
+' 2>/dev/null; then
+  echo ""
+  echo "   ✗ engine horoscope golden mismatch: ${HORO:0:300}"
+  ZW_OK=0
+fi
+if [ "$ZW_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 # Test 8c: palm endpoints are routed and auth-guarded (401 without a session).
 # (auth fires before any rate limit on these paths — 401 probes consume no quota)
 echo -n "8c. Palm endpoints (401 without auth)... "

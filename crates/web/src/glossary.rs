@@ -45,7 +45,8 @@ pub struct Term {
 /// 2026-11-17 glossary-1.5：興趣探索下架（站長裁示），移除「自我探索」分類與其 2 條。
 /// 2026-11-18 glossary-1.6：新增「風水」分類 10 條（空間風水 v1 Batch 2；風水詞條用引述
 /// 語氣、研究詞條照實，避開 spec §2.6 禁用詞）。
-pub const GLOSSARY_VERSION: &str = "glossary-1.6";
+/// 2026-11-21 glossary-1.7：子單元——紫微新增流年／小限／流年四化／童限，風水新增門沖。
+pub const GLOSSARY_VERSION: &str = "glossary-1.7";
 
 /// 詞條按分類排列。
 pub static TERMS: &[Term] = &[
@@ -75,7 +76,7 @@ pub static TERMS: &[Term] = &[
         category: Category::Ziwei,
         def: "十年一階段的運勢區間，類似西洋占星的十年大運。",
     },
-    // 紫微子單元（2026-11-21 流年大運／今年運勢；GLOSSARY_VERSION 由整合時一次 bump）
+    // 紫微子單元（2026-11-21 流年大運／今年運勢；glossary-1.7）
     Term {
         term: "童限",
         category: Category::Ziwei,
