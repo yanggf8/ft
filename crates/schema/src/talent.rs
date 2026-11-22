@@ -14,6 +14,8 @@ pub const TALENT_CATALOG_VERSION: &str = "1";
 
 /// 每題的步數。
 pub const STEPS: u8 = 3;
+/// 每次小挑戰的時間（分鐘）；文案「15 分鐘」與倒數都以此為準。
+pub const TIMER_MINUTES: i32 = 15;
 /// 猜完後回報的期限（秒）：7 天。
 pub const WINDOW_SECS: i64 = 7 * 86_400;
 /// 顯示「猜測傾向」需要的最少已回報筆數。
@@ -603,6 +605,9 @@ mod tests {
             assert!(CATALOG.iter().any(|i| i.domain == d), "{d:?} empty");
         }
         assert_eq!(STEPS as usize, CATALOG[0].steps.len());
+        // 文案寫的分鐘數必須與倒數一致
+        assert!(TIMER_NOTE.contains(&format!("{TIMER_MINUTES} 分鐘")));
+        assert!(PAGE_INTRO.contains(&format!("{TIMER_MINUTES} 分鐘")));
     }
 
     #[test]

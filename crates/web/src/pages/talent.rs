@@ -24,8 +24,8 @@ use leptos_router::components::A;
 use crate::api::{self, ApiErr};
 use crate::auth::use_auth;
 
-/// 倒數長度（秒）：與 `TIMER_NOTE`「計時 15 分鐘」同一個 15 分鐘。純前端、不存。
-const TIMER_SECS: i32 = 15 * 60;
+/// 倒數長度（秒）：來自 schema `TIMER_MINUTES`（測試確保與文案一致）。純前端、不存。
+const TIMER_SECS: i32 = ft_schema::talent::TIMER_MINUTES * 60;
 /// 已有進行中實驗時，先猜區的說明（API 409 `OPEN_TRIAL_EXISTS` 同義）。
 const OPEN_EXISTS_MSG: &str = "你還有一個進行中的小實驗，先對完答案或等它過期。";
 /// 已下架題目（item_id 不在目前 CATALOG）的標題。
