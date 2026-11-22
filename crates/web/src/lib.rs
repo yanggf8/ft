@@ -19,7 +19,7 @@ use crate::components::Layout;
 use crate::pages::{
     AdminPage, DivinationPage, DivinationParamPage, FengshuiPage, GlossaryPage, HomePage,
     LoginPage, NamingPage, PalmCapturePage, PalmL0Page, PersonalityPage, ProfilePage, ShopPage,
-    StoryPage, TarotPage, TarotSpreadPage, ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage,
+    StoryPage, TalentPage, TarotPage, TarotSpreadPage, ZiweiHubPage, ZiweiLuckPage, ZiweiYearPage,
     ZodiacMatchPage,
 };
 
@@ -54,6 +54,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/zodiac") view=ZodiacMatchPage/>
                     // 開運小物 v1（公開；匿名以 localStorage anonId 登記）
                     <Route path=path!("/shop") view=ShopPage/>
+                    // 上手小實驗 v1（頁面公開；未登入顯示說明＋登入連結，功能需登入）
+                    <Route path=path!("/try") view=TalentPage/>
                     <Route path=path!("/glossary") view=GlossaryPage/>
                     <Route path=path!("/profile") view=|| view! { <Protected><ProfilePage/></Protected> }/>
                     <Route path=path!("/personality") view=|| view! { <Protected><PersonalityPage/></Protected> }/>

@@ -16,9 +16,10 @@
 //     （淨零：DELETE 依 anonId 刪掉剛寫的列）；
 //   - 空間風水：選房間三個縮景載入；三房型各灌一組答案到 localStorage → 結果頁縮景圖全部載入、
 //     有翻卡；
-//   - 塔羅今日抽牌可翻牌；紫微選單三張子單元卡；
+//   - 塔羅今日抽牌可翻牌；紫微選單三張子單元卡；上手小實驗 /try 未登入有登入連結；
 //   - --login：DB 直插 login token 自造測試帳號（同 subunits-selftest.py，需本機 turso 已登入），
-//     驗 /ziwei/luck 十二宮與流年標記、/ziwei/chart 命盤、/tarot/love 頁面（不抽牌、不打 AI），
+//     驗 /ziwei/luck 十二宮與流年標記、/ziwei/chart 命盤、/tarot/love 頁面（不抽牌、不打 AI）、
+//     上手小實驗整鏈（抽三個→猜第 1 步→對答案第 2 步→結果卡「多走了 1 步」→UI 刪除→紀錄為空），
 //     結束 SQL 硬清測試列。
 // 結束碼：0 全過；1 有失敗；2 環境問題（找不到 playwright／chromium）。
 
@@ -128,7 +129,7 @@ async function makeTestUser() {
   return { sid, uid };
 }
 function cleanupTestUser(uid) {
-  for (const t of ['tarot_readings', 'ziwei_year_readings', 'interpretations', 'shop_interest', 'zodiac_match_readings']) {
+  for (const t of ['tarot_readings', 'ziwei_year_readings', 'interpretations', 'shop_interest', 'zodiac_match_readings', 'talent_trials']) {
     try { turso(`DELETE FROM ${t} WHERE user_id='${uid}'`); } catch { /* table may not exist */ }
   }
   turso(`DELETE FROM users WHERE id='${uid}'`);
@@ -154,7 +155,7 @@ async function main() {
 
   try {
     // 1. 公開頁 mount
-    for (const route of ['/', '/tarot', '/fengshui', '/fengshui/office', '/shop', '/ziwei', '/zodiac', '/naming', '/glossary', '/palm', '/login']) {
+    for (const route of ['/', '/tarot', '/fengshui', '/fengshui/office', '/shop', '/try', '/ziwei', '/zodiac', '/naming', '/glossary', '/palm', '/login']) {
       try {
         const p = await openPage(ctx, route, problems);
         step(`mount ${route}`, true);
@@ -175,7 +176,7 @@ async function main() {
       step('快取 hash ft_web.js（boot.js 內）', /ft_web\.js\?v=/.test(html));
       // 首頁功能卡
       const cards = await p.evaluate(() => [...document.querySelectorAll('a.feature')].map(a => a.getAttribute('href')));
-      step('首頁功能卡', cards.length >= 8 && cards.includes('/shop') && cards.includes('/fengshui'), `${cards.length} 張`);
+      step('首頁功能卡', cards.length >= 8 && cards.includes('/shop') && cards.includes('/fengshui') && cards.includes('/try'), `${cards.length} 張`);
       await p.close();
     }
 
@@ -243,6 +244,11 @@ async function main() {
       // 未登入時子單元連結走 /login?next=…（設計如此），登入後才是直接路徑
       step('紫微選單三張子單元', ['/ziwei/chart', '/ziwei/luck', '/ziwei/year'].every(h => links.some(l => l === h || l === `/login?next=${h}`)));
       await z.close();
+      // 上手小實驗：未登入顯示登入連結（回流 /try）
+      const t = await openPage(ctx, '/try', problems);
+      const tryLogin = await t.locator('a[href="/login?next=/try"]').count();
+      step('上手小實驗未登入有登入連結', tryLogin > 0, `${tryLogin}`);
+      await t.close();
     }
 
     // 6. 登入後（--login）
@@ -267,6 +273,32 @@ async function main() {
         const h1 = await love.evaluate(() => document.querySelector('h1')?.innerText || '');
         step('塔羅感情頁（不抽牌）', h1.includes('感情'), h1);
         await love.close();
+        // 上手小實驗整鏈（淨零：最後由 UI 刪除；cleanup 另以 SQL 兜底）
+        const tr = await openPage(ctx, '/try', problems);
+        try {
+          await tr.waitForSelector('[data-testid=try-history]', { timeout: args.timeout });
+          await tr.click('[data-testid=try-draw]');
+          await tr.waitForFunction(() => document.querySelectorAll('.try-card').length === 3, null, { timeout: 5000 });
+          step('上手小實驗抽三個', true);
+          await tr.locator('.try-card').first().click();
+          await tr.click('[data-testid=try-predict] .try-step[data-step="1"]');
+          await tr.click('[data-testid=try-predict-submit]');
+          await tr.waitForSelector('[data-testid=try-open] [data-testid=try-report]', { timeout: args.timeout });
+          await tr.click('[data-testid=try-report] .try-step[data-step="2"]');
+          await tr.click('[data-testid=try-report-submit]');
+          await tr.waitForSelector('[data-testid=try-result]', { timeout: args.timeout });
+          const res = await tr.locator('[data-testid=try-result]').innerText();
+          step('上手小實驗猜 1 → 實際 2 結果卡', res.includes('多走了 1 步'), res.replace(/\s+/g, ' ').slice(0, 80));
+          const del = tr.locator('.try-history-row .try-del').first();
+          await del.click();
+          await tr.waitForFunction(() => (document.querySelector('.try-history-row .try-del')?.innerText || '').includes('再點一次'), null, { timeout: 5000 });
+          await del.click();
+          await tr.waitForSelector('[data-testid=try-history-empty]', { timeout: args.timeout });
+          step('上手小實驗 UI 刪除後紀錄為空', true);
+        } catch (e) {
+          step('上手小實驗整鏈', false, String(e.message).split('\n')[0]);
+        }
+        await tr.close();
       } catch (e) {
         step('登入後檢查', false, String(e.message).split('\n')[0]);
       } finally {
