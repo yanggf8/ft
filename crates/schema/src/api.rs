@@ -712,3 +712,73 @@ pub struct ShopInterestResponse {
 pub struct ShopInterestMeResponse {
     pub item_ids: Vec<String>,
 }
+
+// ═══ 上手小實驗（spec docs/superpowers/specs/2026-11-22-talent-tryout-design.md §13.3）═══
+
+/// `POST /api/talent/trials` 請求。數字欄位由路由以 `serde_json::Value` 驗證，此型別供前端送出。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentTrialCreate {
+    pub item_id: String,
+    pub predicted: u8,
+    pub request_id: String,
+}
+
+/// `POST /api/talent/trials/:id/report` 請求。`reached: None`＝這次沒做（key 必送，序列化為 null）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentTrialReport {
+    pub reached: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stuck: Option<String>,
+    pub request_id: String,
+}
+
+/// 一筆小實驗。`status`：open｜reported｜skipped｜expired（expired 由讀取時計算）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentTrial {
+    pub id: String,
+    pub item_id: String,
+    pub catalog_version: String,
+    pub predicted: u8,
+    pub created_at: String,
+    pub status: String,
+    #[serde(default)]
+    pub reached: Option<u8>,
+    #[serde(default)]
+    pub stuck: Option<String>,
+    #[serde(default)]
+    pub reported_at: Option<String>,
+    /// 實際−猜；只有 reported 有值
+    #[serde(default)]
+    pub gap: Option<i8>,
+}
+
+/// 猜測傾向。`need`＝還差幾筆（0＝已達門檻）；`kind`：conservative｜close｜optimistic。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentTendency {
+    pub reported_count: u32,
+    pub need: u32,
+    pub under: u32,
+    pub exact: u32,
+    pub over: u32,
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
+/// `GET /api/talent/trials` 回應（新到舊）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentTrialsResponse {
+    pub trials: Vec<TalentTrial>,
+    pub tendency: TalentTendency,
+}
+
+/// DELETE 回應。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TalentDeleteResponse {
+    pub deleted: u32,
+}

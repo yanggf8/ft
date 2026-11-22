@@ -13,6 +13,7 @@ pub mod predict;
 pub mod shop;
 pub mod storage;
 pub mod symbolic;
+pub mod talent;
 pub mod tarot;
 pub mod ziwei_luck;
 pub mod zodiac;
