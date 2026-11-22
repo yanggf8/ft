@@ -63,6 +63,7 @@ node scripts/web-smoke.mjs --base <url> [--login]  # 前端真瀏覽器驗證（
 ./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
 python3 -I scripts/subunits-selftest.py      # 子單元正式站自測（紫微流年/今年運勢、塔羅主題；自造帳號、預設硬清）
 python3 -I scripts/shop-selftest.py          # 開運小物正式站自測（匿名／登入登記、轉登入不重算、me 聯集、取消、錯誤碼；結束硬清）
+python3 scripts/talent-selftest.py [--api <url> --db <name>]  # 上手小實驗自測（建立冪等、單一進行中、回報一次性、過期 410、傾向門檻、刪除；結束硬清）
 ./scripts/f8-acceptance.sh [--cleanup]      # F8 對照組驗收全自動（DB 自造 login token 登入、
                                             #   測驗自舉、事前盲/遮罩/解盲、turso 帳本交叉比對）
 ```
@@ -167,6 +168,12 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   價格測試守門，**不得宣稱任何改運效果**。`routes/shop.rs` 登入可選（`auth_user_opt`）＋`anonId`；
   migration 先於 API 部署；資料永不寫入 predictions/prediction_feedback/f8_assignments；
   日後加帳號刪除路由須一併刪 `shop_interest`。細節見 docs/ARCHITECTURE.md §開運小物。
+- **上手小實驗（天賦線 v1，2026-11-22）**：`/try`，宣稱者＝使用者自己（先猜 15 分鐘做到第幾步→鎖定→
+  7 天內回報→看差距）。目錄 `ft_schema::talent`：題目 `id`／標題／領域／步驟**永不改**（改＝新 id、舊 id 下架＋
+  bump `TALENT_CATALOG_VERSION`）；所有固定文案在 schema，雙語禁字測試守門（對外不說「天賦」、不做能力宣稱、
+  不做跨題比較）；`draw_three` 只吃「試過的領域」，結果**不得**進推薦。過期判斷唯一來源 `talent::is_expired`；
+  「同時一筆進行中」靠原子 `INSERT … WHERE NOT EXISTS`；回報一次性。資料永不寫入
+  predictions/prediction_feedback/f8_assignments、不 import `symbolic`；日後加帳號刪除路由須一併刪 `talent_trials`。
 - **風水縮景（2026-11-22）**：結果頁縮景零件由 `scripts/sprite-stack/fengshui_parts.py` 產生
   （切片＋`crates/schema/src/fengshui/diorama_parts.rs`，勿手改）；改零件或 ruleset 題目／選項後必重跑產生器、
   跑 `--check`（CI 沒 PIL），並更新 `fengshui/diorama.rs` 的 `MAPPING`、bump `DIORAMA_VERSION`

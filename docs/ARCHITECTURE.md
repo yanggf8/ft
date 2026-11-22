@@ -297,6 +297,18 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   零件位置表在產生器檔頭；`--check`（需 PIL，CI 不跑）比對檔案⇄常數（含像素）、不同題目零件兩兩無共用體素、
   每個零件接地。只畫使用者描述的東西：unknown／「沒有」不畫、不標好壞、中性粉彩。
 
+## 上手小實驗（天賦線 v1，2026-11-22）
+
+- 設計：`docs/superpowers/specs/2026-11-22-talent-tryout-design.md`（v1.2，§13 為 Gemini 獨立審修正，優先）；
+  方向：`2026-11-17-talent-direction.md` v3 路徑 c。
+- schema `ft_schema::talent`：12 題（10 領域）、卡點、固定文案、`gap`／`tendency`（≥3 筆已回報才給
+  conservative｜close｜optimistic，平均差距 ±0.5 為界）、`is_expired`（7×24h）、`draw_three`（有未試領域時第一題取
+  未試領域）、`digits_for`（數字題由試驗 id 確定性產生）、`TIMER_MINUTES`。
+- API `routes/talent.rs`：`GET|POST /api/talent/trials`、`POST /api/talent/trials/:id/report`、
+  `DELETE /api/talent/trials(/:id)`；全需登入、寫入限流 `talent:user:{uid}` 60／小時；表 `talent_trials`（只有 PK）。
+  過期與沒做不計入傾向；狀態 expired 由讀取時計算。
+- 前端 `pages/talent.rs`（`/try`）＋首頁卡；web-smoke `--login` 跑整鏈並由 UI 刪除；`scripts/talent-selftest.py`。
+
 ## 上線前驗證管線（2026-11-22）
 
 - **staging 環境**（完全隔離）：Turso `fortunet-staging`（schema.sql 建表，與正式同 24 表）；
