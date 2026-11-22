@@ -63,7 +63,9 @@ ADMIN_EMAIL = "yanggf@msn.com,yang.goufang@gmail.com"
 # Pages preview deployments get hashed origins like
 # https://abc12345.fortunet.pages.dev — each preview origin must be listed
 # here explicitly after deploying a preview, or preview previews fail CORS.
-ALLOWED_ORIGINS = ""
+# staging.fortunet.pages.dev = 固定的上線前驗證分支（deploy-web.sh 先部署到這裡跑
+# scripts/web-smoke.mjs，過了才部署 main）；只有本帳號能部署到 fortunet 專案。
+ALLOWED_ORIGINS = "https://staging.fortunet.pages.dev"
 
 # Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
 # class_names are already in `new_sqlite_classes` and are NOT re-run.

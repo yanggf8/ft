@@ -37,7 +37,7 @@ cargo clippy --target wasm32-unknown-unknown   # lints (report only, not gating)
 ```bash
 ./scripts/deploy-api.sh      # api: worker-build --release + wrangler deploy + route sanity
 ./scripts/deploy-engine.sh   # engine: worker-build --release + wrangler deploy
-./scripts/deploy-web.sh      # web: build-web.sh (copies _headers) + wrangler pages deploy
+./scripts/deploy-web.sh      # web: build → staging 分支 → web-smoke（過了才）→ 正式站 → web-smoke
 # build only (web): cd crates/web && ./scripts/build-web.sh   (cargo build + wasm-bindgen, no trunk)
 # manual equivalent (api): cd crates/api && worker-build --release && wrangler deploy
 ```
@@ -57,7 +57,8 @@ gwebcdb-mint turso --tier write --db fortunet --export
 ### Helper Scripts
 
 ```bash
-./scripts/verify-deployment.sh              # production health + new-route sanity
+./scripts/verify-deployment.sh              # production health + new-route sanity + 9. 前端真瀏覽器 smoke
+node scripts/web-smoke.mjs --base <url> [--login]  # 前端真瀏覽器驗證（staging 或正式站；--login 自造帳號、硬清）
 ./scripts/predictions-e2e.sh -t <session>   # F5 本週預測半自動 E2E（generate→checks→feedback 整鏈）
 python3 -I scripts/subunits-selftest.py      # 子單元正式站自測（紫微流年/今年運勢、塔羅主題；自造帳號、預設硬清）
 python3 -I scripts/shop-selftest.py          # 開運小物正式站自測（匿名／登入登記、轉登入不重算、me 聯集、取消、錯誤碼；結束硬清）
@@ -90,6 +91,12 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
 - `crates/web` — Leptos CSR frontend.
 
 ## Rules worth remembering
+
+- **前端驗證紅線（2026-11-22）**：沒有本機伺服器，上線前驗證＝Pages 固定分支
+  `staging.fortunet.pages.dev`（API `ALLOWED_ORIGINS` 已列入，打正式 API／DB）。`deploy-web.sh`
+  先部署 staging、跑 `scripts/web-smoke.mjs`，**不過不准上正式站**；上線後再對 ahexagram.com 跑一次。
+  新增頁面或互動時，同步在 web-smoke 加檢查。smoke 寫入的測試資料必須淨零（匿名登記即刻取消、
+  `--login` 帳號 SQL 硬清）。API／engine 目前沒有 staging（共用正式 DB），只有部署後的 verify。
 
 - Engine-version constants are authoritative in
   `crates/api/src/services/engine_version.rs` — the api side stamps chart caches and

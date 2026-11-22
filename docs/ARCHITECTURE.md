@@ -297,6 +297,16 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   零件位置表在產生器檔頭；`--check`（需 PIL，CI 不跑）比對檔案⇄常數（含像素）、不同題目零件兩兩無共用體素、
   每個零件接地。只畫使用者描述的東西：unknown／「沒有」不畫、不標好壞、中性粉彩。
 
+## 前端驗證管線（2026-11-22）
+
+- `scripts/web-smoke.mjs`（Playwright core＋本機 chromium headless shell，手機 390×844 新 context）：
+  11 個公開頁 mount、JS 例外與同源 4xx/5xx、`?v=` 快取 hash、首頁卡、開運小物（6 卡、sprite stack 圖、
+  匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景（灌 localStorage 答案後清掉）、塔羅翻牌、紫微選單；
+  `--login` 另驗流年大運／命盤／塔羅感情頁並硬清測試帳號。結束碼 0／1／2（2＝環境缺 playwright）。
+- `deploy-web.sh`：build → `--branch=staging`（staging.fortunet.pages.dev）→ smoke（turso 可用時 `--login`）
+  → 過了才 `--branch=main` → smoke 正式站。`verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
+- 缺口：API／engine 沒有 staging，部署前只有單元測試＋部署後 verify（cort question 追蹤）。
+
 ## Kawaii light theme (2026-11-19)
 
 Plan + review record: `docs/superpowers/plans/2026-11-19-kawaii-light-redesign.md`
