@@ -311,8 +311,9 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景、塔羅翻牌、紫微選單；`--login` 另驗流年大運／
   命盤／塔羅感情頁並硬清測試帳號。`FT_API`／`FT_DB` 指向 staging。結束碼 0／1／2（2＝缺 playwright）。
   `verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
-- 限制：staging 沒有 Resend／Google OAuth／Cerebras／Groq 金鑰，寄信、Google 登入與外部 AI 在 staging
-  不可用（Workers AI 可用）；smoke 不測這些。
+- staging 刻意只有 `TURSO_AUTH_TOKEN`：程式只讀三把 secret（TURSO_AUTH_TOKEN、RESEND_API_KEY 寄登入信、
+  GOOGLE_CLIENT_SECRET Google 登入）；staging 驗證用 DB 直插 login token 登入，不寄信、不走 Google，
+  所以後兩把不需要。正式 worker 上的 GROQ_API_KEY／CEREBRAS_API_KEY 是舊 provider 殘留，程式已不讀。
 
 ## Kawaii light theme (2026-11-19)
 

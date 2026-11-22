@@ -99,7 +99,7 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   `staging.fortunet.pages.dev`＋`scripts/web-smoke.mjs --login`）。staging 完全隔離：Turso
   `fortunet-staging`、獨立 DO／R2，網頁依 host 自動打 staging API（`api.rs api_base`）。
   **任何 DB migration 先跑 `fortunet-staging` 再跑 `fortunet`**；schema.sql 變更兩邊都要套。
-  staging 只有 `TURSO_AUTH_TOKEN` secret（不寄信、不走 Google OAuth）。新增頁面或互動時同步在
+  staging 只需要 `TURSO_AUTH_TOKEN`（程式另外只讀 RESEND_API_KEY／GOOGLE_CLIENT_SECRET，staging 驗證用不到）。新增頁面或互動時同步在
   web-smoke 加檢查；smoke 測試資料必須淨零。
 - Engine-version constants are authoritative in
   `crates/api/src/services/engine_version.rs` — the api side stamps chart caches and
