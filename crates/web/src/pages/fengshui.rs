@@ -23,14 +23,16 @@ use ft_schema::fengshui::corpus::{
     REVEAL_MISS, REVEAL_PROMPT, REVEAL_SKIP_ALL,
 };
 use ft_schema::fengshui::{
-    assess, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Room, Stance,
-    Status, FENGSHUI_ROOM_CORPUS_VERSION, FENGSHUI_ROOM_RULESET_VERSION,
+    assess, diorama_parts, evidence_by_key, question, questions, Card, Evidence, QuestionDef, Room,
+    Stance, Status, DIORAMA_CAPTION, DIORAMA_GRID, FENGSHUI_ROOM_CORPUS_VERSION,
+    FENGSHUI_ROOM_RULESET_VERSION,
 };
 use leptos::prelude::*;
 use leptos_router::components::{Redirect, A};
 use leptos_router::hooks::{use_navigate, use_params_map};
 
-use crate::components::SpriteStack;
+use super::room_stacks::{ROOM_STACK_GRID, ROOM_STACK_LAYERS};
+use crate::components::{SpriteStack, SpriteStackParts};
 
 // ═══ localStorage ═══
 
@@ -1116,6 +1118,8 @@ pub fn FengshuiPage() -> impl IntoView {
                 </div>
             </div>
 
+            {diorama(r, &answers.get())}
+
             {has_cards.then(|| {
                 view! {
                     {(!has_actionable).then(|| view! {
@@ -1192,13 +1196,34 @@ pub fn FengshuiPage() -> impl IntoView {
     }
 }
 
-/// 房型縮景切片：(層數, 切片格數)。由 `scripts/sprite-stack/rooms.py` 產生於
-/// `assets/stack/room-<wire>/NN.webp`；重跑後層數變了要同步這裡。
+/// 房型縮景切片：(層數, 切片格數)。切片與常數都由 `scripts/sprite-stack/rooms.py` 產生
+/// （`assets/stack/room-<wire>/NN.webp`、`room_stacks.rs`）。
 fn room_stack_dims(r: Room) -> (usize, usize) {
-    match r {
-        Room::Bedroom => (13, 36),
-        Room::Study => (16, 36),
-        Room::Office => (16, 36),
+    let layers = ROOM_STACK_LAYERS
+        .iter()
+        .find(|(room, _)| *room == r)
+        .map_or(0, |(_, n)| *n);
+    (layers, ROOM_STACK_GRID)
+}
+
+/// 結果頁頂端「你的房間」縮景（spec 2026-11-22 風水縮景）：依答案組零件疊起來自轉；
+/// 只重現使用者描述的東西，不標好壞。零件切片由 `scripts/sprite-stack/fengshui_parts.py` 產生。
+fn diorama(r: Room, answers: &BTreeMap<String, String>) -> impl IntoView {
+    let parts: Vec<(&'static str, &'static [u8])> = diorama_parts(r, answers)
+        .into_iter()
+        .map(|p| (p.id, p.layers))
+        .collect();
+    view! {
+        <figure class="card fs-diorama">
+            <SpriteStackParts
+                base=format!("/assets/stack/fs/{}", r.wire())
+                parts=parts
+                grid=DIORAMA_GRID
+                label=format!("{}示意縮景", r.label())
+                class="fs-diorama-stack"
+            />
+            <figcaption class="fs-diorama-caption">{DIORAMA_CAPTION}</figcaption>
+        </figure>
     }
 }
 

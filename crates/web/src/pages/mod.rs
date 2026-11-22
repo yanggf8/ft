@@ -8,6 +8,7 @@ mod naming;
 mod palm;
 mod personality;
 mod profile;
+mod room_stacks;
 mod shop;
 mod story;
 mod tarot;

@@ -2,15 +2,17 @@
 
 三個程式化體素縮景（臥室／書房（在家）／辦公室座位）→ 每層一張透明 webp，
 輸出 crates/web/assets/stack/room-<wire>/NN.webp（由下而上）。/fengshui 選房間按鈕把各層疊起來自轉。
-改模型後重跑：python3 scripts/sprite-stack/rooms.py；層數會印出來，要同步
-crates/web/src/pages/fengshui.rs 的 ROOM_STACKS。顏色是點陣圖內容，不受 :root token 規則管轄。
+改模型後重跑：python3 scripts/sprite-stack/rooms.py；層數與格數同時寫成產生檔
+crates/web/src/pages/room_stacks.rs（勿手改，fengshui.rs 讀它）。顏色是點陣圖內容，不受 :root token 規則管轄。
 只用盒子拼家具——示意空間配置，不畫任何風水物件或宣稱效果。"""
 import os
+import subprocess
 from PIL import Image
 
 N = 36       # 平面格數
 SCALE = 8    # 每格輸出像素
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "crates", "web", "assets", "stack")
+RUST_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "crates", "web", "src", "pages", "room_stacks.rs")
 
 FLOOR = (238, 222, 204); FLOOR2 = (230, 212, 192)
 WALL = (232, 226, 246); WALL_TOP = (214, 204, 238)
@@ -60,6 +62,7 @@ class Model:
         im.putpixel((x, y), tuple(min(255, int(c * k)) for c in rgb) + (255,))
       im.resize((N * SCALE, N * SCALE), Image.NEAREST).save(os.path.join(out, f"{z:02d}.webp"), lossless=True)
     print(name, "layers", top + 1)
+    return top + 1
 
 
 def bedroom():
@@ -76,7 +79,7 @@ def bedroom():
   m.box(27, 4, 10, 31, 8, 13, YELLOW)
   # 地毯
   m.box(10, 28, 1, 26, 34, 2, MINT)
-  m.save("room-bedroom")
+  return m.save("room-bedroom")
 
 
 def study():
@@ -99,7 +102,7 @@ def study():
     m.box(23 + i * 2, 3, 11, 24 + i * 2, 7, 15, (MINT, LAV, PINK, BLUE, YELLOW)[i])
   # 盆栽
   m.box(28, 26, 1, 32, 30, 4, WHITE); m.box(28, 26, 4, 32, 30, 8, LEAF)
-  m.save("room-study")
+  return m.save("room-study")
 
 
 def office():
@@ -125,8 +128,32 @@ def office():
   m.box(17, 23, 1, 19, 25, 4, GREY)
   # 走道標線
   m.box(2, 32, 1, 34, 33, 2, YELLOW)
-  m.save("room-office")
+  return m.save("room-office")
+
+
+def write_rust(counts):
+  """層數常數（spec 2026-11-22 風水縮景 §7.11）：消除手動同步。"""
+  rows = "\n".join(f"    (Room::{v}, {n})," for v, n in counts)
+  src = f"""//! 選房間按鈕縮景的切片層數——由 `scripts/sprite-stack/rooms.py` 產生，**勿手改**。
+//!
+//! 切片在 `crates/web/assets/stack/room-<wire>/NN.webp`。
+
+use ft_schema::fengshui::Room;
+
+/// 切片的平面格數（寬＝高）。
+pub const ROOM_STACK_GRID: usize = {N};
+
+/// 各房型的層數。
+pub const ROOM_STACK_LAYERS: [(Room, usize); 3] = [
+{rows}
+];
+"""
+  out = subprocess.run(["rustfmt", "--edition", "2021", "--emit", "stdout"], input=src.encode(),
+                       capture_output=True, check=True).stdout.decode()
+  with open(RUST_OUT, "w") as fh:
+    fh.write(out)
+  print("wrote", os.path.normpath(RUST_OUT))
 
 
 if __name__ == "__main__":
-  bedroom(); study(); office()
+  write_rust([("Bedroom", bedroom()), ("Study", study()), ("Office", office())])

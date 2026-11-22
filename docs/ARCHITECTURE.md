@@ -282,11 +282,20 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `python3 -I scripts/shop-selftest.py`（自造帳號、結束硬清）。
 - **Sprite stacking（2026-11-22）**：共用元件 `components/sprite_stack.rs` `SpriteStack{base, layers, grid, label, class}`，
   把 `<base>/NN.webp`（00＝最底）每層畫兩張（整格＋半格位移補縫），`--step`＝0.85 格換算成層寬 %，
-  CSS `.stack-layer` 位移＋`scaleY(.62)` 壓成俯視角、`stack-spin` 自轉；減少動態效果時停在 30°。
+  結構 `.stack-stage > .stack-layer`（位移＋`scaleY(.62)` 壓成俯視角）`> .stack-spin`（自轉，動畫只掛這層）`> img`
+  （絕對定位，一層可疊多張）；減少動態效果時 `.stack-spin` 停在 30°。
   用處：開運小物桌面小盆栽（`pages/shop.rs` `STACKS`；切片 `scripts/sprite-stack/desk_plant.py` →
-  `assets/shop/stack/desk-plant/`）、空間風水選房間三個房型縮景（`pages/fengshui.rs` `room_stack_dims`；
-  `scripts/sprite-stack/rooms.py` → `assets/stack/room-<wire>/`，裝飾用 aria-hidden）。切片由程式化體素模型
-  產生（AI 產圖無法產出互相對齊的切片）；重跑後層數變了要同步各處常數。切片是點陣圖內容，不受 `:root` token 規則管。
+  `assets/shop/stack/desk-plant/`）、空間風水選房間三個房型縮景（`pages/fengshui.rs` `room_stack_dims` 讀產生檔
+  `pages/room_stacks.rs`；`scripts/sprite-stack/rooms.py` 同時產生切片 `assets/stack/room-<wire>/` 與層數常數，
+  裝飾用 aria-hidden）。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
+- **空間風水結果頁「你的房間」縮景（2026-11-22，spec `docs/superpowers/specs/2026-11-22-fengshui-diorama-design.md` §7）**：
+  `SpriteStackParts{base, parts, grid, label, class}` 把多個零件的同層切片疊在同一個 `.stack-spin` 裡。
+  零件＝每個可畫的選項一個（三房型 51 件，N=40、全域 TOP 明暗），`scripts/sprite-stack/fengshui_parts.py`
+  產生 `assets/stack/fs/<room>/<part>/NN.webp`（只有非空層）與 `ft_schema::fengshui::diorama_parts`
+  （`DIORAMA_PARTS`，產生檔勿手改）；答案→零件在 `fengshui::diorama`（`MAPPING`／`MAPPING_DEPENDENT`
+  （對門依房門位置選變體）／`FIXED_PARTS`／`REPLACES`（床沒靠牆取代 `bed`）／`DIORAMA_VERSION`）。
+  零件位置表在產生器檔頭；`--check`（需 PIL，CI 不跑）比對檔案⇄常數（含像素）、不同題目零件兩兩無共用體素、
+  每個零件接地。只畫使用者描述的東西：unknown／「沒有」不畫、不標好壞、中性粉彩。
 
 ## Kawaii light theme (2026-11-19)
 

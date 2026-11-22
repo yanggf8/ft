@@ -1030,7 +1030,14 @@ input[type="range"]:disabled { opacity: 0.6; }
 /* 房型縮景（sprite stacking，2026-11-22）：按鈕上方的自轉小模型，慢轉 24s */
 .fs-room-stack { width: 100%; max-width: 180px; aspect-ratio: 1 / 1; align-self: center; margin: -0.25rem 0 0.25rem; }
 .fs-room-stack .stack-layer { top: 30%; }
-.fs-room-stack .stack-layer img { animation-duration: 24s; }
+.fs-room-stack .stack-spin { animation-duration: 24s; }
+/* 結果頁「你的房間」縮景（2026-11-22 spec 風水縮景）：白卡置中、最寬 320px；零件最高到 17 層，
+   層寬 68%、top 29% 讓任何角度都不被 stage 裁切（預覽表以同一組幾何驗過）。說明字 --silver-dim 在白卡上 ≥7。 */
+.fs-diorama { display: flex; flex-direction: column; align-items: center; margin: 0 0 1.5rem; padding: 0.75rem 1rem 1rem; }
+.fs-diorama-stack { width: 100%; max-width: 320px; aspect-ratio: 1 / 1; }
+.fs-diorama-stack .stack-layer { left: 16%; width: 68%; top: 29%; }
+.fs-diorama-stack .stack-spin { animation-duration: 24s; }
+.fs-diorama-caption { color: var(--silver-dim); font-size: 0.85rem; line-height: 1.6; text-align: center; margin: 0.25rem 0 0; }
 
 .fs-office-note { font-size: 0.85rem; margin: 0 0 0.4rem; }
 .fs-room {
@@ -1734,13 +1741,15 @@ input[type="range"]:disabled { opacity: 0.6; }
   transform: translateY(calc(var(--i) * var(--step) * -1%)) scaleY(0.62);
   pointer-events: none;
 }
-.stack-layer img {
-  display: block; width: 100%; height: 100%; image-rendering: pixelated;
-  animation: stack-spin 14s linear infinite;
+/* 層內再包一層 .stack-spin 負責自轉（spec 2026-11-22 風水縮景 §7.1）：一層可疊多張零件切片
+   （position:absolute 疊在同一格），動畫只掛在 .stack-spin，合成層數＝2×層數，與每層幾張圖無關。 */
+.stack-spin { position: absolute; inset: 0; animation: stack-spin 14s linear infinite; }
+.stack-spin img {
+  position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated;
 }
 @keyframes stack-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .stack-layer img { animation: none; transform: rotate(30deg); }
+  .stack-spin { animation: none; transform: rotate(30deg); }
 }
 .shop-name { font-size: 1.1rem; margin-bottom: 0.25rem; }
 .shop-tagline { color: var(--silver-dim); font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }

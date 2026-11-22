@@ -157,6 +157,10 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
   價格測試守門，**不得宣稱任何改運效果**。`routes/shop.rs` 登入可選（`auth_user_opt`）＋`anonId`；
   migration 先於 API 部署；資料永不寫入 predictions/prediction_feedback/f8_assignments；
   日後加帳號刪除路由須一併刪 `shop_interest`。細節見 docs/ARCHITECTURE.md §開運小物。
+- **風水縮景（2026-11-22）**：結果頁縮景零件由 `scripts/sprite-stack/fengshui_parts.py` 產生
+  （切片＋`crates/schema/src/fengshui/diorama_parts.rs`，勿手改）；改零件或 ruleset 題目／選項後必重跑產生器、
+  跑 `--check`（CI 沒 PIL），並更新 `fengshui/diorama.rs` 的 `MAPPING`、bump `DIORAMA_VERSION`
+  （`every_question_option_is_mapped` 測試會擋漏寫的選項）。
 - **Workers AI 呼叫一律走 `providers.rs run_plain_json`**：workers-rs `Ai::run` 會把
   `serde_json::Value` 物件序列化成 JS `Map`，binding 讀不到欄位（2026-11-20 正式站 AI 全滅事故）。
 

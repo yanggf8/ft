@@ -6,12 +6,16 @@
 
 pub mod corpus;
 pub mod date;
+pub mod diorama;
+pub mod diorama_parts;
 pub mod evidence;
 pub mod observe;
 pub mod ruleset;
 
 pub use corpus::{card_text, Adjustment, Badge, CardText, CARDS};
 pub use date::{iso_shift_days, parse_iso_ms};
+pub use diorama::{diorama_parts, DIORAMA_CAPTION, DIORAMA_VERSION};
+pub use diorama_parts::{DioramaPart, DIORAMA_GRID, DIORAMA_PARTS};
 pub use evidence::{evidence_by_key, Evidence, EVIDENCE};
 pub use ruleset::{question, questions, QuestionDef, QuestionOption, QUESTIONS};
 

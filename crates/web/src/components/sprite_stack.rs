@@ -3,8 +3,45 @@
 //! 切片放在 `<base>/NN.webp`（00 = 最底層），由 `scripts/sprite-stack/*.py` 程式化體素模型產生；
 //! 每層畫兩次（整格＋半格位移）補層間縫。位移量＝0.85 格，依切片格數 `grid` 換算成層寬的 %，
 //! 以 `--step` 行內變數交給 CSS（`.stack-layer`）；壓扁比例、自轉與減少動態效果在 style.css。
+//!
+//! 結構：`.stack-stage > .stack-layer（位移＋壓扁）> .stack-spin（自轉）> img`。
+//! 一層可放多張切片（`SpriteStackParts`：同一層的各零件疊在同一格），動畫只掛在 `.stack-spin`。
 
 use leptos::prelude::*;
+
+/// 每層位移（層寬 %）：0.85 格。
+fn layer_step(grid: usize) -> f32 {
+    100.0 * 0.85 / grid as f32
+}
+
+/// 一個 `.stack-layer`（k = 半層序號；偶數整格、奇數半格位移）。
+fn layer_view(k: usize, step: f32, srcs: Vec<String>) -> impl IntoView {
+    let pos = (k / 2) as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
+    view! {
+      <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
+        <div class="stack-spin">
+          {srcs
+            .into_iter()
+            .map(|src| view! { <img src=src alt="" loading="lazy" decoding="async"/> })
+            .collect_view()}
+        </div>
+      </div>
+    }
+}
+
+fn stage_view(label: String, class: String, layers: AnyView) -> impl IntoView {
+    let decorative = label.is_empty();
+    view! {
+      <div
+        class=format!("stack-stage {class}")
+        role=(!decorative).then_some("img")
+        aria-label=(!decorative).then_some(label)
+        aria-hidden=decorative.then_some("true")
+      >
+        {layers}
+      </div>
+    }
+}
 
 #[component]
 pub fn SpriteStack(
@@ -21,28 +58,48 @@ pub fn SpriteStack(
     #[prop(optional, into)]
     class: String,
 ) -> impl IntoView {
-    let step = 100.0 * 0.85 / grid as f32;
+    let step = layer_step(grid);
+    let slices = (0..layers * 2)
+        .map(|k| layer_view(k, step, vec![format!("{base}/{:02}.webp", k / 2)]))
+        .collect_view()
+        .into_any();
+    stage_view(label, class, slices)
+}
+
+/// 多零件組合疊：每個零件只有部分層有切片（`<base>/<part>/NN.webp`，NN＝全域層號）。
+/// 層 z 的 `.stack-spin` 內依 `parts` 順序放所有在 z 層有切片的零件；層數＝所有零件最高層＋1。
+#[component]
+pub fn SpriteStackParts(
+    /// 零件根目錄，例如 `/assets/stack/fs/bedroom`
+    base: String,
+    /// (零件 id, 該零件有切片的層號)；順序即同層內的繪製順序
+    parts: Vec<(&'static str, &'static [u8])>,
+    /// 切片的平面格數（寬＝高）
+    grid: usize,
+    /// 無障礙名稱；空字串＝純裝飾（aria-hidden）
+    #[prop(into)]
+    label: String,
+    /// 額外 class（尺寸、外框）
+    #[prop(optional, into)]
+    class: String,
+) -> impl IntoView {
+    let step = layer_step(grid);
+    let layers = parts
+        .iter()
+        .flat_map(|(_, ls)| ls.iter())
+        .max()
+        .map_or(0, |&z| z as usize + 1);
     let slices = (0..layers * 2)
         .map(|k| {
-            let z = k / 2;
-            let pos = z as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
-            let src = format!("{base}/{z:02}.webp");
-            view! {
-              <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
-                <img src=src alt="" loading="lazy" decoding="async"/>
-              </div>
-            }
+            let z = (k / 2) as u8;
+            let srcs = parts
+                .iter()
+                .filter(|(_, ls)| ls.contains(&z))
+                .map(|(id, _)| format!("{base}/{id}/{z:02}.webp"))
+                .collect();
+            layer_view(k, step, srcs)
         })
-        .collect_view();
-    let decorative = label.is_empty();
-    view! {
-      <div
-        class=format!("stack-stage {class}")
-        role=(!decorative).then_some("img")
-        aria-label=(!decorative).then_some(label)
-        aria-hidden=decorative.then_some("true")
-      >
-        {slices}
-      </div>
-    }
+        .collect_view()
+        .into_any();
+    stage_view(label, class, slices)
 }
