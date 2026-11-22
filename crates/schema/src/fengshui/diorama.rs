@@ -16,7 +16,7 @@ pub const DIORAMA_VERSION: &str = "1";
 
 /// 縮景說明（spec §7.9）。
 pub const DIORAMA_CAPTION: &str =
-    "依你的答案組出的示意圖：只畫你描述到的東西，『不確定』和『沒有』不畫";
+    "依你的答案組出的示意圖：只畫你描述到的東西，「不確定」和「沒有」不畫";
 
 /// (題目 id, 選項 id, 零件 id)。畫不出東西的選項寫空陣列；`unknown` 不列。
 pub const MAPPING: &[(&str, &str, &[&str])] = &[
