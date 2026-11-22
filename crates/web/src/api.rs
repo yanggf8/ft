@@ -651,3 +651,45 @@ pub async fn shop_interest_remove(
     let path = format!("/api/shop/interest/{}", body.item_id);
     send_json(Request::delete(&url(&path)), body).await
 }
+
+// ── 上手小實驗 v1（spec 2026-11-22-talent-tryout-design §8／§13.3；全部需登入）──
+
+/// `GET /api/talent/trials` — 本人所有紀錄（新到舊）＋猜測傾向。
+pub async fn talent_trials() -> Result<TalentTrialsResponse, ApiErr> {
+    get_json("/api/talent/trials", true).await
+}
+
+/// `POST /api/talent/trials` — 先猜並鎖定（requestId 冪等；201／200 皆成功；
+/// 409 `OPEN_TRIAL_EXISTS`＝已有進行中的一筆）。
+pub async fn talent_create(body: &TalentTrialCreate) -> Result<TalentTrial, ApiErr> {
+    send_json(Request::post(&url("/api/talent/trials")), body).await
+}
+
+/// `POST /api/talent/trials/:id/report` — 對答案（一次性；`reached: null`＝這次沒做；
+/// 409 `ALREADY_REPORTED`、410 `EXPIRED`）。
+pub async fn talent_report(id: &str, body: &TalentTrialReport) -> Result<TalentTrial, ApiErr> {
+    let path = format!(
+        "/api/talent/trials/{}/report",
+        js_sys::encode_uri_component(id)
+    );
+    send_json(Request::post(&url(&path)), body).await
+}
+
+/// `DELETE /api/talent/trials/:id` — 硬刪一筆（不存在／他人 → 404）。
+pub async fn talent_delete(id: &str) -> Result<TalentDeleteResponse, ApiErr> {
+    let path = format!("/api/talent/trials/{}", js_sys::encode_uri_component(id));
+    let resp = with_auth(Request::delete(&url(&path)))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    decode(resp).await
+}
+
+/// `DELETE /api/talent/trials` — 硬刪本人全部，回刪除筆數。
+pub async fn talent_delete_all() -> Result<TalentDeleteResponse, ApiErr> {
+    let resp = with_auth(Request::delete(&url("/api/talent/trials")))
+        .send()
+        .await
+        .map_err(|e| ApiErr::Network(e.to_string()))?;
+    decode(resp).await
+}

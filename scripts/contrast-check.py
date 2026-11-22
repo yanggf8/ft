@@ -81,6 +81,8 @@ PAIRS = [
   (["--primary-deep"], ["--sign-aries-light"], "nontext", "home fi-shop icon stroke"),
   (["--success"], ["--success-soft"], "text", "shop 已登記 button label"),
   (["--success"], ["#fff"], "nontext", "shop 已登記 button inset border on white card"),
+  # 上手小實驗 /try（talent.rs；其餘字色配對皆為既有：選項鈕、題卡、狀態標籤見 style.css 段首）
+  (["--primary-deep"], ["--sign-virgo-light"], "nontext", "home fi-try icon stroke"),
   # 紫微流年（/ziwei/luck 宮格疊層、/ziwei/year 摘要；ziwei.rs／palace_grid.rs）
   (["--ink-on-primary"], ["--primary", "--primary-deep"], "text",
    "ziwei badges 流年命宮 / 大限命宮・童限"),

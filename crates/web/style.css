@@ -357,6 +357,7 @@ main { flex: 1; }
 .fi-glossary { background: var(--surface-tint); }
 .fi-match { background: var(--sign-pisces-light); }
 .fi-shop { background: var(--sign-aries-light); }
+.fi-try { background: var(--sign-virgo-light); }
 /* 2026-09-18 issue #2：姓名學/名詞解釋為整卡連結 — 擋全域 a 的底線/改色，
    讓連結卡與 div 卡視覺一致（全域 a:hover 會穿透子元素，故逐項重設） */
 a.feature { display: block; text-decoration: none; color: inherit; transition: transform 0.18s ease, box-shadow 0.18s ease; }
@@ -1765,3 +1766,102 @@ input[type="range"]:disabled { opacity: 0.6; }
 .shop-btn.on:hover { background: var(--success-soft); color: var(--success); }
 .shop-btn.on:disabled { box-shadow: 0 0 0 2px var(--success) inset, 0 4px 0 var(--success); }
 .shop-err { margin: 0.6rem 0 0; }
+
+/* ═══ 上手小實驗 /try（2026-11-22 spec §10）═══
+   卡＝既有 .card 金邊白卡；頁首兩段在頁底（同 /shop：--text、--silver-faint）。
+   配對全部是既有配對：選項鈕＝quiz-choice 同款（白板 --silver-dim＋--metal-lo 框；選取紫板
+   --ink-on-primary）；題卡／數字／未選狀態底 --surface-tint 配 --heading／--primary-deep／--silver-dim；
+   「進行中」--primary-deep on --primary-soft；「已對答案」--success on --success-soft。 */
+.try-page h1 { margin-bottom: 0.75rem; }
+.try-intro { color: var(--text); line-height: 1.8; margin-bottom: 0.5rem; }
+.try-self { color: var(--silver-faint); font-size: 0.85rem; line-height: 1.7; margin-bottom: 1.5rem; }
+.try-login { display: grid; gap: 1rem; justify-items: center; text-align: center; }
+.try-pick-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.try-pick-actions .cta-alt { padding: 0.75rem 1.5rem; cursor: pointer; font: inherit; font-weight: 800; }
+.try-cards { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 1rem; }
+.try-cards:empty { display: none; }
+@media (min-width: 640px) { .try-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.try-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; text-align: left;
+  min-height: 44px; padding: 0.75rem 1rem; cursor: pointer; font: inherit;
+  border: 1px solid var(--metal-lo); border-radius: 14px;
+  background: var(--surface-tint); color: var(--heading);
+}
+@media (hover: hover) { .try-card:not(.on):hover { border-color: var(--primary); } }
+.try-card:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.try-card-domain { font-size: 0.78rem; font-weight: 700; color: var(--primary-deep); }
+.try-card-title { font-weight: 800; line-height: 1.5; }
+.try-card.on { background: var(--primary); border-color: var(--primary-deep); color: var(--ink-on-primary); }
+.try-card.on .try-card-domain { color: var(--ink-on-primary); }
+.try-detail { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--metal-line); }
+.try-title { font-size: 1.2rem; margin-bottom: 0.25rem; }
+.try-domain { color: var(--primary-deep); font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; }
+.try-prep { color: var(--text); font-size: 0.9rem; margin-bottom: 0.5rem; }
+.try-steps { color: var(--text); padding-left: 1.4rem; margin-bottom: 0.75rem; line-height: 1.7; }
+.try-timer-note, .try-note { color: var(--silver-faint); font-size: 0.85rem; line-height: 1.7; margin-bottom: 0.5rem; }
+.try-q { font-size: 1rem; margin: 1rem 0 0.5rem; }
+.try-q-sub { font-size: 0.95rem; }
+.try-predict .try-note { margin-top: 0.5rem; }
+.try-steps-pick, .try-stuck-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+@media (min-width: 640px) { .try-steps-pick { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .try-stuck-pick { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.try-step, .try-stuck, .try-skip {
+  min-height: 44px; padding: 0.5rem; cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 700;
+  border: 1px solid var(--metal-lo); border-radius: 12px;
+  background: var(--surface); color: var(--silver-dim);
+}
+.try-skip { margin-top: 0.5rem; width: 100%; }
+@media (hover: hover) {
+  .try-step:not(.on):not(:disabled):hover,
+  .try-stuck:not(.on):not(:disabled):hover,
+  .try-skip:not(.on):not(:disabled):hover { border-color: var(--primary); color: var(--primary-deep); }
+}
+.try-step:focus-visible, .try-stuck:focus-visible, .try-skip:focus-visible { outline: 2px solid var(--starlight); outline-offset: 2px; }
+.try-step.on, .try-stuck.on, .try-skip.on {
+  background: var(--primary); border-color: var(--primary-deep); color: var(--ink-on-primary);
+}
+.try-step:disabled, .try-stuck:disabled, .try-skip:disabled { opacity: 0.6; cursor: not-allowed; }
+.try-submit { margin-top: 1rem; min-height: 44px; width: 100%; }
+@media (min-width: 640px) { .try-submit { width: auto; } }
+.try-locked-note { color: var(--primary-deep); font-size: 0.9rem; font-weight: 700; margin: 0.5rem 0 0; }
+.try-err { margin: 0.6rem 0 0; }
+
+/* 進行中 */
+.try-badge {
+  display: inline-block; font-size: 0.78rem; font-weight: 800; padding: 0.1rem 0.6rem; border-radius: 999px;
+  color: var(--primary-deep); background: var(--primary-soft); margin-bottom: 0.5rem;
+}
+.try-guess { color: var(--heading); font-weight: 800; margin-bottom: 0.5rem; }
+.try-digits {
+  font-family: var(--font-round); font-variant-numeric: tabular-nums; font-size: 1.15rem; font-weight: 800;
+  letter-spacing: 0.08em; word-spacing: 0.3em; color: var(--heading); background: var(--surface-tint);
+  border-radius: 12px; padding: 0.6rem 0.9rem; margin-bottom: 0.75rem; overflow-wrap: anywhere;
+}
+.try-timer { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.5rem; }
+.try-clock { font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 800; color: var(--heading); }
+.try-clock:empty { display: none; }
+.try-timer-btn { padding: 0.5rem 1.25rem; cursor: pointer; font: inherit; font-weight: 800; min-height: 44px; }
+
+/* 結果卡 */
+.try-result-line { color: var(--heading); font-weight: 800; font-size: 1.05rem; margin-bottom: 0.25rem; }
+.try-result-gap { color: var(--primary-deep); font-weight: 700; margin-bottom: 0.5rem; }
+.try-date { color: var(--silver-faint); font-size: 0.85rem; }
+
+/* 我的紀錄／比你以為的順／傾向 */
+.try-history h2, .try-smoother h2, .try-tendency h2 { font-size: 1.15rem; margin-bottom: 0.75rem; }
+.try-history-list, .try-smoother-list { list-style: none; display: grid; gap: 0.75rem; margin-bottom: 0.75rem; }
+.try-history-list > li, .try-smoother-list > li { padding-bottom: 0.75rem; border-bottom: 1px solid var(--metal-line); }
+.try-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.try-row-title { font-weight: 800; color: var(--heading); }
+.try-row-meta { color: var(--silver-dim); font-size: 0.88rem; margin: 0.15rem 0; }
+.try-row-gap { color: var(--text); font-size: 0.88rem; }
+.try-status {
+  flex: none; font-size: 0.75rem; font-weight: 800; padding: 0.05rem 0.5rem; border-radius: 999px;
+  color: var(--silver-dim); background: var(--surface-tint);
+}
+.try-status.st-open { color: var(--primary-deep); background: var(--primary-soft); }
+.try-status.st-reported { color: var(--success); background: var(--success-soft); }
+.try-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; margin-top: 0.25rem; }
+.try-del, .try-del-all { min-height: 44px; padding: 0.25rem 0; font: inherit; font-size: 0.88rem; font-weight: 700; }
+.try-del-note { color: var(--rose); font-size: 0.82rem; }
+.try-tendency-kind { color: var(--heading); font-weight: 800; margin: 0.25rem 0 0.5rem; }

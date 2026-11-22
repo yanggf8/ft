@@ -1,6 +1,7 @@
 //! Landing page — port of `HomePage.tsx`.
 
 use ft_schema::shop::HOME_CARD_BLURB;
+use ft_schema::talent;
 use leptos::prelude::*;
 use leptos_router::components::A;
 
@@ -48,6 +49,13 @@ pub fn HomePage() -> impl IntoView {
                         <span class="feature-new">"NEW"</span>
                     </h3>
                     <p>{HOME_CARD_BLURB}</p>
+                </A>
+                <A href="/try" attr:class="feature">
+                    <h3>
+                        <FeatureIcon kind="try"/>" "{talent::PAGE_TITLE}
+                        <span class="feature-new">"NEW"</span>
+                    </h3>
+                    <p>{talent::HOME_CARD_BLURB}</p>
                 </A>
                 <A href="/palm" attr:class="feature">
                     <h3>
@@ -172,6 +180,11 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
     "shop" => (
       "M5 11h14v8.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5z",
       "M5 11h14v8.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5zM4 7.5h16a1 1 0 0 1 1 1V11H3V8.5a1 1 0 0 1 1-1zM12 7.5V21M12 7.5c-1.2-2.6-4.6-3.6-5-1.6-.3 1.4 2.4 1.6 5 1.6zM12 7.5c1.2-2.6 4.6-3.6 5-1.6.3 1.4-2.4 1.6-5 1.6z",
+    ),
+    // 上手小實驗：碼錶（錶身＋上方按鈕＋指針＋側鈕）
+    "try" => (
+      "M12 7a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z",
+      "M12 7a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 3.5h4M12 3.5V7M12 13.5V10M12 13.5l2.2 1.6M17.4 7.6l1.4-1.4",
     ),
     _ => ("", ""),
   }
