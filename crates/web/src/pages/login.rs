@@ -239,7 +239,7 @@ pub fn LoginPage() -> impl IntoView {
                                     return;
                                 }
                                 g_loading.set(true);
-                                let mut url = format!("{}/api/auth/google", crate::api::API_URL);
+                                let mut url = format!("{}/api/auth/google", crate::api::api_base());
                                 // 首次 Google 註冊需要邀請碼——把（可能填在註冊
                                 // 分頁的）邀請碼一併帶上；既有帳號登入不受影響。
                                 let inv = invite.get_untracked().trim().to_string();

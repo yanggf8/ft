@@ -35,8 +35,8 @@ cargo clippy --target wasm32-unknown-unknown   # lints (report only, not gating)
 ### Deploy
 
 ```bash
-./scripts/deploy-api.sh      # api: worker-build --release + wrangler deploy + route sanity
-./scripts/deploy-engine.sh   # engine: worker-build --release + wrangler deploy
+./scripts/deploy-api.sh      # api: build → staging（sanity＋verify 全套）→ 驗過才正式 → sanity
+./scripts/deploy-engine.sh   # engine: build → staging（health／golden）→ 驗過才正式
 ./scripts/deploy-web.sh      # web: build → staging 分支 → web-smoke（過了才）→ 正式站 → web-smoke
 # build only (web): cd crates/web && ./scripts/build-web.sh   (cargo build + wasm-bindgen, no trunk)
 # manual equivalent (api): cd crates/api && worker-build --release && wrangler deploy
@@ -49,6 +49,7 @@ everything is on Turso. `TURSO_URL` is a `[vars]` entry; `TURSO_AUTH_TOKEN` is a
 
 ```bash
 # schema.sql is the single source of truth for the database shape.
+turso db shell fortunet-staging < scripts/schema.sql   # staging 先
 turso db shell fortunet < scripts/schema.sql
 # Mint a token (one group token covers every DB in the group):
 gwebcdb-mint turso --tier write --db fortunet --export
@@ -92,12 +93,14 @@ notes, engine-version narrative — lives in **docs/ARCHITECTURE.md**. Crate map
 
 ## Rules worth remembering
 
-- **前端驗證紅線（2026-11-22）**：沒有本機伺服器，上線前驗證＝Pages 固定分支
-  `staging.fortunet.pages.dev`（API `ALLOWED_ORIGINS` 已列入，打正式 API／DB）。`deploy-web.sh`
-  先部署 staging、跑 `scripts/web-smoke.mjs`，**不過不准上正式站**；上線後再對 ahexagram.com 跑一次。
-  新增頁面或互動時，同步在 web-smoke 加檢查。smoke 寫入的測試資料必須淨零（匿名登記即刻取消、
-  `--login` 帳號 SQL 硬清）。API／engine 目前沒有 staging（共用正式 DB），只有部署後的 verify。
-
+- **上線前驗證紅線（2026-11-22）**：沒有本機伺服器，三個部署腳本都是「staging 先、驗過才上正式」：
+  `deploy-engine.sh`（fortunet-engine-staging：health／紫微／流年 golden）→ `deploy-api.sh`
+  （fortunet-api-staging：sanity＋`verify-deployment.sh` 全套）→ `deploy-web.sh`（Pages 分支
+  `staging.fortunet.pages.dev`＋`scripts/web-smoke.mjs --login`）。staging 完全隔離：Turso
+  `fortunet-staging`、獨立 DO／R2，網頁依 host 自動打 staging API（`api.rs api_base`）。
+  **任何 DB migration 先跑 `fortunet-staging` 再跑 `fortunet`**；schema.sql 變更兩邊都要套。
+  staging 只有 `TURSO_AUTH_TOKEN` secret（不寄信、不走 Google OAuth）。新增頁面或互動時同步在
+  web-smoke 加檢查；smoke 測試資料必須淨零。
 - Engine-version constants are authoritative in
   `crates/api/src/services/engine_version.rs` — the api side stamps chart caches and
   compares against them; the engine worker's own version field is decorative. Bump policy

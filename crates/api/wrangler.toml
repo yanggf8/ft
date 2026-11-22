@@ -63,9 +63,8 @@ ADMIN_EMAIL = "yanggf@msn.com,yang.goufang@gmail.com"
 # Pages preview deployments get hashed origins like
 # https://abc12345.fortunet.pages.dev — each preview origin must be listed
 # here explicitly after deploying a preview, or preview previews fail CORS.
-# staging.fortunet.pages.dev = 固定的上線前驗證分支（deploy-web.sh 先部署到這裡跑
-# scripts/web-smoke.mjs，過了才部署 main）；只有本帳號能部署到 fortunet 專案。
-ALLOWED_ORIGINS = "https://staging.fortunet.pages.dev"
+# staging 網頁打的是 fortunet-api-staging（見 [env.staging]），正式 API 不需要允許它。
+ALLOWED_ORIGINS = ""
 
 # Migrations — MUST stay identical to the JS worker's existing tags (v1/v2) so the
 # class_names are already in `new_sqlite_classes` and are NOT re-run.
@@ -80,5 +79,58 @@ new_sqlite_classes = ["AIMutexDO"]
 # P2-02 — RateLimitDO joins in a NEW tag; v1/v2 stay untouched so the existing
 # SessionDO/AIMutexDO classes are never re-migrated.
 [[migrations]]
+tag = "v3"
+new_sqlite_classes = ["RateLimitDO"]
+
+# ── staging（2026-11-22）：上線前驗證用，與正式完全隔離 ──
+# 部署：wrangler deploy --env staging（deploy-api.sh 先部署這裡、驗證過才部署正式）。
+# 獨立的 Turso DB fortunet-staging（schema.sql 建表；migration 也要先跑在這裡）、獨立 DO、
+# 獨立 R2、service binding 指向 fortunet-engine-staging。vars／bindings 在 wrangler 不會從頂層
+# 繼承，必須在這裡完整重列。secrets 只放 staging 需要的 TURSO_AUTH_TOKEN（staging 不寄信、
+# 不走 Google OAuth；AI 只用 Workers AI binding）。
+[env.staging]
+name = "fortunet-api-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "AI_MUTEX"
+class_name = "AIMutexDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMIT"
+class_name = "RateLimitDO"
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "fortunet-storage-staging"
+
+[[env.staging.services]]
+binding = "FT_ENGINE"
+service = "fortunet-engine-staging"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+TURSO_URL = "libsql://fortunet-staging-yanggf8.aws-ap-northeast-1.turso.io"
+GOOGLE_CLIENT_ID = "892069949445-f9nt1195pk0cq5dpal00dui1t0p6l3e6.apps.googleusercontent.com"
+WEB_ORIGIN = "https://staging.fortunet.pages.dev"
+MAIL_FROM = "noreply@ahexagram.com"
+ADMIN_EMAIL = "yanggf@msn.com,yang.goufang@gmail.com"
+ALLOWED_ORIGINS = "https://staging.fortunet.pages.dev"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]
+
+[[env.staging.migrations]]
+tag = "v2"
+new_sqlite_classes = ["AIMutexDO"]
+
+[[env.staging.migrations]]
 tag = "v3"
 new_sqlite_classes = ["RateLimitDO"]

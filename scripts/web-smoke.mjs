@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // web-smoke.mjs — 前端真瀏覽器驗證（2026-11-22）。
 //
-//   node scripts/web-smoke.mjs --base https://staging.fortunet.pages.dev [--login]
+//   FT_API=https://fortunet-api-staging.yanggf.workers.dev FT_DB=fortunet-staging \
+//     node scripts/web-smoke.mjs --base https://staging.fortunet.pages.dev [--login]
 //   node scripts/web-smoke.mjs --base https://ahexagram.com --login
 //
 // 本專案沒有本機伺服器（規則：不起 server），所以「上線前驗證」跑在 Cloudflare Pages
@@ -31,7 +32,9 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const PW_DIR = process.env.PLAYWRIGHT_CORE
   || '/home/yanggf/.npm/_npx/9833c18b2d85bc59/node_modules/playwright-core';
+// staging 頁打 staging API／DB（deploy-web.sh 會設 FT_API、FT_DB）
 const API = process.env.FT_API || 'https://api.ahexagram.com';
+const DB = process.env.FT_DB || 'fortunet';
 const UA = 'Mozilla/5.0 (FortuneT web-smoke)';
 const TEST_EMAIL = 'ft-web-smoke@example.invalid';
 
@@ -101,7 +104,7 @@ async function imagesLoaded(page, selector) {
 
 // ── 測試帳號（--login）──
 function turso(sql) {
-  return execFileSync('turso', ['db', 'shell', 'fortunet', sql], { encoding: 'utf8', timeout: 30000 });
+  return execFileSync('turso', ['db', 'shell', DB, sql], { encoding: 'utf8', timeout: 30000 });
 }
 async function apiCall(method, p, body, token) {
   const headers = { 'Content-Type': 'application/json', 'User-Agent': UA, Origin: 'https://ahexagram.com' };

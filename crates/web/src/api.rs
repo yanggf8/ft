@@ -17,6 +17,22 @@ use wasm_bindgen::JsCast;
 /// Canonical production API (custom domain, 2026-09); the workers.dev URL
 /// keeps serving as backup and for `verify-deployment.sh`.
 pub const API_URL: &str = "https://api.ahexagram.com";
+/// 上線前驗證用 staging API（2026-11-22，獨立 DB／DO）。
+pub const API_URL_STAGING: &str = "https://fortunet-api-staging.yanggf.workers.dev";
+/// 從 staging Pages 分支開的網頁才打 staging API；同一份 dist 先上 staging、再原封上正式站。
+const STAGING_HOST: &str = "staging.fortunet.pages.dev";
+
+/// 依目前網頁的 host 選 API：staging 分支 → staging API，其他一律正式 API。
+pub fn api_base() -> &'static str {
+    let host = web_sys::window()
+        .and_then(|w| w.location().hostname().ok())
+        .unwrap_or_default();
+    if host == STAGING_HOST {
+        API_URL_STAGING
+    } else {
+        API_URL
+    }
+}
 
 const SESSION_KEY: &str = "sessionId";
 
@@ -120,7 +136,7 @@ pub fn set_session(session_id: Option<&str>) {
 // ── request plumbing ──
 
 fn url(path: &str) -> String {
-    format!("{}{}", API_URL, path)
+    format!("{}{}", api_base(), path)
 }
 
 /// Turn a finished response into `T`, or into a structured `ApiErr`.

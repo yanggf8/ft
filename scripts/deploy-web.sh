@@ -5,7 +5,7 @@
 # 本專案沒有本機伺服器，上線前驗證跑在固定的 staging 分支：
 #   1. build-web.sh
 #   2. 部署 dist 到 --branch=staging → https://staging.fortunet.pages.dev
-#      （已列入 API ALLOWED_ORIGINS，可打正式 API）
+#      （網頁依 host 自動改打 fortunet-api-staging，資料寫進 fortunet-staging DB，不碰正式資料）
 #   3. scripts/web-smoke.mjs --base staging（本機 turso 已登入時加 --login 驗登入後頁面）
 #      失敗 → 停，不部署正式站
 #   4. 同一份 dist 部署到 --branch=main（正式站）
@@ -19,6 +19,7 @@ unset CLOUDFLARE_API_TOKEN 2>/dev/null || true
 STAGING="https://staging.fortunet.pages.dev"
 PROD="https://ahexagram.com"
 LOGIN_FLAG=""
+STAGING_API="https://fortunet-api-staging.yanggf.workers.dev"
 if command -v turso >/dev/null 2>&1 && turso db list >/dev/null 2>&1; then
   LOGIN_FLAG="--login"
 fi
@@ -30,7 +31,7 @@ echo "🧪 deploying to staging ($STAGING) ..."
 npx wrangler pages deploy dist --project-name=fortunet --branch=staging --commit-dirty=true
 
 echo "🧪 smoke test on staging ${LOGIN_FLAG:+(with login)} ..."
-if ! node "$ROOT/scripts/web-smoke.mjs" --base "$STAGING" $LOGIN_FLAG; then
+if ! FT_API="$STAGING_API" FT_DB=fortunet-staging node "$ROOT/scripts/web-smoke.mjs" --base "$STAGING" $LOGIN_FLAG; then
   echo "❌ staging smoke failed — production NOT deployed"
   exit 1
 fi

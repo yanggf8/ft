@@ -5,3 +5,10 @@ compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
+
+# staging（2026-11-22）：fortunet-api-staging 的 service binding 目標；deploy-engine.sh 先部署這裡驗證。
+[env.staging]
+name = "fortunet-engine-staging"
+
+[env.staging.observability]
+enabled = true

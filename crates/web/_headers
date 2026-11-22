@@ -4,7 +4,7 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://fortunet-api.yanggf.workers.dev https://api.ahexagram.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://fortunet-api.yanggf.workers.dev https://api.ahexagram.com https://fortunet-api-staging.yanggf.workers.dev; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
 
 # 2026-11-20 白屏事故：ft_web.js 被快取 4h、ft_web_bg.wasm 為 max-age=0，部署後
 # 舊膠水碼配新 wasm → init 失敗 → app 不 mount。檔名無 hash，故一律每次重驗（304 很便宜）。

@@ -297,15 +297,22 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   零件位置表在產生器檔頭；`--check`（需 PIL，CI 不跑）比對檔案⇄常數（含像素）、不同題目零件兩兩無共用體素、
   每個零件接地。只畫使用者描述的東西：unknown／「沒有」不畫、不標好壞、中性粉彩。
 
-## 前端驗證管線（2026-11-22）
+## 上線前驗證管線（2026-11-22）
 
+- **staging 環境**（完全隔離）：Turso `fortunet-staging`（schema.sql 建表，與正式同 24 表）；
+  `fortunet-engine-staging`、`fortunet-api-staging`（wrangler `[env.staging]`：獨立 DO、R2
+  `fortunet-storage-staging`、service binding 指向 staging engine，secret 只有 `TURSO_AUTH_TOKEN`）；
+  Pages 分支 `staging.fortunet.pages.dev`。網頁 `api.rs api_base()` 依 host 選 API，同一份 dist
+  先上 staging、再原封上正式。CSP `connect-src` 含 staging API。
+- **部署腳本**：engine／api／web 都是 staging → 驗證 → 驗過才正式 → 上線後驗證。API staging 跑
+  `verify-deployment.sh`（`API_URL`／`ENGINE_URL` 指向 staging、`WEB_BASE=skip`）。
 - `scripts/web-smoke.mjs`（Playwright core＋本機 chromium headless shell，手機 390×844 新 context）：
   11 個公開頁 mount、JS 例外與同源 4xx/5xx、`?v=` 快取 hash、首頁卡、開運小物（6 卡、sprite stack 圖、
-  匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景（灌 localStorage 答案後清掉）、塔羅翻牌、紫微選單；
-  `--login` 另驗流年大運／命盤／塔羅感情頁並硬清測試帳號。結束碼 0／1／2（2＝環境缺 playwright）。
-- `deploy-web.sh`：build → `--branch=staging`（staging.fortunet.pages.dev）→ smoke（turso 可用時 `--login`）
-  → 過了才 `--branch=main` → smoke 正式站。`verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
-- 缺口：API／engine 沒有 staging，部署前只有單元測試＋部署後 verify（cort question 追蹤）。
+  匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景、塔羅翻牌、紫微選單；`--login` 另驗流年大運／
+  命盤／塔羅感情頁並硬清測試帳號。`FT_API`／`FT_DB` 指向 staging。結束碼 0／1／2（2＝缺 playwright）。
+  `verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
+- 限制：staging 沒有 Resend／Google OAuth／Cerebras／Groq 金鑰，寄信、Google 登入與外部 AI 在 staging
+  不可用（Workers AI 可用）；smoke 不測這些。
 
 ## Kawaii light theme (2026-11-19)
 

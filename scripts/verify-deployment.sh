@@ -285,7 +285,9 @@ fi
 # 正式站、匿名模式（不建帳號）。WEB_BASE 可覆寫；環境沒有 playwright 時只警告不算失敗。
 WEB_BASE="${WEB_BASE:-https://ahexagram.com}"
 echo -n "9. Frontend browser smoke ($WEB_BASE)... "
-if command -v node >/dev/null 2>&1; then
+if [ "$WEB_BASE" = "skip" ]; then
+  echo "skipped (WEB_BASE=skip)"
+elif command -v node >/dev/null 2>&1; then
   SMOKE_OUT=$(node "$(dirname "$0")/web-smoke.mjs" --base "$WEB_BASE" 2>&1); SMOKE_RC=$?
   if [ "$SMOKE_RC" = "0" ]; then
     echo -e "${GREEN}✓${NC}"
