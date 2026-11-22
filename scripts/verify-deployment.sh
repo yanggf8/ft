@@ -281,6 +281,34 @@ else
   FAILED=1
 fi
 
+# Test 8t: 上手小實驗 endpoints are routed and auth-guarded (401 without a session;
+# spec 2026-11-22-talent-tryout §13.3). Auth fires before the per-user rate limit — 401
+# probes consume no quota and write nothing.
+echo -n "8t. Talent tryout endpoints (401 without auth)... "
+TALENT_OK=1
+for probe in \
+  "GET|/api/talent/trials" \
+  "POST|/api/talent/trials" \
+  "POST|/api/talent/trials/00000000-0000-0000-0000-000000000000/report" \
+  "DELETE|/api/talent/trials/00000000-0000-0000-0000-000000000000" \
+  "DELETE|/api/talent/trials"
+do
+  METHOD="${probe%%|*}"
+  PATHNAME="${probe##*|}"
+  CODE=$(hcurl -X "$METHOD" "$API_URL$PATHNAME" -w "%{http_code}" -o /dev/null) || true
+  if [ "$CODE" != "401" ]; then
+    echo ""
+    echo "   ✗ $METHOD $PATHNAME -> $CODE (expected 401)"
+    TALENT_OK=0
+  fi
+done
+if [ "$TALENT_OK" = "1" ]; then
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${RED}✗${NC} (see above)"
+  FAILED=1
+fi
+
 # Test 9: 前端真瀏覽器驗證（scripts/web-smoke.mjs；需 node＋本機 playwright-core／chromium）。
 # 正式站、匿名模式（不建帳號）。WEB_BASE 可覆寫；環境沒有 playwright 時只警告不算失敗。
 WEB_BASE="${WEB_BASE:-https://ahexagram.com}"
