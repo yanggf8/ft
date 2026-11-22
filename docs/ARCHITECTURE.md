@@ -313,7 +313,7 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
 - staging 刻意只有 `TURSO_AUTH_TOKEN`：程式只讀三把 secret（TURSO_AUTH_TOKEN、RESEND_API_KEY 寄登入信、
   GOOGLE_CLIENT_SECRET Google 登入）；staging 驗證用 DB 直插 login token 登入，不寄信、不走 Google，
-  所以後兩把不需要。正式 worker 上的 GROQ_API_KEY／CEREBRAS_API_KEY 是舊 provider 殘留，程式已不讀。
+  所以後兩把不需要。正式 worker 上舊 provider 殘留的 GROQ_API_KEY／CEREBRAS_API_KEY 已於 2026-11-22 刪除。
 
 ## Kawaii light theme (2026-11-19)
 
