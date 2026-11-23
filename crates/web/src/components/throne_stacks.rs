@@ -23,16 +23,16 @@ pub const THRONE_HEAD: [(&str, &str); 2] =
 /// 椅背月亮（當晚月相，鍵＝`MoonPhase::key()`）：(月相, hash)。
 pub const THRONE_MOONS: [(&str, &str); 5] = [
     ("new", "ad282a4fc8b0"),
-    ("crescent", "eee4ed1b96f6"),
-    ("quarter", "4aa4b5077698"),
-    ("gibbous", "fa4d77fb21bf"),
-    ("full", "dd6133ec8eb2"),
+    ("crescent", "329bde42d55c"),
+    ("quarter", "c9d6700b4110"),
+    ("gibbous", "bdca8b7b11a0"),
+    ("full", "f1361db79217"),
 ];
 /// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
 pub const THRONE_SUN_CORE: &str = "f10ba6eb2379";
 pub const THRONE_SUN_RAYS: &str = "5d495f0a9e9a";
-/// 太陽的正方形框：(left%, 中心 bottom%, width%)。
-pub const THRONE_SUN_BOX: (f32, f32, f32) = (30.469, 87.071, 32.812);
+/// 太陽的正方形框：(left%, 中心 bottom%, width%)——月亮對轉軸的對稱點（初始在地平線下）。
+pub const THRONE_SUN_BOX: (f32, f32, f32) = (36.719, -7.071, 32.812);
 /// 雲圖：(形狀, hash)。
 pub const THRONE_CLOUD_IMGS: [(&str, &str); 2] = [("0", "1f7f228264bb"), ("1", "a1a150cb07d4")];
 /// 椅背上飄的雲：(形狀, 雲底 bottom%, 寬%)；飄動時間在 style.css `.throne-cloud`。
@@ -41,7 +41,15 @@ pub const THRONE_STAR: &str = "7fadd2823f0c";
 pub const THRONE_ORBIT_MASK: &str = "578f6a610b42";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。
 pub const THRONE_SKY_RECT: (f32, f32, f32, f32) = (30.469, 77.668, 32.812, 18.807);
-/// 星星公轉：(中心 left%, 中心 bottom%, 半徑（層寬倍數）, 星星寬（層寬倍數）)。
-pub const THRONE_ORBIT: (f32, f32, f32, f32) = (49.04, 59.363, 0.3, 0.1406);
-/// 星星數。
-pub const THRONE_ORBIT_STARS: usize = 6;
+/// 夜空的星星中心：(left%, bottom%)；星星寬（%＝舞台寬）。
+pub const THRONE_STARS: [(f32, f32); 6] = [
+    (23.438, 79.011),
+    (75.0, 83.489),
+    (18.75, 65.578),
+    (79.688, 70.055),
+    (65.625, 94.236),
+    (31.25, 93.34),
+];
+pub const THRONE_STAR_W: f32 = 14.062;
+/// 天空轉輪的轉軸：(left%, bottom%)；夜空組在上、太陽在對面，24 秒內轉 180°×2（style.css `.throne-wheel`）。
+pub const THRONE_WHEEL: (f32, f32) = (50.0, 40.0);

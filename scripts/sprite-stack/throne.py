@@ -6,9 +6,9 @@
   2. 同一疊的每一層再放一張「頭」圖集，只有頭繞自己的中心慢慢左右轉（CSS `.throne-head`）；
   3. 花窗上疊 2D 像素圖：當晚月相的月亮與太陽交替淡入淡出（位置由投影算好，並檢查不會蓋到前方體素，
      貓頭左右轉的範圍也算）；
-  4. 太陽的射線繞太陽轉；太陽出現時星星淡出。椅背上有雲慢慢飄過（同一張遮罩）。
-  5. 星星繞著吉祥物頭部中心公轉：星星層套一張遮罩（orbit-mask），只留「椅背正面、且沒被前方體素擋住」的
-     區域——星星繞到貓背後就被擋住、離開椅背就消失。
+  4. 天空像有地平線：夜空組（月亮帶淺坑＋雲＋固定的星星）與太陽裝在同一個轉輪上、隔著轉軸相對，
+     轉輪一轉就是月亮轉下去、太陽轉上來（一升一降）；太陽只有射線繞太陽轉。整片天空套一張遮罩
+     （orbit-mask），只留「椅背正面、且沒被前方體素擋住」的區域——轉下去就沉到貓身後、出椅背就消失。
 貓本體重用 mascot.py 的模型（月牙頭；新月夜睡覺用暗色月牙＋閉眼）。站姿尾巴往後伸會埋進椅背，坐姿改由左側
 繞出、翹在扶手上。
 輸出：crates/web/assets/mascot/throne/*.webp（檔名帶內容 hash）、crates/web/src/components/throne_stacks.rs（勿手改）。
@@ -42,6 +42,7 @@ MOON_C = (252, 236, 170); MOON_E = (214, 178, 96)
 SUN_C = (252, 206, 96); SUN_E = (236, 150, 60)
 STAR_C = (250, 206, 110); STAR_E = (214, 158, 60)
 CLOUD_C = (252, 248, 255); CLOUD_E = (210, 196, 236)
+MOON_K = (238, 218, 156)   # 月面淺坑
 
 SZ = 15                         # 座面頂
 PANEL_Y = int(C - 11) - 1       # 花窗面（椅背最前一層）
@@ -50,8 +51,11 @@ HEAD_PIVOT = (C, C - 4)         # 頭的轉軸（切片座標）
 # 花窗上的疊加物：(名稱, 中心 x, 中心 z, 寬, 高)（體素格；中心落在格中央）
 MOON_AT = (C - 2, 71, 21, 21)
 STAR_SIZE = 9
-ORBIT_R = 0.30      # 星星公轉半徑（層寬倍數）
-ORBIT_N = 6         # 星星數
+# 夜空的星星（花窗面上的體素座標 x, z）：固定掛在夜空、跟著天空一起轉，不繞月亮也不繞太陽
+STARS = [(C - 17, 62), (C + 16, 67), (C - 20, 47), (C + 19, 52), (C + 10, 79), (C - 12, 78)]
+# 天空轉輪的轉軸（舞台 left%, bottom%）：在椅背下緣附近＝地平線；夜空組在上、太陽在轉軸對面（下方），
+# 轉 180° 就是月亮轉下去、太陽轉上來。
+WHEEL = (50.0, 40.0)
 MASK_PX = 4         # 遮罩每格像素
 PHASE_KEYS = ("new", "crescent", "quarter", "gibbous", "full")   # ＝ft_schema::moon::MoonPhase::key()
 
@@ -232,6 +236,13 @@ def draw_moon(phase="crescent", size=21):
       if lit:
         im.putpixel((x, y), MOON_C + (255,))
   im = outline(im, MOON_C, MOON_E)
+  # 淺坑（站長：好識別、和太陽分開）：只畫在亮面內部、不壓輪廓
+  px = im.load()
+  for cx, cy, r in ((c - 3.5, c - 2, 2.2), (c + 2, c + 3.5, 1.7), (c - 1.5, c + 5, 1.2), (c + 3.5, c - 4, 1.3), (c - 6, c + 2.5, 1.1)):
+    for x in range(size):
+      for y in range(size):
+        if math.hypot(x - cx, y - cy) <= r and px[x, y][:3] == MOON_C:
+          px[x, y] = MOON_K + (255,)
   if phase == "new":
     px = im.load()
     for y in range(size):
@@ -316,13 +327,6 @@ def pct(v):
   return round(v * 100, 3)
 
 
-def head_center(head):
-  """頭部的畫面中心 (x, h)，W 為單位（星星公轉中心）。"""
-  xs = [(x + 0.5) / N for (x, _, _) in head]
-  hs = [screen_h(y, z) for (_, y, z) in head]
-  return sum(xs) / len(xs), sum(hs) / len(hs)
-
-
 def orbit_mask(th, fronts, mh, mb):
   """星星層遮罩：椅背正面（y==PANEL_Y、座面以上）減去所有在它前方的體素（含轉頭範圍）。"""
   from PIL import ImageDraw
@@ -391,12 +395,18 @@ def main():
 
   l, r, b, t = moon_rect
   sky = (pct(l), pct((b - mb) / mh), pct(r - l), pct((t - b) / mh))
-  # 太陽用正方形框（射線要能轉）：與月亮同中心、同寬
-  sun_box = (pct(l), pct(((b + t) / 2 - mb) / mh), pct(r - l))
+  # 太陽用正方形框（射線要能轉），放在月亮對轉軸的對稱點：天空轉 180° 時正好轉到月亮的位置
+  wx, wy = WHEEL[0] / 100, mb + WHEEL[1] / 100 * mh          # 轉軸（W 單位）
+  scx, scy, sw = (l + r) / 2, (b + t) / 2, r - l
+  rx, ry = 2 * wx - scx, 2 * wy - scy
+  sun_box = (pct(rx - sw / 2), pct((ry - mb) / mh), pct(sw))
   # 雲：(形狀, 雲底高度 bottom%, 寬 %)；高度一朵在月亮下緣、一朵在頭側
   clouds = [("0", pct((b - 0.02 - mb) / mh), pct(25 / N)), ("1", pct((t - 0.42 - mb) / mh), pct(26 / N))]
-  hx, hh = head_center(variants["crescent"])
-  orbit = (pct(hx), pct((hh - mb) / mh), ORBIT_R, round(STAR_SIZE / N, 4))
+  stars = []
+  for x, z in STARS:
+    sl, sr, sb, st = overlay_rect(x, z, STAR_SIZE, STAR_SIZE)
+    stars.append((pct((sl + sr) / 2), pct(((sb + st) / 2 - mb) / mh)))
+  star_w = pct(STAR_SIZE / N)
   origin = (pct((HEAD_PIVOT[0] + 0.5) / N), pct((HEAD_PIVOT[1] + 0.5) / N))
 
   def rows(rs):
@@ -434,7 +444,7 @@ pub const THRONE_MOONS: [(&str, &str); {len(moon_rows)}] = [
 /// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
 pub const THRONE_SUN_CORE: &str = "{core_h}";
 pub const THRONE_SUN_RAYS: &str = "{rays_h}";
-/// 太陽的正方形框：(left%, 中心 bottom%, width%)。
+/// 太陽的正方形框：(left%, 中心 bottom%, width%)——月亮對轉軸的對稱點（初始在地平線下）。
 pub const THRONE_SUN_BOX: (f32, f32, f32) = {sun_box};
 /// 雲圖：(形狀, hash)。
 pub const THRONE_CLOUD_IMGS: [(&str, &str); {len(cloud_rows)}] = [
@@ -448,26 +458,28 @@ pub const THRONE_STAR: &str = "{star_h}";
 pub const THRONE_ORBIT_MASK: &str = "{mask_h}";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。
 pub const THRONE_SKY_RECT: (f32, f32, f32, f32) = {sky};
-/// 星星公轉：(中心 left%, 中心 bottom%, 半徑（層寬倍數）, 星星寬（層寬倍數）)。
-pub const THRONE_ORBIT: (f32, f32, f32, f32) = {orbit};
-/// 星星數。
-pub const THRONE_ORBIT_STARS: usize = {ORBIT_N};
+/// 夜空的星星中心：(left%, bottom%)；星星寬（%＝舞台寬）。
+pub const THRONE_STARS: [(f32, f32); {len(stars)}] = [
+{chr(10).join(f"    ({x}, {y})," for x, y in stars)}
+];
+pub const THRONE_STAR_W: f32 = {star_w};
+/// 天空轉輪的轉軸：(left%, bottom%)；夜空組在上、太陽在對面，24 秒內轉 180°×2（style.css `.throne-wheel`）。
+pub const THRONE_WHEEL: (f32, f32) = {WHEEL};
 """
   out = subprocess.run(["rustfmt", "--edition", "2021", "--emit", "stdout"], input=src.encode(),
                        capture_output=True, check=True).stdout.decode()
   with open(RUST_OUT, "w") as fh:
     fh.write(out)
-  print("layers", layers, "stage", (mh, mb), "orbit", orbit, "wrote", os.path.normpath(RUST_OUT))
+  print("layers", layers, "stage", (mh, mb), "sun", sun_box, "wrote", os.path.normpath(RUST_OUT))
 
 
 def preview(out_dir):
-  """舞台座標的合成預覽（與 CSS 同一套幾何）：月亮＋公轉星星（套遮罩），頭轉 -HEAD_TURN／0／+HEAD_TURN。"""
+  """舞台座標的合成預覽（與 CSS 同一套幾何，天空在 0°）：月亮＋星星（套遮罩），頭轉 -HEAD_TURN／0／+HEAD_TURN。"""
   os.makedirs(out_dir, exist_ok=True)
   th, bodies, variants, top, fronts, moon_rect, mh, mb = build_all()
   W = 384
   Hs = int(round(mh * W))
   mask = orbit_mask(th, fronts, mh, mb).resize((W, Hs), Image.NEAREST).getchannel("A")
-  hx, hh = head_center(variants["crescent"])
   star = draw_star()
   sp = int(STAR_SIZE / N * W)
   for name, head_key, pose, phase in (("crescent", "crescent", "wave", "full"), ("sleep", "sleep", "sleep", "new")):
@@ -485,9 +497,9 @@ def preview(out_dir):
       cv.alpha_composite(draw_moon(phase).resize((int((r - l) * W), int((t - b) * W)), Image.NEAREST),
                          (int(l * W), int(Hs - (t - mb) * W)))
       layer = Image.new("RGBA", (W, Hs), (0, 0, 0, 0))
-      for i in range(ORBIT_N):
-        ang = math.radians(i * 360 / ORBIT_N + a * 2)
-        cx, cy = hx * W + ORBIT_R * W * math.cos(ang), Hs - (hh - mb) * W - ORBIT_R * W * math.sin(ang)
+      for x, z in STARS:
+        sl, sr, sb, st = overlay_rect(x, z, STAR_SIZE, STAR_SIZE)
+        cx, cy = (sl + sr) / 2 * W, Hs - ((sb + st) / 2 - mb) * W
         layer.alpha_composite(star.resize((sp, sp), Image.NEAREST), (int(cx - sp / 2), int(cy - sp / 2)))
       la = layer.getchannel("A")
       layer.putalpha(Image.composite(la, Image.new("L", la.size, 0), mask))
