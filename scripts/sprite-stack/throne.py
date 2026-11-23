@@ -6,8 +6,9 @@
   2. 同一疊的每一層再放一張「頭」圖集，只有頭繞自己的中心慢慢左右轉（CSS `.throne-head`）；
   3. 花窗上疊 2D 像素圖：當晚月相的月亮與太陽交替淡入淡出（位置由投影算好，並檢查不會蓋到前方體素，
      貓頭左右轉的範圍也算）；
-  4. 天空像有地平線：夜空組（月亮帶淺坑＋雲＋固定的星星）與太陽裝在同一個轉輪上、隔著轉軸相對，
-     轉輪一轉就是月亮轉下去、太陽轉上來（一升一降）；太陽只有射線繞太陽轉。整片天空套一張遮罩
+  4. 天空像有地平線：夜空組（月亮帶淺坑＋固定的星星）與太陽裝在同一個轉輪上、隔著轉軸相對，
+     轉輪一轉就是月亮轉下去、太陽轉上來（一升一降）；太陽的光束鋪滿整個椅背（不轉，一段段光往外射）；雲不跟著轉，
+     月亮轉下去時橫向飄走。整片天空套一張遮罩
      （orbit-mask），只留「椅背正面、且沒被前方體素擋住」的區域——轉下去就沉到貓身後、出椅背就消失。
 貓本體重用 mascot.py 的模型（月牙頭；新月夜睡覺用暗色月牙＋閉眼）。站姿尾巴往後伸會埋進椅背，坐姿改由左側
 繞出、翹在扶手上。
@@ -43,6 +44,7 @@ SUN_C = (252, 206, 96); SUN_E = (236, 150, 60)
 STAR_C = (250, 206, 110); STAR_E = (214, 158, 60)
 CLOUD_C = (252, 248, 255); CLOUD_E = (210, 196, 236)
 MOON_K = (238, 218, 156)   # 月面淺坑
+BEAM_C = (255, 236, 160)   # 太陽光束
 
 SZ = 15                         # 座面頂
 PANEL_Y = int(C - 11) - 1       # 花窗面（椅背最前一層）
@@ -254,7 +256,7 @@ def draw_moon(phase="crescent", size=21):
 
 
 def draw_sun(part, size=21):
-  """太陽拆兩張：core＝圓心、rays＝一圈射線（CSS 只轉射線）。"""
+  """太陽圓心（core）；舊的一圈短光芒（rays）已改成 draw_sunbeams 的長光束。"""
   im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
   c = (size - 1) / 2
   for x in range(size):
@@ -265,6 +267,28 @@ def draw_sun(part, size=21):
       if hit:
         im.putpixel((x, y), SUN_C + (255,))
   return outline(im, SUN_C, SUN_E)
+
+
+def draw_sunbeams(kind="base", size=144):
+  """太陽光束（站長：不要一圈短光芒，射線鋪到整個椅背；射線不轉，一段段光往外射）。
+  base＝12 道固定的淡光束（外淡內濃）；dash＝同樣 12 道、只畫中外段一截的亮光，CSS 從太陽往外放大淡出，
+  三張錯開＝一段段光線射出去。兩張都放成 3 倍層寬的方框、套天空遮罩，只剩椅背上的部分。"""
+  im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+  c = (size - 1) / 2
+  R = size / 2
+  for x in range(size):
+    for y in range(size):
+      d = math.hypot(x - c, y - c)
+      if d < 4 or d > R:
+        continue
+      a = math.degrees(math.atan2(y - c, x - c)) % 30
+      if not (a < 4.5 or a > 25.5):
+        continue
+      if kind == "base":
+        im.putpixel((x, y), BEAM_C + (int(110 * (1 - 0.7 * d / R)),))
+      elif 0.55 * R <= d <= 0.75 * R:
+        im.putpixel((x, y), BEAM_C + (210,))
+  return im
 
 
 def draw_cloud(variant):
@@ -388,7 +412,8 @@ def main():
   for ph in PHASE_KEYS:
     moon_rows.append((ph, save_img(f"moon-{ph}", draw_moon(ph))))
   core_h = save_img("sun-core", draw_sun("core"))
-  rays_h = save_img("sun-rays", draw_sun("rays"))
+  rays_h = save_img("sun-rays", draw_sunbeams("base"))
+  dash_h = save_img("sun-dash", draw_sunbeams("dash"))
   cloud_rows = [(str(v), save_img(f"cloud-{v}", draw_cloud(v))) for v in (0, 1)]
   star_h = save_img("star", draw_star())
   mask_h = save_img("orbit-mask", orbit_mask(th, fronts, mh, mb))
@@ -444,6 +469,8 @@ pub const THRONE_MOONS: [(&str, &str); {len(moon_rows)}] = [
 /// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
 pub const THRONE_SUN_CORE: &str = "{core_h}";
 pub const THRONE_SUN_RAYS: &str = "{rays_h}";
+/// 一段段往外射的亮光（CSS 錯開三份放大淡出）。
+pub const THRONE_SUN_DASH: &str = "{dash_h}";
 /// 太陽的正方形框：(left%, 中心 bottom%, width%)——月亮對轉軸的對稱點（初始在地平線下）。
 pub const THRONE_SUN_BOX: (f32, f32, f32) = {sun_box};
 /// 雲圖：(形狀, hash)。

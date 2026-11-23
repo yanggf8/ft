@@ -1680,10 +1680,29 @@ input[type="range"]:disabled { opacity: 0.6; }
 @keyframes throne-day-fade { 0%, 40% { opacity: 0; } 46%, 94% { opacity: 1; } 100% { opacity: 0; } }
 .throne-sun { position: absolute; aspect-ratio: 1 / 1; transform: translateY(50%); /* bottom＝中心高度 */ }
 .throne-sun img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-.throne-sun-rays { animation: throne-rays 16s linear infinite; }
-@keyframes throne-rays { to { transform: rotate(360deg); } }
-/* 雲：從左飄到右（跟著夜空組升降） */
-.throne-clouds { position: absolute; inset: 0; }
+/* 光束：從太陽放射、鋪滿整個椅背（3 倍層寬方框，套天空遮罩只剩椅背）。光束本身不轉；
+   .throne-sun-dash 是每道光束上的一截亮光，三份錯開從太陽往外放大淡出＝一段段光線射出去 */
+.throne-sun img.throne-sun-rays {
+  inset: auto; left: 50%; top: 50%; width: calc(var(--mw) * 3); height: auto; aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%); image-rendering: auto;
+}
+.throne-sun img.throne-sun-dash { opacity: 0; animation: throne-dash 3.6s ease-out infinite; }
+.throne-sun img.throne-sun-dash:nth-of-type(3) { animation-delay: -1.2s; }
+.throne-sun img.throne-sun-dash:nth-of-type(4) { animation-delay: -2.4s; }
+@keyframes throne-dash {
+  0% { transform: translate(-50%, -50%) scale(0.15); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+}
+/* 雲：自己從左飄到右；整層不跟轉輪轉，見 .throne-clouds */
+.throne-clouds { position: absolute; inset: 0; animation: throne-clouds-away 24s ease-in-out infinite; }
+/* 月亮轉下去（40→50%）時雲往右飄出椅背；太陽期間在左邊外面等；月亮回來（90→100%）時從左飄回 */
+@keyframes throne-clouds-away {
+  0%, 40% { transform: translateX(0); }
+  50% { transform: translateX(110%); }
+  50.01%, 90% { transform: translateX(-110%); }
+  100% { transform: translateX(0); }
+}
 .throne-cloud {
   position: absolute; left: 0; display: block; height: auto; image-rendering: pixelated;
   animation: throne-cloud 46s linear infinite;
@@ -1725,7 +1744,8 @@ input[type="range"]:disabled { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
   .mascot-joy:not(.mascot-hidden) { animation: none; }
   .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
-  .throne-stack .throne-head, .throne-wheel, .throne-night, .throne-day, .throne-sun-rays { animation: none; }
+  .throne-stack .throne-head, .throne-wheel, .throne-night, .throne-day, .throne-clouds { animation: none; }
+  .throne-sun img.throne-sun-dash { animation: none; opacity: 0; }
   .throne-cloud { animation: none; left: 8%; }
   .throne-cloud:nth-of-type(2) { left: auto; right: 6%; }
   .mascot-sparks { display: none; }

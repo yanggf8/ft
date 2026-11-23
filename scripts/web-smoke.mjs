@@ -186,14 +186,15 @@ async function main() {
       const sky = await p.evaluate(() => ({
         moon: document.querySelector('.throne-moon')?.getAttribute('src') || '',
         stars: document.querySelectorAll('.throne-night .throne-star').length,
-        rays: document.querySelectorAll('.throne-sun .throne-sun-rays').length,
+        rays: document.querySelectorAll('.throne-sun .throne-sun-rays:not(.throne-sun-dash)').length,
+        dash: document.querySelectorAll('.throne-sun .throne-sun-dash').length,
         clouds: document.querySelectorAll('.throne-clouds .throne-cloud').length,
         mask: getComputedStyle(document.querySelector('.throne-skymask') || document.body).maskImage || '',
         night: !!document.querySelector('.throne-wheel .throne-night .throne-moon') && !!document.querySelector('.throne-wheel .throne-day .throne-sun'),
       }));
-      step('首頁王座天空轉輪：月亮帶月相＋雲＋星星、太陽射線、遮罩',
-        /\/moon-(new|crescent|quarter|gibbous|full)-[0-9a-f]{12}\.webp$/.test(sky.moon) && sky.stars === 6 && sky.rays === 1 && sky.clouds === 2 && sky.night && /orbit-mask-[0-9a-f]{12}\.webp/.test(sky.mask),
-        `${sky.moon.split('/').pop()} stars=${sky.stars} rays=${sky.rays} clouds=${sky.clouds} mask=${/orbit-mask/.test(sky.mask)}`);
+      step('首頁王座天空轉輪：月亮帶月相＋雲＋星星、太陽光束與一段段射光、雲、遮罩',
+        /\/moon-(new|crescent|quarter|gibbous|full)-[0-9a-f]{12}\.webp$/.test(sky.moon) && sky.stars === 6 && sky.rays === 1 && sky.dash === 3 && sky.clouds === 2 && sky.night && /orbit-mask-[0-9a-f]{12}\.webp/.test(sky.mask),
+        `${sky.moon.split('/').pop()} stars=${sky.stars} rays=${sky.rays} dash=${sky.dash} clouds=${sky.clouds} mask=${/orbit-mask/.test(sky.mask)}`);
       if (await p.locator('.mascot-wake').count()) {
         await p.locator('.mascot-wake').click();
         await sleep(400);

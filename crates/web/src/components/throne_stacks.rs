@@ -30,7 +30,9 @@ pub const THRONE_MOONS: [(&str, &str); 5] = [
 ];
 /// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
 pub const THRONE_SUN_CORE: &str = "f10ba6eb2379";
-pub const THRONE_SUN_RAYS: &str = "5d495f0a9e9a";
+pub const THRONE_SUN_RAYS: &str = "da18daa47392";
+/// 一段段往外射的亮光（CSS 錯開三份放大淡出）。
+pub const THRONE_SUN_DASH: &str = "90f32ffb3764";
 /// 太陽的正方形框：(left%, 中心 bottom%, width%)——月亮對轉軸的對稱點（初始在地平線下）。
 pub const THRONE_SUN_BOX: (f32, f32, f32) = (36.719, 40.929, 32.812);
 /// 雲圖：(形狀, hash)。

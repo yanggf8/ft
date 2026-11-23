@@ -1,6 +1,6 @@
 //! 首頁月亮王座吉祥物（2026-11-23 站長：吉祥物不用動太多，只簡單轉頭；椅背月亮↔太陽循環；
 //! 星星以吉祥物為中心公轉、只在椅背；頭永遠是月牙，月相改由椅背的月亮表現；像有地平線：月亮（帶淺坑）連同雲與星星一組轉下去、太陽從對面轉上來（一升一降），星星不繞誰轉，
-//! 太陽只有射線繞轉；
+//! 太陽的光束鋪滿整個椅背（光束不轉，一段段光往外射）；雲橫向飄走不跟著轉；
 //! 椅背加雲）。
 //!
 //! `scripts/sprite-stack/throne.py` 產生：身體圖集（底座＋王座＋坐姿貓身，靜止）＋頭圖集（月相五種＋睡覺），
@@ -15,7 +15,7 @@ use super::throne_stacks::{
     THRONE_BODY, THRONE_CLOUDS, THRONE_CLOUD_IMGS, THRONE_COLS, THRONE_GRID, THRONE_HEAD,
     THRONE_HEAD_ORIGIN, THRONE_LAYERS, THRONE_MOONS, THRONE_ORBIT_MASK, THRONE_SKY_RECT,
     THRONE_STAGE_B, THRONE_STAGE_H, THRONE_STAR, THRONE_STARS, THRONE_STAR_W, THRONE_SUN_BOX,
-    THRONE_SUN_CORE, THRONE_SUN_RAYS, THRONE_WHEEL,
+    THRONE_SUN_CORE, THRONE_SUN_DASH, THRONE_SUN_RAYS, THRONE_WHEEL,
 };
 use super::SpriteStackSheetDuo;
 
@@ -77,20 +77,11 @@ pub fn Throne(
           head_origin=THRONE_HEAD_ORIGIN
           class="throne-stack"
         />
-        // 天空套椅背遮罩（只在椅背、被貓擋住）；轉輪上夜空組在上、太陽在轉軸對面，一轉就一升一降
+        // 天空套椅背遮罩（只在椅背、被貓擋住）；轉輪上夜空組（月亮＋星星）在上、太陽在轉軸對面，一轉就一升一降
         <div class="throne-skymask">
           <div class="throne-wheel">
           <div class="throne-night">
             <img class="throne-sky throne-moon" src=moon_src alt="" style=rect_style(THRONE_SKY_RECT) />
-            <div class="throne-clouds">
-              {THRONE_CLOUDS
-                .iter()
-                .map(|(v, b, w)| {
-                  let src = format!("{BASE}/cloud-{v}-{}.webp", find(&THRONE_CLOUD_IMGS, v));
-                  view! { <img class="throne-cloud" src=src alt="" style=format!("bottom:{b}%;width:{w}%") /> }
-                })
-                .collect_view()}
-            </div>
             {THRONE_STARS
               .iter()
               .map(|(x, y)| view! {
@@ -103,10 +94,25 @@ pub fn Throne(
           <div class="throne-day">
             <div class="throne-sun" style=sun_style>
               <img class="throne-sun-rays" src=format!("{BASE}/sun-rays-{THRONE_SUN_RAYS}.webp") alt="" />
+              {(0..3)
+                .map(|_| view! {
+                  <img class="throne-sun-rays throne-sun-dash" src=format!("{BASE}/sun-dash-{THRONE_SUN_DASH}.webp") alt="" />
+                })
+                .collect_view()}
               <img class="throne-sun-core" src=format!("{BASE}/sun-core-{THRONE_SUN_CORE}.webp") alt="" />
             </div>
           </div>
           </div>
+          // 雲不跟轉輪轉：月亮轉下去時橫向飄走、月亮回來時從另一邊飄回來（style.css .throne-clouds）
+        <div class="throne-clouds">
+          {THRONE_CLOUDS
+            .iter()
+            .map(|(v, b, w)| {
+              let src = format!("{BASE}/cloud-{v}-{}.webp", find(&THRONE_CLOUD_IMGS, v));
+              view! { <img class="throne-cloud" src=src alt="" style=format!("bottom:{b}%;width:{w}%") /> }
+            })
+            .collect_view()}
+        </div>
         </div>
       </div>
     }
