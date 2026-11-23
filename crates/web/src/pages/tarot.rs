@@ -3,6 +3,7 @@
 //! （32 hex）；同裝置同日同牌、換日自動換牌。明文不防重擲——算命娛樂站定位，
 //! 抽牌是體驗不是契約（清儲存重抽屬使用者自由）。
 
+use ft_schema::moon;
 use ft_schema::tarot::{
     self, DrawnCard, TarotTopic, TAROT_CORPUS_VERSION, TAROT_DRAW_ALGO_VERSION,
 };
@@ -10,7 +11,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::components::A;
 
-use crate::components::{Mascot, MascotPose};
+use crate::components::{Mascot, MascotPose, MoonNow};
 
 const SEED_KEY: &str = "tarot_seed";
 
@@ -80,6 +81,8 @@ pub fn TarotPage() -> impl IntoView {
     let auth = crate::auth::use_auth();
     let draw = RwSignal::new(draw_today());
     let flipped = RwSignal::new(false);
+    // 月亮貓頭形與翻牌前台詞跟著當下月相（ft_schema::moon）
+    let phase = MoonNow::read().phase;
     let date = taipei_date_now().unwrap_or_default();
 
     view! {
@@ -142,13 +145,13 @@ pub fn TarotPage() -> impl IntoView {
                         // 結果已由 #tarot-daily-result 取得焦點）。兩張圖集都由隱藏 img 先載入，切換不閃。
                         <div class="tarot-mascot" aria-hidden="true">
                             <span class="mascot-bubble">
-                                {move || if flipped.get() { "抽到了！" } else { "翻開看看？" }}
+                                {move || if flipped.get() { moon::TAROT_JOY_LINE } else { moon::tarot_wait_line(phase) }}
                             </span>
                             <div class="mascot-slot" class:mascot-hidden=move || flipped.get()>
-                                <Mascot pose=MascotPose::Wait />
+                                <Mascot pose=MascotPose::Wait phase=phase />
                             </div>
                             <div class="mascot-slot mascot-joy" class:mascot-hidden=move || !flipped.get()>
-                                <Mascot pose=MascotPose::Joy />
+                                <Mascot pose=MascotPose::Joy phase=phase />
                             </div>
                         </div>
                         </div>

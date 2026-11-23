@@ -1,12 +1,13 @@
 //! Landing page — port of `HomePage.tsx`.
 
+use ft_schema::moon::{self, MoonPhase};
 use ft_schema::shop::HOME_CARD_BLURB;
 use ft_schema::talent;
 use leptos::prelude::*;
 use leptos_router::components::A;
 
 use crate::auth::use_auth;
-use crate::components::{Mascot, MascotPose};
+use crate::components::{Mascot, MascotPose, MascotSparks, MoonNow};
 
 #[component]
 pub fn HomePage() -> impl IntoView {
@@ -15,8 +16,7 @@ pub fn HomePage() -> impl IntoView {
     view! {
         <div class="hero">
             <div class="hero-head">
-                // 吉祥物月亮貓（裝飾；alt="" ＋ aria-hidden，不進報讀）
-                <Mascot pose=MascotPose::Wave class="mascot-hero" />
+                <HomeMascot />
                 <h1>"FortuneT - AI 智能命理分析"</h1>
                 <p class="hero-sub">"紫微斗數與西洋占星的專業解讀"</p>
                 <Show
@@ -189,4 +189,69 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
     ),
     _ => ("", ""),
   }
+}
+
+/// 滿月變身「今晚已演過」的 localStorage 鍵（值＝`moon::taipei_night_key`）。
+const FULL_MOON_SEEN_KEY: &str = "mascot_full_moon_night";
+
+/// 首頁的月亮貓「引路貓」（2026-11-23 設計稿 https://claude.ai/artifact/4j3inRg98QWKbvkq9NfR6X）：
+/// 頭形跟著當下月相；台北夜晚（18–06 點）才開口說一句；新月夜睡著（按一下叫醒）；
+/// 滿月夜當晚第一次進站轉一整圈並灑星點（減少動態效果時不轉、不灑，style.css）。
+#[component]
+fn HomeMascot() -> impl IntoView {
+    let now = MoonNow::read();
+    let phase = now.phase;
+    let night = now.night;
+    let asleep = RwSignal::new(night && phase == MoonPhase::New);
+    let transforming = RwSignal::new(false);
+
+    if night && phase == MoonPhase::Full {
+        let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+        let seen = storage
+            .as_ref()
+            .and_then(|s| s.get_item(FULL_MOON_SEEN_KEY).ok().flatten());
+        if seen.as_deref() != Some(now.night_key.as_str()) {
+            if let Some(s) = storage.as_ref() {
+                let _ = s.set_item(FULL_MOON_SEEN_KEY, &now.night_key);
+            }
+            transforming.set(true);
+            set_timeout(
+                move || {
+                    transforming.try_set(false);
+                },
+                std::time::Duration::from_millis(1300),
+            );
+        }
+    }
+
+    view! {
+        {move || if asleep.get() {
+            // 新月夜：睡著；按一下叫醒（真按鈕，可 Tab；圖與泡泡裝飾性 aria-hidden）
+            view! {
+                <button
+                    type="button"
+                    class="mascot-wake"
+                    aria-label=moon::WAKE_LABEL
+                    on:click=move |_| asleep.set(false)
+                >
+                    <span class="mascot-bubble mascot-say" aria-hidden="true">{moon::SLEEP_LINE}</span>
+                    <Mascot pose=MascotPose::Sleep phase=phase class="mascot-hero" />
+                </button>
+            }
+                .into_any()
+        } else {
+            view! {
+                <Show when=move || night>
+                    <p class="mascot-bubble mascot-say">{moon::home_line(phase)}</p>
+                </Show>
+                <div class="mascot-fx" class:mascot-transforming=move || transforming.get() aria-hidden="true">
+                    <Mascot pose=MascotPose::Wave phase=phase class="mascot-hero" />
+                    <Show when=move || transforming.get()>
+                        <MascotSparks />
+                    </Show>
+                </div>
+            }
+                .into_any()
+        }}
+    }
 }

@@ -7,6 +7,7 @@ pub mod api;
 pub mod cycle;
 pub mod fengshui;
 pub mod items;
+pub mod moon;
 pub mod naming;
 pub mod palm;
 pub mod predict;

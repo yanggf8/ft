@@ -3,7 +3,7 @@
 程式化體素月亮貓（頭本身是月牙、長靴、肚肚、圍巾、尾巴；照 2026-11-19 原設計平面圖；大頭短身呆萌比例）× 三個姿勢：
   wave（首頁打招呼，右手魔杖）／wait（塔羅翻牌前，雙手握魔杖在胸前）／joy（翻牌後，雙手舉高、張嘴笑）。
 舞台高度與層底位置由 stage_box 算出寫進產生檔，元件以 --mh／--mb 行內帶給 CSS。
-輸出圖集 crates/web/assets/mascot/stack/<pose>-<hash>.webp（一個姿勢一張、一個請求），層數／格數／hash 寫成產生檔
+輸出圖集 crates/web/assets/mascot/stack/<pose>-<phase>-<hash>.webp（姿勢 × 月相頭形，新月另有 sleep）（一個姿勢一張、一個請求），層數／格數／hash 寫成產生檔
 crates/web/src/components/mascot_stacks.rs（勿手改，components/mascot.rs 讀它）。
 正面＝切片的 +y（圖下緣），元件以左右擺動代替整圈自轉，臉一直朝前。
 改模型後重跑：python3 scripts/sprite-stack/mascot.py；
@@ -26,8 +26,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..", "crates", "web", "assets", "mascot", "stack")
 RUST_OUT = os.path.join(HERE, "..", "..", "crates", "web", "src", "components", "mascot_stacks.rs")
 POSES = ("wave", "wait", "joy")
+# 月相頭形（2026-11-23「引路貓」設計稿）：挖口圓 (x 偏移, z 偏移, 半徑)；半徑 0＝滿月圓頭。
+# wire 值＝ft_schema::moon::MoonPhase::key()，是圖集檔名的一部分，不可改名。
+PHASES = {
+  "new": (2.2, 12.6, 10.4),       # 新月：頭形同眉月、頭色轉暗（DARK）
+  "crescent": (2.2, 12.6, 10.4),  # 眉月：標準造型
+  "quarter": (2.0, 15.5, 9.0),
+  "gibbous": (1.5, 18.0, 7.5),
+  "full": (0.0, 0.0, 0.0),
+}
+# (姿勢, 月相) 組合：三個姿勢 × 五種月相，加新月夜睡覺（wait 手勢＋閉眼）
+COMBOS = [(p, ph) for ph in PHASES for p in POSES] + [("sleep", "new")]
 
-LAV = (204, 188, 244); LAV_D = (180, 162, 228)
+LAV = (204, 188, 244); LAV_D = (180, 162, 228); DARK = (150, 140, 204)
 PINK = (246, 184, 206); MOON = (244, 166, 196)
 CREAM = (252, 244, 232); MINT = (150, 214, 208)
 TEAL = (110, 196, 200); INK = (92, 78, 128); WHITE = (255, 255, 255)
@@ -90,7 +101,7 @@ def star_pts(cx, cz, r):
 LIFT = 0.85   # 每層往上位移（格），與 sprite_stack.rs layer_step 一致；畫面上的圓要把 z 半徑除以它
 
 
-def build(pose):
+def build(pose, phase="crescent"):
   """呆萌比例（2026-11-23 站長回饋）：大頭短身（頭約佔全身一半）、正圓大眼放低分開、小 ω 嘴、圓腮紅。
   頭本身是月牙（照原設計）：大圓上方被挖掉一塊、兩角朝上，挖口內緣粉紅月牙帶只畫在前後表面。"""
   m = Model()
@@ -111,7 +122,10 @@ def build(pose):
   # 頭＝胖月牙：厚度＝離外緣、離挖口兩邊都做圓角（不會像被切平的碗）
   HZ = 38.5
   R = 15.0
-  BX, BZ, BR = C + 2.2, HZ + 12.6, 10.4
+  bx, bz, BR = PHASES[phase]
+  BX, BZ = C + bx, HZ + bz
+  HEAD = DARK if phase == "new" else LAV
+  sleep = pose == "sleep"
   D = 10.0
   for x in range(N):
     for z in range(int(HZ - R) - 1, int(HZ + R) + 2):
@@ -125,7 +139,7 @@ def build(pose):
       band = db < BR + 2.8
       for y in range(N):
         if abs(y - C) <= ry:
-          m.put(x, y, z, MOON if band and abs(y - C) > ry - 1.6 else LAV)
+          m.put(x, y, z, MOON if BR > 0 and band and abs(y - C) > ry - 1.6 else HEAD)
   # 臉：正圓大眼（畫面上的圓：z 半徑＝x 半徑 / LIFT）、大反光點、圓腮紅、小 ω 嘴、額頭小星
   EZ = HZ - 4.6
   ER = 4.3
@@ -134,10 +148,15 @@ def build(pose):
     for x in range(N):
       for z in range(int(EZ - ER / LIFT) - 1, int(EZ + ER / LIFT) + 2):
         d = math.hypot((x - ex) / ER, (z - EZ) * LIFT / ER)
-        if d <= 1:
+        if sleep:
+          # 閉眼：下彎弧線
+          dd = math.hypot((x - ex) / ER, (z - (EZ + 1)) * LIFT / ER)
+          if 0.72 <= dd <= 1 and z < EZ + 1:
+            m.paint_front(x, z, INK)
+        elif d <= 1:
           m.paint_front(x, z, INK if (d > 0.78 or z > EZ + 0.6) else TEAL)
-    # 反光：左上 2×2 大亮點＋右下 1 點
-    for dx, dz in ((-1.6, 1.8), (-0.6, 1.8), (-1.6, 2.8), (-0.6, 2.8), (1.6, -1.9)):
+    # 反光：左上 2×2 大亮點＋右下 1 點（睡著不畫）
+    for dx, dz in (() if sleep else ((-1.6, 1.8), (-0.6, 1.8), (-1.6, 2.8), (-0.6, 2.8), (1.6, -1.9))):
       m.paint_front(round(ex + dx), round(EZ + dz), WHITE)
     for x in range(N):
       for z in range(int(HZ) - 14, int(HZ) - 6):
@@ -188,7 +207,7 @@ def build(pose):
     arm(-1, (C - 15, C + 1, 30), pad=True)
     arm(1, (C + 12, C + 4, 16))
     wand((C + 12, C + 5, 11), (C + 17, C + 5, 33), (C + 17, C + 5.5, 35))
-  elif pose == "wait":
+  elif pose in ("wait", "sleep"):
     # 雙手握魔杖擋在胸前，杖頭星星在右臉旁
     arm(-1, (C + 0.5, C + 9, 15))
     arm(1, (C + 4.5, C + 9, 18.5))
@@ -233,7 +252,7 @@ def render(m):
   return out
 
 
-def save(pose, layers):
+def save(name, layers):
   """合成一張圖集：COLS 欄、由左而右由上而下排（第 0 格＝最底層），回傳內容 hash（快取鍵）。"""
   rows = -(-len(layers) // COLS)
   cell = N * SHEET_SCALE
@@ -242,16 +261,13 @@ def save(pose, layers):
     sheet.paste(im.resize((cell, cell), Image.NEAREST), ((z % COLS) * cell, (z // COLS) * cell))
   # 檔名帶內容 hash（<pose>-<hash>.webp）：舊版程式只會 404（吉祥物空白），不會拿到新圖集配舊格數而錯位
   os.makedirs(ROOT, exist_ok=True)
-  tmp = os.path.join(ROOT, f".{pose}.tmp.webp")
+  tmp = os.path.join(ROOT, f".{name}.tmp.webp")
   sheet.save(tmp, lossless=True)
   with open(tmp, "rb") as fh:
     digest = hashlib.sha256(fh.read()).hexdigest()[:12]
-  for f in os.listdir(ROOT):
-    if f.startswith(f"{pose}-") or f == f"{pose}.webp":
-      os.remove(os.path.join(ROOT, f))
-  path = os.path.join(ROOT, f"{pose}-{digest}.webp")
+  path = os.path.join(ROOT, f"{name}-{digest}.webp")
   os.replace(tmp, path)
-  print(pose, "layers", len(layers), "sheet", sheet.size, os.path.getsize(path), "bytes")
+  print(name, "layers", len(layers), "sheet", sheet.size, os.path.getsize(path), "bytes")
   return digest
 
 
@@ -269,10 +285,10 @@ def preview(layers, angle, width=240):
 
 
 def write_rust(counts, box):
-  rows = "\n".join(f'    ("{p}", {n}, "{h}"),' for p, n, h in counts)
+  rows = "\n".join(f'    ("{p}", "{ph}", {n}, "{h}"),' for p, ph, n, h in counts)
   src = f"""//! 吉祥物月亮貓 sprite stack 的圖集常數——由 `scripts/sprite-stack/mascot.py` 產生，**勿手改**。
 //!
-//! 每個姿勢一張圖集 `crates/web/assets/mascot/stack/<pose>-<hash>.webp`：{COLS} 欄、由左而右由上而下，第 0 格＝最底層。
+//! 每個（姿勢, 月相）一張圖集 `crates/web/assets/mascot/stack/<pose>-<phase>-<hash>.webp`：{COLS} 欄、由左而右由上而下，第 0 格＝最底層。
 
 /// 切片的平面格數（寬＝高）。
 pub const MASCOT_STACK_GRID: usize = {N};
@@ -285,8 +301,8 @@ pub const MASCOT_SHEET_COLS: usize = {COLS};
 pub const MASCOT_STAGE_H: f32 = {box[0]};
 pub const MASCOT_STAGE_B: f32 = {box[1]};
 
-/// 各姿勢：(姿勢, 層數, 圖集內容 hash——在檔名裡，舊程式拿不到新圖集、zone 4h 快取也不會配到舊圖)。
-pub const MASCOT_STACK_LAYERS: [(&str, usize, &str); {len(counts)}] = [
+/// (姿勢, 月相 wire 值, 層數, 圖集內容 hash——在檔名裡，舊程式拿不到新圖集、zone 4h 快取也不會配到舊圖)。
+pub const MASCOT_STACK_LAYERS: [(&str, &str, usize, &str); {len(counts)}] = [
 {rows}
 ];
 """
@@ -300,22 +316,26 @@ pub const MASCOT_STACK_LAYERS: [(&str, usize, &str); {len(counts)}] = [
 if __name__ == "__main__":
   if len(sys.argv) == 3 and sys.argv[1] == "--preview":
     os.makedirs(sys.argv[2], exist_ok=True)
-    for p in POSES:
-      layers = render(build(p))
+    for p, ph in COMBOS:
+      layers = render(build(p, ph))
       row = [preview(layers, a) for a in (0, -25, 25, 90)]
       sheet = Image.new("RGBA", (sum(i.width for i in row), max(i.height for i in row)), (255, 255, 255, 255))
       x = 0
       for i in row:
         sheet.alpha_composite(i, (x, sheet.height - i.height)); x += i.width
-      sheet.save(os.path.join(sys.argv[2], f"{p}.png"))
+      sheet.save(os.path.join(sys.argv[2], f"{p}-{ph}.png"))
     print("preview →", sys.argv[2])
   else:
     counts, models = [], []
-    for p in POSES:
-      m = build(p)
+    os.makedirs(ROOT, exist_ok=True)
+    for f in os.listdir(ROOT):
+      if f.endswith(".webp"):
+        os.remove(os.path.join(ROOT, f))
+    for p, ph in COMBOS:
+      m = build(p, ph)
       models.append(m)
       layers = render(m)
-      counts.append((p, len(layers), save(p, layers)))
+      counts.append((p, ph, len(layers), save(f"{p}-{ph}", layers)))
     box = stage_box(models)
     print("stage", box)
     write_rust(counts, box)
