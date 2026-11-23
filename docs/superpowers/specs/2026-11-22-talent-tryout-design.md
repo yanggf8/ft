@@ -270,3 +270,9 @@ CREATE INDEX IF NOT EXISTS idx_talent_trials_user_created ON talent_trials(user_
 
 `digits` 的數字由 `ft_schema::talent::digits_for(trial_id)` 以試驗 id 做確定性雜湊產生 30 位（同一筆永遠同一串，
 不另存）；猜之前不顯示，猜完才顯示。`Domain` 的中文標籤也是常數。
+
+## 14. 站長定案（2026-11-23）
+
+站長「沒做不顯示結果卡、數字猜完才顯示，都照你的」：
+- 回報「這次沒做」後不顯示結果卡，只更新紀錄（狀態「沒做」）。
+- `digits` 題的 30 位數字在猜完（鎖定）之後才顯示；猜之前只顯示準備說明。
