@@ -310,7 +310,9 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `Throne{phase, asleep}`。`scripts/sprite-stack/throne.py`（N=64，重用 mascot.py 模型，`m.head` 拆出頭部體素）
   產生身體圖集 `body-<wave|sleep>`（底座＋王座＋坐姿貓身，靜止）與頭圖集 `head-<crescent|sleep>`，
   `SpriteStackSheetDuo` 逐層交錯疊、只有頭那格掛 `.throne-head` 轉頭（轉軸＝頭中心）。花窗上的月亮（當晚月相 5 張
-  `moon-<phase>`）／太陽是 2D 像素疊加（位置由產生器投影算出，並檢查轉頭範圍內不會蓋到前方體素）。星星 6 顆繞頭部中心
+  `moon-<phase>`）／太陽（`sun-core`＋`sun-rays`，只有射線繞太陽轉）是 2D 像素疊加（位置由產生器
+  投影算出，並檢查轉頭範圍內不會蓋到前方體素）。太陽出現時星星層與月亮同步淡出（太陽時沒有星）。椅背上兩朵像素雲
+  （`cloud-0/1`）慢慢從左飄到右，與星星共用 `orbit-mask`。星星 6 顆繞頭部中心
   公轉（`.throne-ring`），星星層套產生器畫的 `orbit-mask`（椅背正面減去前方體素＋轉頭範圍）：繞到貓背後被擋、離開
   椅背消失。站姿尾巴往後伸會埋進椅背，坐姿由 `m.tail` 拿掉後改從左側繞出、翹在扶手外。滿月夜不再整隻旋轉，
   只灑星點。減少動態效果：不轉頭、只顯示月亮、星星不公轉不自轉。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。

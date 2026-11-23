@@ -6,7 +6,8 @@
   2. 同一疊的每一層再放一張「頭」圖集，只有頭繞自己的中心慢慢左右轉（CSS `.throne-head`）；
   3. 花窗上疊 2D 像素圖：當晚月相的月亮與太陽交替淡入淡出（位置由投影算好，並檢查不會蓋到前方體素，
      貓頭左右轉的範圍也算）；
-  4. 星星繞著吉祥物頭部中心公轉：星星層套一張遮罩（orbit-mask），只留「椅背正面、且沒被前方體素擋住」的
+  4. 太陽的射線繞太陽轉；太陽出現時星星淡出。椅背上有雲慢慢飄過（同一張遮罩）。
+  5. 星星繞著吉祥物頭部中心公轉：星星層套一張遮罩（orbit-mask），只留「椅背正面、且沒被前方體素擋住」的
      區域——星星繞到貓背後就被擋住、離開椅背就消失。
 貓本體重用 mascot.py 的模型（月牙頭；新月夜睡覺用暗色月牙＋閉眼）。站姿尾巴往後伸會埋進椅背，坐姿改由左側
 繞出、翹在扶手上。
@@ -40,6 +41,7 @@ BASE = (64, 74, 140); BASE_E = (96, 110, 176)
 MOON_C = (252, 236, 170); MOON_E = (214, 178, 96)
 SUN_C = (252, 206, 96); SUN_E = (236, 150, 60)
 STAR_C = (250, 206, 110); STAR_E = (214, 158, 60)
+CLOUD_C = (252, 248, 255); CLOUD_E = (210, 196, 236)
 
 SZ = 15                         # 座面頂
 PANEL_Y = int(C - 11) - 1       # 花窗面（椅背最前一層）
@@ -240,16 +242,30 @@ def draw_moon(phase="crescent", size=21):
   return im
 
 
-def draw_sun(size=21):
+def draw_sun(part, size=21):
+  """太陽拆兩張：core＝圓心、rays＝一圈射線（CSS 只轉射線）。"""
   im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
   c = (size - 1) / 2
   for x in range(size):
     for y in range(size):
       d = math.hypot(x - c, y - c)
       a = math.degrees(math.atan2(y - c, x - c)) % 45
-      if d <= 5.6 or (7.2 <= d <= 10.2 and (a < 7 or a > 38)):
+      hit = d <= 5.6 if part == "core" else (7.2 <= d <= 10.2 and (a < 7 or a > 38))
+      if hit:
         im.putpixel((x, y), SUN_C + (255,))
   return outline(im, SUN_C, SUN_E)
+
+
+def draw_cloud(variant):
+  """椅背上飄的像素雲（兩種形狀）：幾個圓疊成、底部切平。"""
+  blobs = {0: [(6, 7, 4.2), (12, 5, 5.2), (18, 7, 4.0)], 1: [(5, 6, 3.4), (10, 4.5, 4.4), (16, 5.5, 4.0), (21, 7, 3.0)]}[variant]
+  w, h = (25, 11) if variant == 0 else (26, 10)
+  im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+  for x in range(w):
+    for y in range(h):
+      if y <= h - 2 and any(math.hypot(x - bx, (y - by) * 1.2) <= r for bx, by, r in blobs):
+        im.putpixel((x, y), CLOUD_C + (255,))
+  return outline(im, CLOUD_C, CLOUD_E)
 
 
 def draw_star(size=STAR_SIZE):
@@ -367,12 +383,18 @@ def main():
     head_rows.append((name, save_sheet(f"head-{name}", layers_of(head, top, full))))
   for ph in PHASE_KEYS:
     moon_rows.append((ph, save_img(f"moon-{ph}", draw_moon(ph))))
-  sun_h = save_img("sun", draw_sun())
+  core_h = save_img("sun-core", draw_sun("core"))
+  rays_h = save_img("sun-rays", draw_sun("rays"))
+  cloud_rows = [(str(v), save_img(f"cloud-{v}", draw_cloud(v))) for v in (0, 1)]
   star_h = save_img("star", draw_star())
   mask_h = save_img("orbit-mask", orbit_mask(th, fronts, mh, mb))
 
   l, r, b, t = moon_rect
   sky = (pct(l), pct((b - mb) / mh), pct(r - l), pct((t - b) / mh))
+  # 太陽用正方形框（射線要能轉）：與月亮同中心、同寬
+  sun_box = (pct(l), pct(((b + t) / 2 - mb) / mh), pct(r - l))
+  # 雲：(形狀, 雲底高度 bottom%, 寬 %)；高度一朵在月亮下緣、一朵在頭側
+  clouds = [("0", pct((b - 0.02 - mb) / mh), pct(25 / N)), ("1", pct((t - 0.42 - mb) / mh), pct(26 / N))]
   hx, hh = head_center(variants["crescent"])
   orbit = (pct(hx), pct((hh - mb) / mh), ORBIT_R, round(STAR_SIZE / N, 4))
   origin = (pct((HEAD_PIVOT[0] + 0.5) / N), pct((HEAD_PIVOT[1] + 0.5) / N))
@@ -409,8 +431,19 @@ pub const THRONE_HEAD: [(&str, &str); {len(head_rows)}] = [
 pub const THRONE_MOONS: [(&str, &str); {len(moon_rows)}] = [
 {rows(moon_rows)}
 ];
-/// 太陽、星星、星星層遮罩的檔名 hash。
-pub const THRONE_SUN: &str = "{sun_h}";
+/// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
+pub const THRONE_SUN_CORE: &str = "{core_h}";
+pub const THRONE_SUN_RAYS: &str = "{rays_h}";
+/// 太陽的正方形框：(left%, 中心 bottom%, width%)。
+pub const THRONE_SUN_BOX: (f32, f32, f32) = {sun_box};
+/// 雲圖：(形狀, hash)。
+pub const THRONE_CLOUD_IMGS: [(&str, &str); {len(cloud_rows)}] = [
+{rows(cloud_rows)}
+];
+/// 椅背上飄的雲：(形狀, 雲底 bottom%, 寬%)；飄動時間在 style.css `.throne-cloud`。
+pub const THRONE_CLOUDS: [(&str, f32, f32); {len(clouds)}] = [
+{chr(10).join(f'    ("{v}", {bb}, {ww}),' for v, bb, ww in clouds)}
+];
 pub const THRONE_STAR: &str = "{star_h}";
 pub const THRONE_ORBIT_MASK: &str = "{mask_h}";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。

@@ -28,8 +28,15 @@ pub const THRONE_MOONS: [(&str, &str); 5] = [
     ("gibbous", "fa4d77fb21bf"),
     ("full", "dd6133ec8eb2"),
 ];
-/// 太陽、星星、星星層遮罩的檔名 hash。
-pub const THRONE_SUN: &str = "ed09bdbf13c8";
+/// 太陽（核心／射線）、星星、星星與雲層遮罩的檔名 hash。
+pub const THRONE_SUN_CORE: &str = "f10ba6eb2379";
+pub const THRONE_SUN_RAYS: &str = "5d495f0a9e9a";
+/// 太陽的正方形框：(left%, 中心 bottom%, width%)。
+pub const THRONE_SUN_BOX: (f32, f32, f32) = (30.469, 87.071, 32.812);
+/// 雲圖：(形狀, hash)。
+pub const THRONE_CLOUD_IMGS: [(&str, &str); 2] = [("0", "1f7f228264bb"), ("1", "a1a150cb07d4")];
+/// 椅背上飄的雲：(形狀, 雲底 bottom%, 寬%)；飄動時間在 style.css `.throne-cloud`。
+pub const THRONE_CLOUDS: [(&str, f32, f32); 2] = [("0", 76.319, 39.062), ("1", 68.154, 40.625)];
 pub const THRONE_STAR: &str = "7fadd2823f0c";
 pub const THRONE_ORBIT_MASK: &str = "578f6a610b42";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。

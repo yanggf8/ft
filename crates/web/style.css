@@ -1657,14 +1657,33 @@ input[type="range"]:disabled { opacity: 0.6; }
 .throne-asleep .throne-stack .throne-head { animation: none; }
 .throne-sky { position: absolute; display: block; image-rendering: pixelated; }
 .throne-moon { animation: throne-moon 24s ease-in-out infinite; }
-.throne-sun { opacity: 0; animation: throne-sun 24s ease-in-out infinite; }
+.throne-sun {
+  position: absolute; aspect-ratio: 1 / 1; transform: translateY(50%); /* bottom＝中心高度 */
+  opacity: 0; animation: throne-sun 24s ease-in-out infinite;
+}
+.throne-sun img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.throne-sun-rays { animation: throne-rays 16s linear infinite; }
+@keyframes throne-rays { to { transform: rotate(360deg); } }
+/* 椅背上飄的雲：與星星同一張遮罩（只在椅背、被貓擋住），從左飄到右 */
+.throne-clouds {
+  position: absolute; inset: 0;
+  -webkit-mask-image: var(--orbit-mask); -webkit-mask-size: 100% 100%; -webkit-mask-repeat: no-repeat;
+  mask-image: var(--orbit-mask); mask-size: 100% 100%; mask-repeat: no-repeat;
+}
+.throne-cloud {
+  position: absolute; left: 0; display: block; height: auto; image-rendering: pixelated;
+  animation: throne-cloud 46s linear infinite;
+}
+.throne-cloud:nth-of-type(2) { animation-duration: 62s; animation-delay: -30s; }
+@keyframes throne-cloud { from { left: 0%; transform: translateX(-100%); } to { left: 100%; transform: translateX(0); } }
 @keyframes throne-moon { 0%, 42% { opacity: 1; } 50%, 92% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes throne-sun { 0%, 42% { opacity: 0; } 50%, 92% { opacity: 1; } 100% { opacity: 0; } }
-/* 星星繞頭公轉：遮罩只留椅背正面、扣掉貓與扶手（繞到貓背後被擋、離開椅背消失） */
+/* 星星繞頭公轉：遮罩只留椅背正面、扣掉貓與扶手（繞到貓背後被擋、離開椅背消失）；太陽時淡出 */
 .throne-orbit {
   position: absolute; inset: 0;
   -webkit-mask-image: var(--orbit-mask); -webkit-mask-size: 100% 100%; -webkit-mask-repeat: no-repeat;
   mask-image: var(--orbit-mask); mask-size: 100% 100%; mask-repeat: no-repeat;
+  animation: throne-moon 24s ease-in-out infinite; /* 太陽時沒有星：與月亮同步淡入淡出 */
 }
 .throne-ring { position: absolute; left: var(--ox); bottom: var(--oy); width: 0; height: 0; animation: throne-ring 40s linear infinite; }
 @keyframes throne-ring { to { transform: rotate(360deg); } }
@@ -1708,7 +1727,9 @@ input[type="range"]:disabled { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
   .mascot-joy:not(.mascot-hidden) { animation: none; }
   .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
-  .throne-stack .throne-head, .throne-ring, .throne-star img, .throne-moon { animation: none; }
+  .throne-stack .throne-head, .throne-ring, .throne-star img, .throne-moon, .throne-orbit, .throne-sun-rays { animation: none; }
+  .throne-cloud { animation: none; left: 8%; }
+  .throne-cloud:nth-of-type(2) { left: auto; right: 6%; }
   .throne-sun { animation: none; opacity: 0; }
   .mascot-sparks { display: none; }
 }
