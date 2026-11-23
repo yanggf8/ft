@@ -124,6 +124,9 @@ pub fn SpriteStackSheet(
     /// 額外 class（尺寸、外框）
     #[prop(optional, into)]
     class: String,
+    /// 額外行內樣式（接在 `--sheet` 等之後，例如舞台尺寸變數）
+    #[prop(optional, into)]
+    style: String,
 ) -> impl IntoView {
     let step = layer_step(grid);
     let cols = cols.max(1);
@@ -158,7 +161,7 @@ pub fn SpriteStackSheet(
     view! {
       <div
         class=format!("stack-stage {class}")
-        style=format!("--sheet:url('{src}');--cols:{cols};--rows:{rows}")
+        style=format!("--sheet:url('{src}');--cols:{cols};--rows:{rows};{style}")
         role=(!decorative).then_some("img")
         aria-label=(!decorative).then_some(label)
         aria-hidden=decorative.then_some("true")

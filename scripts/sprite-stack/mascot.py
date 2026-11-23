@@ -1,8 +1,9 @@
 """吉祥物月亮貓 sprite stacking 切片產生器（2026-11-23）。
 
-程式化體素月亮貓（長靴、肚肚、圍巾、月牙、尾巴）× 三個姿勢：
-  wave（首頁打招呼，拿星星魔杖）／wait（塔羅翻牌前，手放胸前期待）／joy（翻牌後，雙手舉高、笑瞇眼）。
-輸出圖集 crates/web/assets/mascot/stack/<pose>.webp（一個姿勢一張、一個請求），層數／格數／hash 寫成產生檔
+程式化體素月亮貓（頭本身是月牙、長靴、肚肚、圍巾、尾巴；照 2026-11-19 原設計平面圖；大頭短身呆萌比例）× 三個姿勢：
+  wave（首頁打招呼，右手魔杖）／wait（塔羅翻牌前，雙手握魔杖在胸前）／joy（翻牌後，雙手舉高、張嘴笑）。
+舞台高度與層底位置由 stage_box 算出寫進產生檔，元件以 --mh／--mb 行內帶給 CSS。
+輸出圖集 crates/web/assets/mascot/stack/<pose>-<hash>.webp（一個姿勢一張、一個請求），層數／格數／hash 寫成產生檔
 crates/web/src/components/mascot_stacks.rs（勿手改，components/mascot.rs 讀它）。
 正面＝切片的 +y（圖下緣），元件以左右擺動代替整圈自轉，臉一直朝前。
 改模型後重跑：python3 scripts/sprite-stack/mascot.py；
@@ -15,10 +16,11 @@ import subprocess
 import sys
 from PIL import Image
 
-N = 32        # 平面格數
+N = 48        # 平面格數（2026-11-23 由 32 提高：臉要放得下正圓大眼）
 SCALE = 8     # 預覽每格像素
-SHEET_SCALE = 4   # 圖集每格像素（顯示 --mw 140px、2x 螢幕約 9 px／格，pixelated 放大仍銳利）
+SHEET_SCALE = 3   # 圖集每格像素（顯示 --mw 150px、2x 螢幕約 6 px／格，pixelated 放大仍銳利）
 COLS = 8      # 圖集欄數
+SQUASH = 0.5  # 與 style.css .mascot-stack 的 --squash 一致（低俯角，臉看得到）
 C = (N - 1) / 2
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..", "crates", "web", "assets", "mascot", "stack")
@@ -85,103 +87,133 @@ def star_pts(cx, cz, r):
   return pts
 
 
+LIFT = 0.85   # 每層往上位移（格），與 sprite_stack.rs layer_step 一致；畫面上的圓要把 z 半徑除以它
+
+
 def build(pose):
+  """呆萌比例（2026-11-23 站長回饋）：大頭短身（頭約佔全身一半）、正圓大眼放低分開、小 ω 嘴、圓腮紅。
+  頭本身是月牙（照原設計）：大圓上方被挖掉一塊、兩角朝上，挖口內緣粉紅月牙帶只畫在前後表面。"""
   m = Model()
-  # 靴子＋腿
+  # 靴子＋短腿
   for sx in (-1, 1):
-    m.capsule((C + sx * 3, C + 0.5, 1.2), (C + sx * 3, C + 0.5, 3), 2.6, CREAM)
-    m.capsule((C + sx * 3, C, 4), (C + sx * 2.6, C, 8), 2.3, LAV)
-  # 身體＋肚肚
-  m.ellipsoid(C, C, 13, 6.2, 5.2, 7, LAV)
+    m.capsule((C + sx * 4.2, C + 0.8, 2), (C + sx * 4.2, C + 0.8, 3.5), 3.4, CREAM)
+    m.capsule((C + sx * 4, C, 5), (C + sx * 3.6, C, 8), 3.0, LAV)
+  # 胖胖的身體＋肚肚
+  m.ellipsoid(C, C, 14, 8.2, 7.2, 8.6, LAV)
   for x in range(N):
-    for z in range(8, 18):
-      if ((x - C) / 3.6) ** 2 + ((z - 12.5) / 4.6) ** 2 <= 1:
+    for z in range(6, 22):
+      if ((x - C) / 4.8) ** 2 + ((z - 13) / 5.4) ** 2 <= 1:
         m.paint_front(x, z, PINK, 2)
   # 尾巴：從背後彎上來，末端薄荷色條紋
-  pts = [(C + 2 + 3.5 * math.sin(t * 1.6), C - 4.5 - 4.5 * t, 7 + 11 * t) for t in [i / 14 for i in range(15)]]
+  pts = [(C + 3 + 5 * math.sin(t * 1.6), C - 6 - 6 * t, 8 + 16 * t) for t in [i / 20 for i in range(21)]]
   for i, (x, y, z) in enumerate(pts):
-    m.ellipsoid(x, y, z, 1.7, 1.7, 1.7, MINT if i >= 10 and i % 2 == 0 else LAV)
-  # 頭
-  HZ = 30
-  m.ellipsoid(C, C, HZ, 9.2, 7.6, 8.4, LAV)
-  # 耳朵（內側粉紅）
-  for sx in (-1, 1):
-    for k in range(7):
-      r = 2.8 * (1 - k / 7) + 0.4
-      m.ellipsoid(C + sx * (5.6 + k * 0.25), C, 36 + k, r, r * 0.8, 0.8, LAV)
-    for k in range(4):
-      r = 1.4 * (1 - k / 5)
-      m.ellipsoid(C + sx * (5.7 + k * 0.25), C + 1.4, 37 + k, r, 0.6, 0.6, PINK)
-  # 月牙：頭後方立起的粉紅新月（x–z 平面，y 在頭後）
+    m.ellipsoid(x, y, z, 2.3, 2.3, 2.3, MINT if i >= 14 and i % 3 == 0 else LAV)
+  # 頭＝胖月牙：厚度＝離外緣、離挖口兩邊都做圓角（不會像被切平的碗）
+  HZ = 38.5
+  R = 15.0
+  BX, BZ, BR = C + 2.2, HZ + 12.6, 10.4
+  D = 10.0
   for x in range(N):
-    for z in range(HZ, 50):
-      outer = (x - (C - 1)) ** 2 + (z - 37) ** 2 <= 10.5 ** 2
-      inner = (x - (C + 3.5)) ** 2 + (z - 40) ** 2 <= 9.5 ** 2
-      if outer and not inner:
-        for y in range(int(C - 6), int(C - 3)):
-          m.put(x, y, z, MOON, keep=True)
-  # 臉：眼睛、亮點、腮紅、嘴、額頭星
-  EZ = HZ - 0.5
+    for z in range(int(HZ - R) - 1, int(HZ + R) + 2):
+      d = math.hypot(x - C, z - HZ)
+      db = math.hypot(x - BX, z - BZ)
+      if d > R or db < BR:
+        continue
+      outer = D * math.sqrt(max(0.0, 1 - (d / R) ** 2))
+      inner = 2.2 + 2.4 * math.sqrt(db - BR)
+      ry = max(1.6, min(outer, inner))
+      band = db < BR + 2.8
+      for y in range(N):
+        if abs(y - C) <= ry:
+          m.put(x, y, z, MOON if band and abs(y - C) > ry - 1.6 else LAV)
+  # 臉：正圓大眼（畫面上的圓：z 半徑＝x 半徑 / LIFT）、大反光點、圓腮紅、小 ω 嘴、額頭小星
+  EZ = HZ - 4.6
+  ER = 4.3
   for sx in (-1, 1):
-    ex = C + sx * 3.7
+    ex = C + sx * 6.9
     for x in range(N):
-      for z in range(HZ - 6, HZ + 5):
-        d = ((x - ex) / 2.4) ** 2 + ((z - EZ) / 2.6) ** 2
-        if pose == "joy":
-          # 笑瞇眼：倒 U 弧線
-          dd = math.hypot(x - ex, (z - (EZ - 1.2)) * 1.1)
-          if 1.6 <= dd <= 2.6 and z >= EZ - 1.2:
-            m.paint_front(x, z, INK)
-        elif d <= 1:
-          m.paint_front(x, z, INK if d > 0.55 else TEAL)
-    if pose != "joy":
-      m.paint_front(round(ex - 0.6), round(EZ + 0.6), WHITE)
-      m.paint_front(round(ex + 0.7), round(EZ - 0.9), WHITE)
+      for z in range(int(EZ - ER / LIFT) - 1, int(EZ + ER / LIFT) + 2):
+        d = math.hypot((x - ex) / ER, (z - EZ) * LIFT / ER)
+        if d <= 1:
+          m.paint_front(x, z, INK if (d > 0.78 or z > EZ + 0.6) else TEAL)
+    # 反光：左上 2×2 大亮點＋右下 1 點
+    for dx, dz in ((-1.6, 1.8), (-0.6, 1.8), (-1.6, 2.8), (-0.6, 2.8), (1.6, -1.9)):
+      m.paint_front(round(ex + dx), round(EZ + dz), WHITE)
     for x in range(N):
-      for z in range(HZ - 6, HZ):
-        if ((x - (C + sx * 6.4)) / 1.7) ** 2 + ((z - (HZ - 3.4)) / 1.0) ** 2 <= 1:
+      for z in range(int(HZ) - 14, int(HZ) - 6):
+        if math.hypot((x - (C + sx * 10.6)) / 2.6, (z - (HZ - 9.4)) * LIFT / 1.7) <= 1:
           m.paint_front(x, z, BLUSH)
-  for x, z in ((C - 0.5, HZ - 3), (C + 0.5, HZ - 3), (C - 1.5, HZ - 2.4), (C + 1.5, HZ - 2.4)):
-    m.paint_front(round(x), round(z), INK)
-  for x, z in star_pts(round(C), HZ + 5, 1):
+  if pose == "joy":
+    for x in range(N):
+      for z in range(int(HZ) - 13, int(HZ) - 7):
+        d = math.hypot((x - C) / 1.9, (z - (HZ - 10)) * LIFT / 1.9)
+        if d <= 1:
+          m.paint_front(x, z, PINK if d < 0.55 and z < HZ - 10 else INK)
+  else:
+    for x, z in ((C - 1.5, HZ - 9.2), (C - 0.5, HZ - 10.2), (C + 0.5, HZ - 10.2), (C + 1.5, HZ - 9.2)):
+      m.paint_front(round(x), round(z), INK)
+  for x, z in star_pts(round(C), round(HZ - 1), 1):
     m.paint_front(x, z, STAR)
   # 圍巾：脖子一圈薄荷／奶油條紋＋垂下的一角
   for x in range(N):
     for y in range(N):
       a = math.atan2(y - C, x - C)
       d = math.hypot(x - C, y - C)
-      for z in range(19, 22):
-        if 3.2 <= d <= 6.4 - abs(z - 20.5) * 0.5:
-          m.put(x, y, z, MINT if int((a + math.pi) / (2 * math.pi) * 12) % 2 else CREAM)
-  for z in range(13, 20):
-    for x in range(int(C - 5), int(C - 2)):
-      m.put(x, int(C + 5), z, MINT if (z // 2) % 2 else CREAM)
-      m.put(x, int(C + 4), z, MINT if (z // 2) % 2 else CREAM)
-  # 手臂（依姿勢）
-  sh = lambda sx: (C + sx * 5.2, C + 0.5, 17.5)
+      for z in range(21, 25):
+        if 4.5 <= d <= 9.2 - abs(z - 23) * 0.6:
+          m.put(x, y, z, MINT if int((a + math.pi) / (2 * math.pi) * 14) % 2 else CREAM)
+  for z in range(13, 22):
+    for x in range(int(C - 7), int(C - 3)):
+      for y in (int(C + 7), int(C + 8)):
+        m.put(x, y, z, MINT if (z // 2) % 2 else CREAM)
+  # 短短的手（依姿勢）
+  sh = lambda sx: (C + sx * 7.2, C + 1, 19)
 
   def arm(sx, hand, pad=False):
-    m.capsule(sh(sx), hand, 1.9, LAV)
-    m.ellipsoid(*hand, 2.2, 2.2, 2.2, LAV)
+    m.capsule(sh(sx), hand, 2.6, LAV)
+    m.ellipsoid(*hand, 3.0, 3.0, 3.0, LAV)
     if pad:
       hx, hy, hz = hand
-      m.ellipsoid(hx, hy + 1.6, hz, 1.2, 0.8, 1.2, PINK)
+      m.ellipsoid(hx, hy + 2.2, hz, 1.6, 1.0, 1.6, PINK)
+
+  def wand(a, b, top):
+    """魔杖（≥2 格粗，轉動時不閃爍）＋杖頭星星。"""
+    m.capsule(a, b, 1.2, STICK, keep=True)
+    tx, ty, tz = top
+    for x, z in star_pts(round(tx), round(tz), 3):
+      for y in (int(ty) - 1, int(ty)):
+        m.put(x, y, z, STAR)
 
   if pose == "wave":
-    arm(-1, (C - 11, C + 1, 27), pad=True)
-    hand = (C + 9, C + 3, 15)
-    arm(1, hand)
-    m.capsule((C + 9, C + 3.5, 12), (C + 12, C + 3.5, 27), 1.1, STICK, keep=True)
-    for x, z in star_pts(round(C + 12), 28, 2):
-      for y in (int(C + 3), int(C + 4)):
-        m.put(x, y, z, STAR)
+    arm(-1, (C - 15, C + 1, 30), pad=True)
+    arm(1, (C + 12, C + 4, 16))
+    wand((C + 12, C + 5, 11), (C + 17, C + 5, 33), (C + 17, C + 5.5, 35))
   elif pose == "wait":
-    arm(-1, (C - 2, C + 6, 17))
-    arm(1, (C + 2, C + 6, 17))
-  else:  # joy
-    arm(-1, (C - 11.5, C + 1, 33), pad=True)
-    arm(1, (C + 11.5, C + 1, 33), pad=True)
+    # 雙手握魔杖擋在胸前，杖頭星星在右臉旁
+    arm(-1, (C + 0.5, C + 9, 15))
+    arm(1, (C + 4.5, C + 9, 18.5))
+    wand((C - 2, C + 10, 9), (C + 12, C + 10, 33), (C + 12.5, C + 10.5, 35))
+  else:  # joy：雙手舉高、張嘴笑，右手魔杖往右上
+    arm(-1, (C - 16, C + 1, 36), pad=True)
+    arm(1, (C + 15.5, C + 1, 35))
+    wand((C + 15.5, C + 2, 31), (C + 19, C + 2, 47), (C + 19, C + 2.5, 49))
   return m
+
+
+def stage_box(models, angles=(-24, 0, 24)):
+  """舞台高度與層底位置（以層寬 W 為單位），照 style.css 疊法算出所有姿勢、擺動角度的外框：
+  回傳 (mh, mb)：舞台高 = mh·W、.stack-layer bottom = -mb·W，最低點貼舞台底、最高點貼舞台頂。"""
+  lo, hi = 1e9, -1e9
+  for m in models:
+    for (x, y, z) in m.v:
+      for a in angles:
+        t = math.radians(a)
+        # 切片繞中心轉（CSS rotate 順時針為正、圖座標 y 向下）
+        yr = (x - C) * math.sin(t) + (y - C) * math.cos(t) + C
+        base = (1 + SQUASH) / 2 - SQUASH * (yr + 0.5) / N
+        lo = min(lo, base - SQUASH * 0.5 / N + z * LIFT / N)
+        hi = max(hi, base + SQUASH * 0.5 / N + (z + 0.5) * LIFT / N)
+  return round(hi - lo + 0.02, 3), round(lo - 0.01, 3)
 
 
 def render(m):
@@ -208,16 +240,19 @@ def save(pose, layers):
   sheet = Image.new("RGBA", (COLS * cell, rows * cell), (0, 0, 0, 0))
   for z, im in enumerate(layers):
     sheet.paste(im.resize((cell, cell), Image.NEAREST), ((z % COLS) * cell, (z // COLS) * cell))
+  # 檔名帶內容 hash（<pose>-<hash>.webp）：舊版程式只會 404（吉祥物空白），不會拿到新圖集配舊格數而錯位
   os.makedirs(ROOT, exist_ok=True)
-  path = os.path.join(ROOT, f"{pose}.webp")
-  sheet.save(path, lossless=True)
-  with open(path, "rb") as fh:
+  tmp = os.path.join(ROOT, f".{pose}.tmp.webp")
+  sheet.save(tmp, lossless=True)
+  with open(tmp, "rb") as fh:
     digest = hashlib.sha256(fh.read()).hexdigest()[:12]
+  for f in os.listdir(ROOT):
+    if f.startswith(f"{pose}-") or f == f"{pose}.webp":
+      os.remove(os.path.join(ROOT, f))
+  path = os.path.join(ROOT, f"{pose}-{digest}.webp")
+  os.replace(tmp, path)
   print(pose, "layers", len(layers), "sheet", sheet.size, os.path.getsize(path), "bytes")
   return digest
-
-
-SQUASH = 0.5   # 與 style.css .mascot-stack 的 --squash 一致（低俯角，臉看得到）
 
 
 def preview(layers, angle, width=240):
@@ -233,11 +268,11 @@ def preview(layers, angle, width=240):
   return canvas
 
 
-def write_rust(counts):
+def write_rust(counts, box):
   rows = "\n".join(f'    ("{p}", {n}, "{h}"),' for p, n, h in counts)
   src = f"""//! 吉祥物月亮貓 sprite stack 的圖集常數——由 `scripts/sprite-stack/mascot.py` 產生，**勿手改**。
 //!
-//! 每個姿勢一張圖集 `crates/web/assets/mascot/stack/<pose>.webp`：{COLS} 欄、由左而右由上而下，第 0 格＝最底層。
+//! 每個姿勢一張圖集 `crates/web/assets/mascot/stack/<pose>-<hash>.webp`：{COLS} 欄、由左而右由上而下，第 0 格＝最底層。
 
 /// 切片的平面格數（寬＝高）。
 pub const MASCOT_STACK_GRID: usize = {N};
@@ -245,7 +280,12 @@ pub const MASCOT_STACK_GRID: usize = {N};
 /// 圖集欄數。
 pub const MASCOT_SHEET_COLS: usize = {COLS};
 
-/// 各姿勢：(姿勢, 層數, 圖集內容 hash——網址帶 `?v=`，zone 的瀏覽器快取 4h 才不會配到舊圖)。
+/// 舞台高（層寬的倍數，CSS `--mh`）與 `.stack-layer` 底部位移（`bottom: -mb × 層寬`，CSS `--mb`）：
+/// 由 `stage_box` 依所有姿勢、±24° 擺動的外框算出，最低點貼舞台底、最高點貼舞台頂。
+pub const MASCOT_STAGE_H: f32 = {box[0]};
+pub const MASCOT_STAGE_B: f32 = {box[1]};
+
+/// 各姿勢：(姿勢, 層數, 圖集內容 hash——在檔名裡，舊程式拿不到新圖集、zone 4h 快取也不會配到舊圖)。
 pub const MASCOT_STACK_LAYERS: [(&str, usize, &str); {len(counts)}] = [
 {rows}
 ];
@@ -270,8 +310,12 @@ if __name__ == "__main__":
       sheet.save(os.path.join(sys.argv[2], f"{p}.png"))
     print("preview →", sys.argv[2])
   else:
-    counts = []
+    counts, models = [], []
     for p in POSES:
-      layers = render(build(p))
+      m = build(p)
+      models.append(m)
+      layers = render(m)
       counts.append((p, len(layers), save(p, layers)))
-    write_rust(counts)
+    box = stage_box(models)
+    print("stage", box)
+    write_rust(counts, box)

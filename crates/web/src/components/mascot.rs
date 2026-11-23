@@ -1,12 +1,14 @@
 //! 吉祥物月亮貓（sprite stacking，2026-11-23；取代 2026-11-19 的平面 WebP）。
 //!
 //! 切片由 `scripts/sprite-stack/mascot.py` 程式化體素產生，每個姿勢合成一張圖集
-//! （`assets/mascot/stack/<pose>.webp`，一個請求）；層數／欄數／內容 hash 在產生檔 `mascot_stacks.rs`。純裝飾：整疊 aria-hidden。左右擺動、低俯角與尺寸在 style.css
+//! （`assets/mascot/stack/<pose>-<hash>.webp`，一個請求）；層數／欄數／內容 hash／舞台尺寸在產生檔 `mascot_stacks.rs`。純裝飾：整疊 aria-hidden。左右擺動、低俯角與尺寸在 style.css
 //! `.mascot-stack`。
 
 use leptos::prelude::*;
 
-use super::mascot_stacks::{MASCOT_SHEET_COLS, MASCOT_STACK_GRID, MASCOT_STACK_LAYERS};
+use super::mascot_stacks::{
+    MASCOT_SHEET_COLS, MASCOT_STACK_GRID, MASCOT_STACK_LAYERS, MASCOT_STAGE_B, MASCOT_STAGE_H,
+};
 use super::SpriteStackSheet;
 
 /// 姿勢：首頁打招呼／塔羅翻牌前期待／翻牌後開心。
@@ -41,12 +43,13 @@ pub fn Mascot(
         .map_or((0, ""), |(_, n, h)| (*n, *h));
     view! {
       <SpriteStackSheet
-        src=format!("/assets/mascot/stack/{key}.webp?v={hash}")
+        src=format!("/assets/mascot/stack/{key}-{hash}.webp")
         layers=layers
         cols=MASCOT_SHEET_COLS
         grid=MASCOT_STACK_GRID
         label=""
         class=format!("mascot-stack {class}")
+        style=format!("--mh:{MASCOT_STAGE_H};--mb:{MASCOT_STAGE_B}")
       />
     }
 }

@@ -288,13 +288,14 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `assets/shop/stack/desk-plant/`）、空間風水選房間三個房型縮景（`pages/fengshui.rs` `room_stack_dims` 讀產生檔
   `pages/room_stacks.rs`；`scripts/sprite-stack/rooms.py` 同時產生切片 `assets/stack/room-<wire>/` 與層數常數，
   裝飾用 aria-hidden）、吉祥物月亮貓（2026-11-23 取代平面 WebP：`components/mascot.rs`
-  `Mascot{pose: Wave|Wait|Joy, class}` 讀產生檔 `components/mascot_stacks.rs`（層數／欄數／圖集內容 hash）；
-  `scripts/sprite-stack/mascot.py` 每個姿勢產生一張圖集 `assets/mascot/stack/<pose>.webp`（8 欄、約 2.5KB、一個請求），
-  `--preview <dir>` 出與 CSS 同款疊法的預覽圖。圖集版元件 `SpriteStackSheet{src, layers, cols, grid, label, class}`：
-  每層一格 `.stack-cell` 以 `background-position` 取格，舞台行內帶 `--sheet/--cols/--rows`；網址帶 `?v=<hash>`
-  （zone 瀏覽器快取 4h，見快取紅線）；另放隱藏 `<img class="stack-preload">` 預載——塔羅頁兩疊先藏後顯，
-  display:none 的背景圖不會載，翻牌瞬間會閃。`.mascot-stack` 低俯角 `--squash:.5`、±24° 左右擺動取代整圈自轉
-  （臉一直朝前），尺寸由 `--mw` 控制）。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
+  `Mascot{pose: Wave|Wait|Joy, class}` 讀產生檔 `components/mascot_stacks.rs`（層數／欄數／圖集 hash／舞台尺寸）；
+  `scripts/sprite-stack/mascot.py`（N=48、大頭短身呆萌比例、頭本身是月牙＝照 2026-11-19 原設計、正圓大眼）
+  每個姿勢產生一張圖集 `assets/mascot/stack/<pose>-<hash>.webp`（8 欄、約 4KB、一個請求；hash 在檔名，
+  舊程式只會 404 不會配錯格數），`--preview <dir>` 出與 CSS 同款疊法的預覽圖。圖集版元件
+  `SpriteStackSheet{src, layers, cols, grid, label, class, style}`：每層一格 `.stack-cell` 以 `background-position`
+  取格，舞台行內帶 `--sheet/--cols/--rows`；另放隱藏 `<img class="stack-preload">` 預載——塔羅頁兩疊先藏後顯，
+  display:none 的背景圖不會載，翻牌瞬間會閃。舞台高 `--mh`／層底位移 `--mb` 由產生器 `stage_box` 依模型與擺動外框
+  算出。`.mascot-stack` 低俯角 `--squash:.5`、±24° 左右擺動取代整圈自轉（臉一直朝前），尺寸由 `--mw` 控制）。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
 - **空間風水結果頁「你的房間」縮景（2026-11-22，spec `docs/superpowers/specs/2026-11-22-fengshui-diorama-design.md` §7）**：
   `SpriteStackParts{base, parts, grid, label, class}` 把多個零件的同層切片疊在同一個 `.stack-spin` 裡。
   零件＝每個可畫的選項一個（三房型 51 件，N=40、全域 TOP 明暗），`scripts/sprite-stack/fengshui_parts.py`
