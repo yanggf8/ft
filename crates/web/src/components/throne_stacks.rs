@@ -32,7 +32,7 @@ pub const THRONE_MOONS: [(&str, &str); 5] = [
 pub const THRONE_SUN_CORE: &str = "f10ba6eb2379";
 pub const THRONE_SUN_RAYS: &str = "5d495f0a9e9a";
 /// 太陽的正方形框：(left%, 中心 bottom%, width%)——月亮對轉軸的對稱點（初始在地平線下）。
-pub const THRONE_SUN_BOX: (f32, f32, f32) = (36.719, -7.071, 32.812);
+pub const THRONE_SUN_BOX: (f32, f32, f32) = (36.719, 40.929, 32.812);
 /// 雲圖：(形狀, hash)。
 pub const THRONE_CLOUD_IMGS: [(&str, &str); 2] = [("0", "1f7f228264bb"), ("1", "a1a150cb07d4")];
 /// 椅背上飄的雲：(形狀, 雲底 bottom%, 寬%)；飄動時間在 style.css `.throne-cloud`。
@@ -52,4 +52,4 @@ pub const THRONE_STARS: [(f32, f32); 6] = [
 ];
 pub const THRONE_STAR_W: f32 = 14.062;
 /// 天空轉輪的轉軸：(left%, bottom%)；夜空組在上、太陽在對面，24 秒內轉 180°×2（style.css `.throne-wheel`）。
-pub const THRONE_WHEEL: (f32, f32) = (50.0, 40.0);
+pub const THRONE_WHEEL: (f32, f32) = (50.0, 64.0);

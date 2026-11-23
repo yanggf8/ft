@@ -312,7 +312,8 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `SpriteStackSheetDuo` 逐層交錯疊、只有頭那格掛 `.throne-head` 轉頭（轉軸＝頭中心）。花窗上的月亮（當晚月相 5 張
   `moon-<phase>`）／太陽（`sun-core`＋`sun-rays`，只有射線繞太陽轉）是 2D 像素疊加（位置由產生器
   投影算出，並檢查轉頭範圍內不會蓋到前方體素）。椅背上兩朵像素雲（`cloud-0/1`）慢慢從左飄到右。
-  天空整層套 `orbit-mask`（`.throne-skymask`），裡面是轉輪 `.throne-wheel`（轉軸 `THRONE_WHEEL` 在地平線附近）：
+  天空整層套 `orbit-mask`（`.throne-skymask`），裡面是轉輪 `.throne-wheel`（轉軸 `THRONE_WHEEL` 在頭頂與月亮之間，
+  轉到一半月亮與太陽分在兩側都看得到；轉到下半邊的那組淡出）：
   夜空組（月亮帶淺坑＋雲＋固定的 6 顆星，不繞誰轉、自己也不轉，只跟夜空一起轉）在上、太陽（只有射線繞轉）放在月亮對轉軸的對稱點；
   24 秒內轉 180° 再轉 180°——月亮轉下去、太陽轉上來（一升一降），轉下去就沉到貓身後、出椅背就被遮掉。`orbit-mask` 由產生器畫（椅背正面減去前方
   體素＋轉頭範圍）。站姿尾巴往後伸會埋進椅背，坐姿由 `m.tail` 拿掉後改從左側繞出、翹在扶手外。滿月夜不再整隻旋轉，

@@ -1657,7 +1657,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 .throne-asleep .throne-stack .throne-head { animation: none; }
 .throne-sky { position: absolute; display: block; image-rendering: pixelated; }
 /* 天空：椅背遮罩（產生器畫的 orbit-mask：椅背正面減去貓與扶手）。轉輪上夜空組（月亮＋雲＋星星）在上、
-   太陽在轉軸（--wx/--wy，地平線附近）對面；轉 180° 就是月亮轉下去、太陽轉上來，再轉 180° 換回來。 */
+   太陽在轉軸（--wx/--wy，頭頂與月亮之間）對面；轉 180° 就是月亮轉下去、太陽轉上來，再轉 180° 換回來。 */
 .throne-skymask {
   position: absolute; inset: 0;
   -webkit-mask-image: var(--orbit-mask); -webkit-mask-size: 100% 100%; -webkit-mask-repeat: no-repeat;
@@ -1673,6 +1673,11 @@ input[type="range"]:disabled { opacity: 0.6; }
   50%, 90% { transform: rotate(180deg); }
   100% { transform: rotate(360deg); }
 }
+/* 轉到下半邊的那組淡出（轉軸在頭頂附近，下半邊會露在貓兩側）；轉到一半時兩組都看得到 */
+.throne-night { animation: throne-night-fade 24s linear infinite; }
+.throne-day { opacity: 0; animation: throne-day-fade 24s linear infinite; }
+@keyframes throne-night-fade { 0%, 44% { opacity: 1; } 50%, 90% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes throne-day-fade { 0%, 40% { opacity: 0; } 46%, 94% { opacity: 1; } 100% { opacity: 0; } }
 .throne-sun { position: absolute; aspect-ratio: 1 / 1; transform: translateY(50%); /* bottom＝中心高度 */ }
 .throne-sun img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 .throne-sun-rays { animation: throne-rays 16s linear infinite; }
@@ -1720,7 +1725,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
   .mascot-joy:not(.mascot-hidden) { animation: none; }
   .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
-  .throne-stack .throne-head, .throne-wheel, .throne-sun-rays { animation: none; }
+  .throne-stack .throne-head, .throne-wheel, .throne-night, .throne-day, .throne-sun-rays { animation: none; }
   .throne-cloud { animation: none; left: 8%; }
   .throne-cloud:nth-of-type(2) { left: auto; right: 6%; }
   .mascot-sparks { display: none; }
