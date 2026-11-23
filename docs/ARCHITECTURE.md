@@ -301,9 +301,15 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   new/crescent/quarter/gibbous/full，虧月同頭形）、`is_night_taipei`（18–06 點）、`taipei_night_key`（凌晨算前一晚）、
   全部台詞（`home_line`／`tarot_wait_line`／`SLEEP_LINE`…，禁字測試：不說運勢、命、注定、改運）。`MoonPhase::key()`
   是圖集檔名的一部分不可改名。產生器 `PHASES` × 姿勢＝15 張＋新月 `sleep`＝16 張圖集 `<pose>-<phase>-<hash>.webp`。
-  首頁 `HomeMascot`：夜晚才開口；新月夜睡著（真 `<button class="mascot-wake">` 叫醒）；滿月夜當晚第一次進站轉一圈＋
+  首頁 `HomeMascot`：夜晚才開口；新月夜睡著（真 `<button class="mascot-wake">` 叫醒）；滿月夜當晚第一次進站灑
   星點（localStorage `mascot_full_moon_night`＝今晚鍵，每晚一次；減少動態效果不轉不灑）。塔羅翻牌前台詞跟月相。
-  時間取瀏覽器時鐘（`MoonNow::read`），只換造型與台詞，不寫任何資料。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
+  時間取瀏覽器時鐘（`MoonNow::read`），只換造型與台詞，不寫任何資料。
+- **首頁月亮王座（2026-11-23 站長：吉祥物只轉頭；椅背月亮↔太陽；星星只在椅背慢轉）**：`components/throne.rs`
+  `Throne{phase, asleep}`。`scripts/sprite-stack/throne.py`（N=64，重用 mascot.py 模型，`m.head` 拆出頭部體素）
+  產生身體圖集 `body-<wave|sleep>`（底座＋王座＋坐姿貓身，靜止）與頭圖集 `head-<phase|sleep>`，
+  `SpriteStackSheetDuo` 逐層交錯疊、只有頭那格掛 `.throne-head` 轉頭（轉軸＝頭中心）。花窗上的月亮／太陽／星星是
+  2D 像素疊加（`throne_stacks.rs` 的位置由產生器投影算出，並檢查轉頭範圍內不會蓋到前方體素）。滿月夜不再整隻旋轉，
+  只灑星點。減少動態效果：不轉頭、只顯示月亮、星星靜止。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
 - **空間風水結果頁「你的房間」縮景（2026-11-22，spec `docs/superpowers/specs/2026-11-22-fengshui-diorama-design.md` §7）**：
   `SpriteStackParts{base, parts, grid, label, class}` 把多個零件的同層切片疊在同一個 `.stack-spin` 裡。
   零件＝每個可畫的選項一個（三房型 51 件，N=40、全域 TOP 明暗），`scripts/sprite-stack/fengshui_parts.py`

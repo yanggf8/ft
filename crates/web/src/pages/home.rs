@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 
 use crate::auth::use_auth;
-use crate::components::{Mascot, MascotPose, MascotSparks, MoonNow};
+use crate::components::{MascotSparks, MoonNow, Throne};
 
 #[component]
 pub fn HomePage() -> impl IntoView {
@@ -195,8 +195,9 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
 const FULL_MOON_SEEN_KEY: &str = "mascot_full_moon_night";
 
 /// 首頁的月亮貓「引路貓」（2026-11-23 設計稿 https://claude.ai/artifact/4j3inRg98QWKbvkq9NfR6X）：
+/// 坐在月亮王座上（`Throne`：身體不動、只轉頭；椅背月亮↔太陽循環、星星慢轉）。
 /// 頭形跟著當下月相；台北夜晚（18–06 點）才開口說一句；新月夜睡著（按一下叫醒）；
-/// 滿月夜當晚第一次進站轉一整圈並灑星點（減少動態效果時不轉、不灑，style.css）。
+/// 滿月夜當晚第一次進站灑星點（減少動態效果時不灑，style.css）。
 #[component]
 fn HomeMascot() -> impl IntoView {
     let now = MoonNow::read();
@@ -235,7 +236,7 @@ fn HomeMascot() -> impl IntoView {
                     on:click=move |_| asleep.set(false)
                 >
                     <span class="mascot-bubble mascot-say" aria-hidden="true">{moon::SLEEP_LINE}</span>
-                    <Mascot pose=MascotPose::Sleep phase=phase class="mascot-hero" />
+                    <Throne phase=phase asleep=true />
                 </button>
             }
                 .into_any()
@@ -245,7 +246,7 @@ fn HomeMascot() -> impl IntoView {
                     <p class="mascot-bubble mascot-say">{moon::home_line(phase)}</p>
                 </Show>
                 <div class="mascot-fx" class:mascot-transforming=move || transforming.get() aria-hidden="true">
-                    <Mascot pose=MascotPose::Wave phase=phase class="mascot-hero" />
+                    <Throne phase=phase />
                     <Show when=move || transforming.get()>
                         <MascotSparks />
                     </Show>

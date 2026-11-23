@@ -119,6 +119,7 @@ def build(pose, phase="crescent"):
   pts = [(C + 3 + 5 * math.sin(t * 1.6), C - 6 - 6 * t, 8 + 16 * t) for t in [i / 20 for i in range(21)]]
   for i, (x, y, z) in enumerate(pts):
     m.ellipsoid(x, y, z, 2.3, 2.3, 2.3, MINT if i >= 14 and i % 3 == 0 else LAV)
+  head_before = set(m.v)
   # 頭＝胖月牙：厚度＝離外緣、離挖口兩邊都做圓角（不會像被切平的碗）
   HZ = 38.5
   R = 15.0
@@ -173,6 +174,8 @@ def build(pose, phase="crescent"):
       m.paint_front(round(x), round(z), INK)
   for x, z in star_pts(round(C), round(HZ - 1), 1):
     m.paint_front(x, z, STAR)
+  # 記下頭部體素（頭形＋臉）：王座版把頭拆成獨立一疊，只有頭會轉（throne.py）
+  m.head = {k: c for k, c in m.v.items() if k not in head_before}
   # 圍巾：脖子一圈薄荷／奶油條紋＋垂下的一角
   for x in range(N):
     for y in range(N):

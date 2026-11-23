@@ -1627,8 +1627,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 .mascot-stack .stack-spin { animation: mascot-sway 4.8s ease-in-out infinite alternate; }
 @keyframes mascot-sway { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
 .mascot-hidden { display: none; }
-.mascot-hero { margin: 0 auto 0.75rem; animation: mascot-bob 3.2s ease-in-out infinite; }
-/* 引路貓（2026-11-23）：夜晚台詞泡泡、新月叫醒按鈕、滿月變身（轉一整圈＋星點） */
+/* 引路貓（2026-11-23）：夜晚台詞泡泡、新月叫醒按鈕、滿月夜灑星點 */
 .mascot-say { width: fit-content; max-width: min(280px, 90%); margin: 0 auto 0.4rem; }
 .mascot-wake {
   display: flex; flex-direction: column; align-items: center; margin: 0 auto; padding: 0.25rem;
@@ -1636,8 +1635,32 @@ input[type="range"]:disabled { opacity: 0.6; }
 }
 .mascot-wake:focus-visible { outline: 3px solid var(--starlight); outline-offset: 2px; }
 .mascot-fx { position: relative; width: fit-content; margin: 0 auto; }
-.mascot-transforming .stack-spin { animation: mascot-transform 1.2s cubic-bezier(0.3, 0.7, 0.3, 1) 1; }
-@keyframes mascot-transform { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* 首頁月亮王座（components/throne.rs、scripts/sprite-stack/throne.py）：整疊靜止，只有頭轉；
+   椅背花窗月亮↔太陽交替、星星慢轉。--mh／--mb 由產生器算出、元件行內帶入。 */
+.throne {
+  --mw: min(300px, 78vw); --squash: 0.5; --mh: 1.4; --mb: 0.25; /* --mh／--mb 預設值，元件行內覆寫 */
+  position: relative; width: var(--mw); height: calc(var(--mw) * var(--mh)); margin: 0 auto 0.75rem;
+  pointer-events: none; user-select: none;
+}
+.throne .throne-stack { position: absolute; inset: 0; overflow: visible; }
+.throne-stack .stack-layer { left: 0; width: 100%; top: auto; bottom: calc(var(--mw) * var(--mb) * -1); }
+.throne-stack .stack-spin { animation: none; }
+.throne-stack .throne-head { animation: throne-head 9s ease-in-out infinite; }
+@keyframes throne-head {
+  0%, 100% { transform: rotate(0deg); }
+  18%, 36% { transform: rotate(-16deg); }
+  54%, 72% { transform: rotate(16deg); }
+  86% { transform: rotate(0deg); }
+}
+.throne-asleep .throne-stack .throne-head { animation: none; }
+.throne-sky, .throne-star { position: absolute; display: block; image-rendering: pixelated; }
+.throne-moon { animation: throne-moon 24s ease-in-out infinite; }
+.throne-sun { opacity: 0; animation: throne-sun 24s ease-in-out infinite; }
+@keyframes throne-moon { 0%, 42% { opacity: 1; } 50%, 92% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes throne-sun { 0%, 42% { opacity: 0; } 50%, 92% { opacity: 1; } 100% { opacity: 0; } }
+.throne-star { animation: throne-star 18s linear infinite; }
+.throne-star:nth-of-type(odd) { animation-direction: reverse; animation-duration: 24s; }
+@keyframes throne-star { to { transform: rotate(360deg); } }
 .mascot-sparks { position: absolute; inset: 0; pointer-events: none; }
 .mascot-spark {
   position: absolute; width: 14px; height: 14px; background: var(--accent);
@@ -1652,7 +1675,6 @@ input[type="range"]:disabled { opacity: 0.6; }
 .mascot-spark:nth-child(5) { left: 22%; top: 2%; animation-delay: 0.3s; }
 .mascot-spark:nth-child(6) { left: 66%; top: 0; animation-delay: 0.25s; }
 @keyframes mascot-spark { 0% { opacity: 0; transform: scale(0.2); } 35% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0; transform: scale(0.6) translateY(-10px); } }
-@keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .tarot-stage { display: flex; align-items: flex-end; gap: 0.5rem; }
 .tarot-mascot { flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
 /* 有吉祥物時牌寬讓出 96px＋gap（蓋過 ≤480px 的 min(240px,62vw)；不影響牌陣 --sm） */
@@ -1669,9 +1691,10 @@ input[type="range"]:disabled { opacity: 0.6; }
 
 /* reduced-motion：吉祥物不浮動、不跳（放在檔尾，K07） */
 @media (prefers-reduced-motion: reduce) {
-  .mascot-hero, .mascot-joy:not(.mascot-hidden) { animation: none; }
+  .mascot-joy:not(.mascot-hidden) { animation: none; }
   .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
-  .mascot-transforming .stack-spin { animation: none; }
+  .throne-stack .throne-head, .throne-star, .throne-moon { animation: none; }
+  .throne-sun { animation: none; opacity: 0; }
   .mascot-sparks { display: none; }
 }
 
@@ -1770,7 +1793,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 }
 /* sprite stacking（components/sprite_stack.rs）：切片由下而上疊，每層往上 0.85 格（--step＝層寬 %，
    由元件依切片格數算好行內帶入）、整疊壓扁成俯視角後一起轉。translateY 的 % 以層自身高度（= 寬）計。 */
-.stack-stage { position: relative; overflow: hidden; --sheet: none; --cols: 1; --rows: 1; /* 圖集版預設，元件行內覆寫 */ }
+.stack-stage { position: relative; overflow: hidden; --sheet: none; --sheet-b: none; --cols: 1; --rows: 1; /* 圖集版預設，元件行內覆寫 */ }
 .stack-layer {
   --i: 0; /* 層高，元件行內覆寫 */
   --step: 1.77; /* 每層位移（層寬 %），元件行內覆寫 */
@@ -1791,6 +1814,7 @@ input[type="range"]:disabled { opacity: 0.6; }
   background-size: calc(var(--cols) * 100%) calc(var(--rows) * 100%); image-rendering: pixelated;
 }
 .stack-preload { display: none; }
+.stack-cell-b { background-image: var(--sheet-b); }
 @media (prefers-reduced-motion: reduce) {
   .stack-spin { animation: none; transform: rotate(30deg); }
 }

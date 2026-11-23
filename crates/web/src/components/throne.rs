@@ -1,0 +1,76 @@
+//! 首頁月亮王座吉祥物（2026-11-23 站長：吉祥物不用動太多，只簡單轉頭；椅背月亮↔太陽循環；
+//! 星星慢轉、只在椅背）。
+//!
+//! `scripts/sprite-stack/throne.py` 產生：身體圖集（底座＋王座＋坐姿貓身，靜止）＋頭圖集（月相五種＋睡覺），
+//! 用 `SpriteStackSheetDuo` 逐層交錯疊，只有頭轉；花窗上的月亮／太陽／星星是 2D 像素疊加，位置在
+//! `throne_stacks.rs`（產生器已檢查不會蓋到前方體素）。動畫與減少動態效果在 style.css `.throne*`。純裝飾。
+
+use ft_schema::moon::MoonPhase;
+use leptos::prelude::*;
+
+use super::throne_stacks::{
+    THRONE_BODY, THRONE_COLS, THRONE_GRID, THRONE_HEAD, THRONE_HEAD_ORIGIN, THRONE_LAYERS,
+    THRONE_MOON, THRONE_SKY_RECT, THRONE_STAGE_B, THRONE_STAGE_H, THRONE_STAR, THRONE_STARS,
+    THRONE_SUN,
+};
+use super::SpriteStackSheetDuo;
+
+const BASE: &str = "/assets/mascot/throne";
+
+fn find(table: &'static [(&'static str, &'static str)], key: &str) -> &'static str {
+    // 表是產生檔的常數，鍵一定在；找不到時回空字串（圖 404 不顯示，不 panic）
+    table
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map_or("", |(_, h)| *h)
+}
+
+fn rect_style((l, b, w, h): (f32, f32, f32, f32)) -> String {
+    format!("left:{l}%;bottom:{b}%;width:{w}%;height:{h}%")
+}
+
+#[component]
+pub fn Throne(
+    /// 頭形（月相）
+    phase: MoonPhase,
+    /// 新月夜睡著：睡覺身體＋閉眼頭、不轉頭
+    #[prop(optional)]
+    asleep: bool,
+) -> impl IntoView {
+    let (pose, head) = if asleep {
+        ("sleep", "sleep")
+    } else {
+        ("wave", phase.key())
+    };
+    let body_src = format!("{BASE}/body-{pose}-{}.webp", find(&THRONE_BODY, pose));
+    let head_src = format!("{BASE}/head-{head}-{}.webp", find(&THRONE_HEAD, head));
+    view! {
+      <div
+        class="throne"
+        class:throne-asleep=asleep
+        style=format!("--mh:{THRONE_STAGE_H};--mb:{THRONE_STAGE_B}")
+        aria-hidden="true"
+      >
+        <SpriteStackSheetDuo
+          src=body_src
+          head_src=head_src
+          layers=THRONE_LAYERS
+          cols=THRONE_COLS
+          grid=THRONE_GRID
+          head_class="throne-head"
+          head_origin=THRONE_HEAD_ORIGIN
+          class="throne-stack"
+        />
+        <img class="throne-sky throne-moon" src=format!("{BASE}/moon-{THRONE_MOON}.webp") alt=""
+          style=rect_style(THRONE_SKY_RECT) />
+        <img class="throne-sky throne-sun" src=format!("{BASE}/sun-{THRONE_SUN}.webp") alt=""
+          style=rect_style(THRONE_SKY_RECT) />
+        {THRONE_STARS
+          .iter()
+          .map(|r| view! {
+            <img class="throne-star" src=format!("{BASE}/star-{THRONE_STAR}.webp") alt="" style=rect_style(*r) />
+          })
+          .collect_view()}
+      </div>
+    }
+}

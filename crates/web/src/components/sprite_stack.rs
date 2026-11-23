@@ -171,3 +171,75 @@ pub fn SpriteStackSheet(
       </div>
     }
 }
+
+/// 雙圖集版（首頁月亮王座）：每層兩格——身體（`--sheet`，`.stack-spin`）與頭（`--sheet-b`，
+/// `.stack-spin` 再加 `head_class`）。兩張圖集層數相同、逐層交錯疊，所以前後遮擋仍正確；
+/// 只有頭那一格掛動畫（例如轉頭），身體靜止。轉軸用 `head_origin`（層框內 x%, y%）。
+#[component]
+pub fn SpriteStackSheetDuo(
+    /// 身體圖集網址
+    src: String,
+    /// 頭圖集網址
+    head_src: String,
+    /// 層數（兩張相同）
+    layers: usize,
+    /// 圖集欄數
+    cols: usize,
+    /// 切片的平面格數（寬＝高）
+    grid: usize,
+    /// 頭那一格額外的 class（動畫）
+    #[prop(into)]
+    head_class: String,
+    /// 頭的轉軸（層框內 x%, y%）
+    head_origin: (f32, f32),
+    /// 額外 class
+    #[prop(optional, into)]
+    class: String,
+    /// 額外行內樣式
+    #[prop(optional, into)]
+    style: String,
+) -> impl IntoView {
+    let step = layer_step(grid);
+    let cols = cols.max(1);
+    let rows = layers.div_ceil(cols).max(1);
+    let pct = |i: usize, n: usize| {
+        if n > 1 {
+            100.0 * i as f32 / (n - 1) as f32
+        } else {
+            0.0
+        }
+    };
+    let (ox, oy) = head_origin;
+    let slices = (0..layers * 2)
+        .map(|k| {
+            let z = k / 2;
+            let pos = z as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
+            let bg = format!(
+                "background-position:{:.4}% {:.4}%",
+                pct(z % cols, cols),
+                pct(z / cols, rows)
+            );
+            view! {
+              <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
+                <div class="stack-spin">
+                  <div class="stack-cell" style=bg.clone()></div>
+                </div>
+                <div class=format!("stack-spin {head_class}") style=format!("transform-origin:{ox}% {oy}%")>
+                  <div class="stack-cell stack-cell-b" style=bg></div>
+                </div>
+              </div>
+            }
+        })
+        .collect_view();
+    view! {
+      <div
+        class=format!("stack-stage {class}")
+        style=format!("--sheet:url('{src}');--sheet-b:url('{head_src}');--cols:{cols};--rows:{rows};{style}")
+        aria-hidden="true"
+      >
+        <img class="stack-preload" src=src.clone() alt="" />
+        <img class="stack-preload" src=head_src.clone() alt="" />
+        {slices}
+      </div>
+    }
+}
