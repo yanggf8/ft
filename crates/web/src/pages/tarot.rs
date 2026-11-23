@@ -139,16 +139,16 @@ pub fn TarotPage() -> impl IntoView {
                             </div>
                         </button>
                         // 吉祥物陪翻牌：翻前期待、翻後開心（裝飾，整塊 aria-hidden；
-                        // 結果已由 #tarot-daily-result 取得焦點）。兩疊切片都先載入（eager），切換不閃。
+                        // 結果已由 #tarot-daily-result 取得焦點）。兩張圖集都由隱藏 img 先載入，切換不閃。
                         <div class="tarot-mascot" aria-hidden="true">
                             <span class="mascot-bubble">
                                 {move || if flipped.get() { "抽到了！" } else { "翻開看看？" }}
                             </span>
                             <div class="mascot-slot" class:mascot-hidden=move || flipped.get()>
-                                <Mascot pose=MascotPose::Wait eager=true />
+                                <Mascot pose=MascotPose::Wait />
                             </div>
                             <div class="mascot-slot mascot-joy" class:mascot-hidden=move || !flipped.get()>
-                                <Mascot pose=MascotPose::Joy eager=true />
+                                <Mascot pose=MascotPose::Joy />
                             </div>
                         </div>
                         </div>

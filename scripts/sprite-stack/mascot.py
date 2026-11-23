@@ -2,12 +2,13 @@
 
 程式化體素月亮貓（長靴、肚肚、圍巾、月牙、尾巴）× 三個姿勢：
   wave（首頁打招呼，拿星星魔杖）／wait（塔羅翻牌前，手放胸前期待）／joy（翻牌後，雙手舉高、笑瞇眼）。
-輸出 crates/web/assets/mascot/stack/<pose>/NN.webp（由下而上），層數與格數寫成產生檔
+輸出圖集 crates/web/assets/mascot/stack/<pose>.webp（一個姿勢一張、一個請求），層數／格數／hash 寫成產生檔
 crates/web/src/components/mascot_stacks.rs（勿手改，components/mascot.rs 讀它）。
 正面＝切片的 +y（圖下緣），元件以左右擺動代替整圈自轉，臉一直朝前。
 改模型後重跑：python3 scripts/sprite-stack/mascot.py；
 預覽合成圖（與 CSS 同款疊法）：python3 scripts/sprite-stack/mascot.py --preview <輸出目錄>。
 顏色是點陣圖內容，不受 :root token 規則管轄。"""
+import hashlib
 import math
 import os
 import subprocess
@@ -15,7 +16,9 @@ import sys
 from PIL import Image
 
 N = 32        # 平面格數
-SCALE = 8     # 每格輸出像素
+SCALE = 8     # 預覽每格像素
+SHEET_SCALE = 4   # 圖集每格像素（顯示 --mw 140px、2x 螢幕約 9 px／格，pixelated 放大仍銳利）
+COLS = 8      # 圖集欄數
 C = (N - 1) / 2
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..", "crates", "web", "assets", "mascot", "stack")
@@ -199,14 +202,19 @@ def render(m):
 
 
 def save(pose, layers):
-  out = os.path.join(ROOT, pose)
-  os.makedirs(out, exist_ok=True)
-  for f in os.listdir(out):
-    if f.endswith(".webp"):
-      os.remove(os.path.join(out, f))
+  """合成一張圖集：COLS 欄、由左而右由上而下排（第 0 格＝最底層），回傳內容 hash（快取鍵）。"""
+  rows = -(-len(layers) // COLS)
+  cell = N * SHEET_SCALE
+  sheet = Image.new("RGBA", (COLS * cell, rows * cell), (0, 0, 0, 0))
   for z, im in enumerate(layers):
-    im.resize((N * SCALE, N * SCALE), Image.NEAREST).save(os.path.join(out, f"{z:02d}.webp"), lossless=True)
-  print(pose, "layers", len(layers))
+    sheet.paste(im.resize((cell, cell), Image.NEAREST), ((z % COLS) * cell, (z // COLS) * cell))
+  os.makedirs(ROOT, exist_ok=True)
+  path = os.path.join(ROOT, f"{pose}.webp")
+  sheet.save(path, lossless=True)
+  with open(path, "rb") as fh:
+    digest = hashlib.sha256(fh.read()).hexdigest()[:12]
+  print(pose, "layers", len(layers), "sheet", sheet.size, os.path.getsize(path), "bytes")
+  return digest
 
 
 SQUASH = 0.5   # 與 style.css .mascot-stack 的 --squash 一致（低俯角，臉看得到）
@@ -226,16 +234,19 @@ def preview(layers, angle, width=240):
 
 
 def write_rust(counts):
-  rows = "\n".join(f'    ("{p}", {n}),' for p, n in counts)
-  src = f"""//! 吉祥物月亮貓 sprite stack 的切片層數——由 `scripts/sprite-stack/mascot.py` 產生，**勿手改**。
+  rows = "\n".join(f'    ("{p}", {n}, "{h}"),' for p, n, h in counts)
+  src = f"""//! 吉祥物月亮貓 sprite stack 的圖集常數——由 `scripts/sprite-stack/mascot.py` 產生，**勿手改**。
 //!
-//! 切片在 `crates/web/assets/mascot/stack/<pose>/NN.webp`。
+//! 每個姿勢一張圖集 `crates/web/assets/mascot/stack/<pose>.webp`：{COLS} 欄、由左而右由上而下，第 0 格＝最底層。
 
 /// 切片的平面格數（寬＝高）。
 pub const MASCOT_STACK_GRID: usize = {N};
 
-/// 各姿勢的層數。
-pub const MASCOT_STACK_LAYERS: [(&str, usize); {len(counts)}] = [
+/// 圖集欄數。
+pub const MASCOT_SHEET_COLS: usize = {COLS};
+
+/// 各姿勢：(姿勢, 層數, 圖集內容 hash——網址帶 `?v=`，zone 的瀏覽器快取 4h 才不會配到舊圖)。
+pub const MASCOT_STACK_LAYERS: [(&str, usize, &str); {len(counts)}] = [
 {rows}
 ];
 """
@@ -262,6 +273,5 @@ if __name__ == "__main__":
     counts = []
     for p in POSES:
       layers = render(build(p))
-      save(p, layers)
-      counts.append((p, len(layers)))
+      counts.append((p, len(layers), save(p, layers)))
     write_rust(counts)

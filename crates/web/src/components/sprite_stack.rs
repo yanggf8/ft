@@ -6,6 +6,7 @@
 //!
 //! 結構：`.stack-stage > .stack-layer（位移＋壓扁）> .stack-spin（自轉）> img`。
 //! 一層可放多張切片（`SpriteStackParts`：同一層的各零件疊在同一格），動畫只掛在 `.stack-spin`。
+//! `SpriteStackSheet`：切片合成一張圖集、一個請求（吉祥物）。
 
 use leptos::prelude::*;
 
@@ -15,14 +16,14 @@ fn layer_step(grid: usize) -> f32 {
 }
 
 /// 一個 `.stack-layer`（k = 半層序號；偶數整格、奇數半格位移）。
-fn layer_view(k: usize, step: f32, srcs: Vec<String>, eager: bool) -> impl IntoView {
+fn layer_view(k: usize, step: f32, srcs: Vec<String>) -> impl IntoView {
     let pos = (k / 2) as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
     view! {
       <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
         <div class="stack-spin">
           {srcs
             .into_iter()
-            .map(|src| view! { <img src=src alt="" loading=if eager { "eager" } else { "lazy" } decoding="async"/> })
+            .map(|src| view! { <img src=src alt="" loading="lazy" decoding="async"/> })
             .collect_view()}
         </div>
       </div>
@@ -57,13 +58,10 @@ pub fn SpriteStack(
     /// 額外 class（尺寸、外框）
     #[prop(optional, into)]
     class: String,
-    /// 不延遲載入（先藏起來、之後才顯示的疊，例如塔羅翻牌後的吉祥物：lazy 在 display:none 時不會載）
-    #[prop(optional)]
-    eager: bool,
 ) -> impl IntoView {
     let step = layer_step(grid);
     let slices = (0..layers * 2)
-        .map(|k| layer_view(k, step, vec![format!("{base}/{:02}.webp", k / 2)], eager))
+        .map(|k| layer_view(k, step, vec![format!("{base}/{:02}.webp", k / 2)]))
         .collect_view()
         .into_any();
     stage_view(label, class, slices)
@@ -100,9 +98,73 @@ pub fn SpriteStackParts(
                 .filter(|(_, ls)| ls.contains(&z))
                 .map(|(id, _)| format!("{base}/{id}/{z:02}.webp"))
                 .collect();
-            layer_view(k, step, srcs, false)
+            layer_view(k, step, srcs)
         })
         .collect_view()
         .into_any();
     stage_view(label, class, slices)
+}
+
+/// 圖集版：所有切片合在一張圖（`cols` 欄、由左而右由上而下，第 0 格＝最底層），一個請求。
+/// 每層是一格 `.stack-cell`，以 `background-position` 取格；圖集網址放在舞台的 `--sheet`。
+/// 另放一張隱藏 `<img>` 預載：先藏起來（display:none）的疊不會載背景圖，顯示瞬間才不會閃。
+#[component]
+pub fn SpriteStackSheet(
+    /// 圖集網址（建議帶 `?v=` 內容 hash）
+    src: String,
+    /// 層數
+    layers: usize,
+    /// 圖集欄數
+    cols: usize,
+    /// 切片的平面格數（寬＝高）
+    grid: usize,
+    /// 無障礙名稱；空字串＝純裝飾（aria-hidden）
+    #[prop(into)]
+    label: String,
+    /// 額外 class（尺寸、外框）
+    #[prop(optional, into)]
+    class: String,
+) -> impl IntoView {
+    let step = layer_step(grid);
+    let cols = cols.max(1);
+    let rows = layers.div_ceil(cols).max(1);
+    // 背景位置百分比：第 c 欄＝c/(cols-1)（單欄／單列時為 0）
+    let pct = |i: usize, n: usize| {
+        if n > 1 {
+            100.0 * i as f32 / (n - 1) as f32
+        } else {
+            0.0
+        }
+    };
+    let slices = (0..layers * 2)
+        .map(|k| {
+            let z = k / 2;
+            let pos = z as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
+            let bg = format!(
+                "background-position:{:.4}% {:.4}%",
+                pct(z % cols, cols),
+                pct(z / cols, rows)
+            );
+            view! {
+              <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
+                <div class="stack-spin">
+                  <div class="stack-cell" style=bg></div>
+                </div>
+              </div>
+            }
+        })
+        .collect_view();
+    let decorative = label.is_empty();
+    view! {
+      <div
+        class=format!("stack-stage {class}")
+        style=format!("--sheet:url('{src}');--cols:{cols};--rows:{rows}")
+        role=(!decorative).then_some("img")
+        aria-label=(!decorative).then_some(label)
+        aria-hidden=decorative.then_some("true")
+      >
+        <img class="stack-preload" src=src.clone() alt="" />
+        {slices}
+      </div>
+    }
 }

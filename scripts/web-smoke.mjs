@@ -178,7 +178,7 @@ async function main() {
       const cards = await p.evaluate(() => [...document.querySelectorAll('a.feature')].map(a => a.getAttribute('href')));
       step('首頁功能卡', cards.length >= 8 && cards.includes('/shop') && cards.includes('/fengshui') && cards.includes('/try'), `${cards.length} 張`);
       const ms = await imagesLoaded(p, '.mascot-hero');
-      step('首頁吉祥物 sprite stack 全部載入', ms.found && ms.n > 0 && ms.ok === ms.n, `${ms.ok}/${ms.n}`);
+      step('首頁吉祥物 sprite stack 圖集載入', ms.found && ms.n > 0 && ms.ok === ms.n, `${ms.ok}/${ms.n}`);
       await p.close();
     }
 
@@ -235,9 +235,9 @@ async function main() {
     // 5. 塔羅今日抽牌、紫微選單
     {
       const p = await openPage(ctx, '/tarot', problems);
-      // 吉祥物兩疊（期待／開心）翻牌前就要載完，翻牌瞬間才不會閃
+      // 吉祥物兩張圖集（期待／開心）翻牌前就要載完（隱藏預載 img），翻牌瞬間才不會閃
       const tm = await imagesLoaded(p, '.tarot-mascot');
-      step('塔羅吉祥物兩疊預載', tm.found && tm.n > 0 && tm.ok === tm.n, `${tm.ok}/${tm.n}`);
+      step('塔羅吉祥物兩張圖集預載', tm.found && tm.n === 2 && tm.ok === tm.n, `${tm.ok}/${tm.n}`);
       const card = p.locator('.tarot-card').first();
       await card.click();
       await sleep(1200);
