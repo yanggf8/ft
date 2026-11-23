@@ -14,21 +14,9 @@ pub const MASCOT_STAGE_H: f32 = 1.077;
 pub const MASCOT_STAGE_B: f32 = 0.432;
 
 /// (姿勢, 月相 wire 值, 層數, 圖集內容 hash——在檔名裡，舊程式拿不到新圖集、zone 4h 快取也不會配到舊圖)。
-pub const MASCOT_STACK_LAYERS: [(&str, &str, usize, &str); 16] = [
-    ("wave", "new", 51, "30b0f54d4763"),
-    ("wait", "new", 51, "5c9008869876"),
-    ("joy", "new", 53, "76e0e02d5c6a"),
+pub const MASCOT_STACK_LAYERS: [(&str, &str, usize, &str); 4] = [
     ("wave", "crescent", 51, "8fd9225b9f7f"),
     ("wait", "crescent", 51, "9db5e11a72e9"),
     ("joy", "crescent", 53, "b1f15d85c90f"),
-    ("wave", "quarter", 52, "b8fe4717fc4a"),
-    ("wait", "quarter", 52, "27d49808cff8"),
-    ("joy", "quarter", 53, "3c93ec0168b9"),
-    ("wave", "gibbous", 53, "b94ce2e69f43"),
-    ("wait", "gibbous", 53, "5c27d1e518ae"),
-    ("joy", "gibbous", 53, "e7bb8ecb3c50"),
-    ("wave", "full", 54, "5765b027a2a8"),
-    ("wait", "full", 54, "1f8eb26cd401"),
-    ("joy", "full", 54, "248213925ed7"),
     ("sleep", "new", 51, "fc29e9e91f83"),
 ];

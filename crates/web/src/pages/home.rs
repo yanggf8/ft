@@ -195,8 +195,8 @@ fn icon_paths(kind: &str) -> (&'static str, &'static str) {
 const FULL_MOON_SEEN_KEY: &str = "mascot_full_moon_night";
 
 /// 首頁的月亮貓「引路貓」（2026-11-23 設計稿 https://claude.ai/artifact/4j3inRg98QWKbvkq9NfR6X）：
-/// 坐在月亮王座上（`Throne`：身體不動、只轉頭；椅背月亮↔太陽循環、星星慢轉）。
-/// 頭形跟著當下月相；台北夜晚（18–06 點）才開口說一句；新月夜睡著（按一下叫醒）；
+/// 坐在月亮王座上（`Throne`：身體不動、只轉頭；椅背月亮（當晚月相）↔太陽循環、星星繞頭公轉）。
+/// 台北夜晚（18–06 點）才開口說一句；新月夜睡著（按一下叫醒）；
 /// 滿月夜當晚第一次進站灑星點（減少動態效果時不灑，style.css）。
 #[component]
 fn HomeMascot() -> impl IntoView {

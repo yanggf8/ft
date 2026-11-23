@@ -26,17 +26,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..", "crates", "web", "assets", "mascot", "stack")
 RUST_OUT = os.path.join(HERE, "..", "..", "crates", "web", "src", "components", "mascot_stacks.rs")
 POSES = ("wave", "wait", "joy")
-# 月相頭形（2026-11-23「引路貓」設計稿）：挖口圓 (x 偏移, z 偏移, 半徑)；半徑 0＝滿月圓頭。
-# wire 值＝ft_schema::moon::MoonPhase::key()，是圖集檔名的一部分，不可改名。
+# 頭形（2026-11-23）：挖口圓 (x 偏移, z 偏移, 半徑)。站長：頭永遠是月牙（招牌造型），月相改由王座椅背的月亮表現；
+# 新月夜睡覺仍用暗色月牙頭。鍵是圖集檔名的一部分，不可改名。
 PHASES = {
-  "new": (2.2, 12.6, 10.4),       # 新月：頭形同眉月、頭色轉暗（DARK）
-  "crescent": (2.2, 12.6, 10.4),  # 眉月：標準造型
-  "quarter": (2.0, 15.5, 9.0),
-  "gibbous": (1.5, 18.0, 7.5),
-  "full": (0.0, 0.0, 0.0),
+  "new": (2.2, 12.6, 10.4),       # 新月夜睡覺：頭形同眉月、頭色轉暗（DARK）
+  "crescent": (2.2, 12.6, 10.4),  # 標準造型
 }
-# (姿勢, 月相) 組合：三個姿勢 × 五種月相，加新月夜睡覺（wait 手勢＋閉眼）
-COMBOS = [(p, ph) for ph in PHASES for p in POSES] + [("sleep", "new")]
+# (姿勢, 頭形) 組合：三個姿勢＋新月夜睡覺（wait 手勢＋閉眼）
+COMBOS = [(p, "crescent") for p in POSES] + [("sleep", "new")]
 
 LAV = (204, 188, 244); LAV_D = (180, 162, 228); DARK = (150, 140, 204)
 PINK = (246, 184, 206); MOON = (244, 166, 196)
@@ -115,10 +112,12 @@ def build(pose, phase="crescent"):
     for z in range(6, 22):
       if ((x - C) / 4.8) ** 2 + ((z - 13) / 5.4) ** 2 <= 1:
         m.paint_front(x, z, PINK, 2)
+  tail_before = set(m.v)
   # 尾巴：從背後彎上來，末端薄荷色條紋
   pts = [(C + 3 + 5 * math.sin(t * 1.6), C - 6 - 6 * t, 8 + 16 * t) for t in [i / 20 for i in range(21)]]
   for i, (x, y, z) in enumerate(pts):
     m.ellipsoid(x, y, z, 2.3, 2.3, 2.3, MINT if i >= 14 and i % 3 == 0 else LAV)
+  m.tail = {k for k in m.v if k not in tail_before}  # 王座版坐著時尾巴改從側邊繞出（throne.py）
   head_before = set(m.v)
   # 頭＝胖月牙：厚度＝離外緣、離挖口兩邊都做圓角（不會像被切平的碗）
   HZ = 38.5

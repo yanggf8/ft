@@ -148,10 +148,10 @@ pub fn TarotPage() -> impl IntoView {
                                 {move || if flipped.get() { moon::TAROT_JOY_LINE } else { moon::tarot_wait_line(phase) }}
                             </span>
                             <div class="mascot-slot" class:mascot-hidden=move || flipped.get()>
-                                <Mascot pose=MascotPose::Wait phase=phase />
+                                <Mascot pose=MascotPose::Wait />
                             </div>
                             <div class="mascot-slot mascot-joy" class:mascot-hidden=move || !flipped.get()>
-                                <Mascot pose=MascotPose::Joy phase=phase />
+                                <Mascot pose=MascotPose::Joy />
                             </div>
                         </div>
                         </div>

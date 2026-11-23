@@ -16,7 +16,7 @@
 //     （淨零：DELETE 依 anonId 刪掉剛寫的列）；
 //   - 空間風水：選房間三個縮景載入；三房型各灌一組答案到 localStorage → 結果頁縮景圖全部載入、
 //     有翻卡；
-//   - 首頁月亮王座（圖集與疊加圖、頭形帶月相；新月夜叫醒有台詞）、塔羅吉祥物兩疊 sprite stack 載入；塔羅今日抽牌可翻牌；紫微選單三張子單元卡；上手小實驗 /try 未登入有登入連結；
+//   - 首頁月亮王座（圖集與疊加圖、月牙頭、椅背月亮帶月相、星星公轉遮罩；新月夜叫醒有台詞）、塔羅吉祥物兩疊 sprite stack 載入；塔羅今日抽牌可翻牌；紫微選單三張子單元卡；上手小實驗 /try 未登入有登入連結；
 //   - --login：DB 直插 login token 自造測試帳號（同 subunits-selftest.py，需本機 turso 已登入），
 //     驗 /ziwei/luck 十二宮與流年標記、/ziwei/chart 命盤、/tarot/love 頁面（不抽牌、不打 AI）、
 //     上手小實驗整鏈（抽三個→猜第 1 步→對答案第 2 步→結果卡「多走了 1 步」→UI 刪除→紀錄為空），
@@ -181,7 +181,16 @@ async function main() {
       step('首頁月亮王座圖集與疊加圖載入', ms.found && ms.n >= 4 && ms.ok === ms.n, `${ms.ok}/${ms.n}`);
       // 引路貓：頭圖集檔名帶月相（head-<phase|sleep>-<hash>.webp）；新月夜睡著時按一下叫醒要出現台詞
       const sheet = await p.evaluate(() => document.querySelector('.throne-stack')?.getAttribute('style') || '');
-      step('首頁王座頭形帶月相', /\/head-(new|crescent|quarter|gibbous|full|sleep)-[0-9a-f]{12}\.webp/.test(sheet), sheet.match(/head-[^']+/)?.[0] || sheet);
+      step('首頁王座月牙頭', /\/head-(crescent|sleep)-[0-9a-f]{12}\.webp/.test(sheet), sheet.match(/head-[^']+/)?.[0] || sheet);
+      // 月相改由椅背的月亮表現；星星 6 顆繞頭公轉、星星層有遮罩
+      const sky = await p.evaluate(() => ({
+        moon: document.querySelector('.throne-moon')?.getAttribute('src') || '',
+        stars: document.querySelectorAll('.throne-ring .throne-star').length,
+        mask: getComputedStyle(document.querySelector('.throne-orbit') || document.body).maskImage || '',
+      }));
+      step('首頁王座椅背月亮帶月相、星星公轉有遮罩',
+        /\/moon-(new|crescent|quarter|gibbous|full)-[0-9a-f]{12}\.webp$/.test(sky.moon) && sky.stars === 6 && /orbit-mask-[0-9a-f]{12}\.webp/.test(sky.mask),
+        `${sky.moon.split('/').pop()} stars=${sky.stars} mask=${/orbit-mask/.test(sky.mask)}`);
       if (await p.locator('.mascot-wake').count()) {
         await p.locator('.mascot-wake').click();
         await sleep(400);

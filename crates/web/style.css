@@ -1638,7 +1638,9 @@ input[type="range"]:disabled { opacity: 0.6; }
 /* 首頁月亮王座（components/throne.rs、scripts/sprite-stack/throne.py）：整疊靜止，只有頭轉；
    椅背花窗月亮↔太陽交替、星星慢轉。--mh／--mb 由產生器算出、元件行內帶入。 */
 .throne {
-  --mw: min(300px, 78vw); --squash: 0.5; --mh: 1.4; --mb: 0.25; /* --mh／--mb 預設值，元件行內覆寫 */
+  --mw: min(300px, 78vw); --squash: 0.5;
+  /* 以下預設值由元件行內覆寫（throne_stacks.rs 產生）：舞台高／層底、星星層遮罩、公轉中心／半徑／星星寬 */
+  --mh: 1.4; --mb: 0.25; --orbit-mask: none; --ox: 50%; --oy: 60%; --or: 0.3; --star: 0.14;
   position: relative; width: var(--mw); height: calc(var(--mw) * var(--mh)); margin: 0 auto 0.75rem;
   pointer-events: none; user-select: none;
 }
@@ -1653,13 +1655,26 @@ input[type="range"]:disabled { opacity: 0.6; }
   86% { transform: rotate(0deg); }
 }
 .throne-asleep .throne-stack .throne-head { animation: none; }
-.throne-sky, .throne-star { position: absolute; display: block; image-rendering: pixelated; }
+.throne-sky { position: absolute; display: block; image-rendering: pixelated; }
 .throne-moon { animation: throne-moon 24s ease-in-out infinite; }
 .throne-sun { opacity: 0; animation: throne-sun 24s ease-in-out infinite; }
 @keyframes throne-moon { 0%, 42% { opacity: 1; } 50%, 92% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes throne-sun { 0%, 42% { opacity: 0; } 50%, 92% { opacity: 1; } 100% { opacity: 0; } }
-.throne-star { animation: throne-star 18s linear infinite; }
-.throne-star:nth-of-type(odd) { animation-direction: reverse; animation-duration: 24s; }
+/* 星星繞頭公轉：遮罩只留椅背正面、扣掉貓與扶手（繞到貓背後被擋、離開椅背消失） */
+.throne-orbit {
+  position: absolute; inset: 0;
+  -webkit-mask-image: var(--orbit-mask); -webkit-mask-size: 100% 100%; -webkit-mask-repeat: no-repeat;
+  mask-image: var(--orbit-mask); mask-size: 100% 100%; mask-repeat: no-repeat;
+}
+.throne-ring { position: absolute; left: var(--ox); bottom: var(--oy); width: 0; height: 0; animation: throne-ring 40s linear infinite; }
+@keyframes throne-ring { to { transform: rotate(360deg); } }
+.throne-star {
+  --a: 0deg; /* 公轉起始角，元件行內覆寫 */
+  position: absolute; width: calc(var(--mw) * var(--star)); height: calc(var(--mw) * var(--star));
+  left: calc(var(--mw) * var(--star) * -0.5); top: calc(var(--mw) * var(--star) * -0.5);
+  transform: rotate(var(--a)) translateX(calc(var(--mw) * var(--or)));
+}
+.throne-star img { display: block; width: 100%; height: 100%; image-rendering: pixelated; animation: throne-star 10s linear infinite; }
 @keyframes throne-star { to { transform: rotate(360deg); } }
 .mascot-sparks { position: absolute; inset: 0; pointer-events: none; }
 .mascot-spark {
@@ -1693,7 +1708,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
   .mascot-joy:not(.mascot-hidden) { animation: none; }
   .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
-  .throne-stack .throne-head, .throne-star, .throne-moon { animation: none; }
+  .throne-stack .throne-head, .throne-ring, .throne-star img, .throne-moon { animation: none; }
   .throne-sun { animation: none; opacity: 0; }
   .mascot-sparks { display: none; }
 }

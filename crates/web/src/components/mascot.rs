@@ -1,10 +1,11 @@
 //! 吉祥物月亮貓（sprite stacking，2026-11-23；取代 2026-11-19 的平面 WebP）。
 //!
-//! 切片由 `scripts/sprite-stack/mascot.py` 程式化體素產生，每個（姿勢, 月相）合成一張圖集
-//! （`assets/mascot/stack/<pose>-<phase>-<hash>.webp`，一個請求）；層數／欄數／內容 hash／舞台尺寸在產生檔
+//! 切片由 `scripts/sprite-stack/mascot.py` 程式化體素產生，每個（姿勢, 頭形）合成一張圖集
+//! （`assets/mascot/stack/<pose>-<crescent|new>-<hash>.webp`，一個請求）；層數／欄數／內容 hash／舞台尺寸在產生檔
 //! `mascot_stacks.rs`。純裝飾：整疊 aria-hidden。左右擺動、低俯角與尺寸在 style.css `.mascot-stack`。
 //!
-//! 「引路貓」（2026-11-23 設計稿）：頭形跟著當下月相（`ft_schema::moon`）。`MoonNow` 給頁面用：
+//! 「引路貓」（2026-11-23 設計稿）：頭永遠是月牙（站長：招牌造型）；月相改由首頁王座椅背的月亮表現、
+//! 台詞跟月相（`ft_schema::moon`）。`MoonNow` 給頁面用：
 //! 月相、是否台北夜晚、今晚的日期鍵（滿月變身每晚只演一次）。
 
 use ft_schema::moon::{self, MoonPhase};
@@ -15,7 +16,7 @@ use super::mascot_stacks::{
 };
 use super::SpriteStackSheet;
 
-/// 姿勢：首頁打招呼／塔羅翻牌前期待／翻牌後開心／新月夜睡覺（只有新月頭形）。
+/// 姿勢：首頁打招呼／塔羅翻牌前期待／翻牌後開心／新月夜睡覺（暗色月牙頭）。
 #[derive(Clone, Copy)]
 pub enum MascotPose {
     Wave,
@@ -57,16 +58,15 @@ impl MoonNow {
 #[component]
 pub fn Mascot(
     pose: MascotPose,
-    /// 頭形（月相）；睡覺姿勢一律用新月頭
-    phase: MoonPhase,
     /// 額外 class（尺寸、動畫）
     #[prop(optional, into)]
     class: String,
 ) -> impl IntoView {
     let key = pose.key();
+    // 頭永遠是月牙（招牌造型，2026-11-23 站長）；只有新月夜睡覺用暗色月牙頭
     let phase_key = match pose {
         MascotPose::Sleep => MoonPhase::New.key(),
-        _ => phase.key(),
+        _ => MoonPhase::Crescent.key(),
     };
     let (layers, hash) = MASCOT_STACK_LAYERS
         .iter()

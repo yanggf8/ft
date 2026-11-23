@@ -1,11 +1,15 @@
-"""首頁「月亮王座」吉祥物（2026-11-23 站長：吉祥物不用動太多，只簡單轉頭；椅背月亮↔太陽循環；星星慢轉、只在椅背）。
+"""首頁「月亮王座」吉祥物（2026-11-23 站長：吉祥物不用動太多，只簡單轉頭；椅背月亮↔太陽循環；
+星星以吉祥物為中心公轉、只出現在椅背；頭永遠是月牙（月相改由椅背的月亮表現）；尾巴要看得到）。
 
 組成（由後往前）：
   1. 一疊 sprite stack＝圓形展示底座＋石造王座（椅背花窗只有鉛條，不畫月亮）＋坐姿月亮貓的身體——靜止不轉；
   2. 同一疊的每一層再放一張「頭」圖集，只有頭繞自己的中心慢慢左右轉（CSS `.throne-head`）；
-  3. 花窗上疊 2D 像素圖：月亮、太陽（交替淡入淡出）、星星（慢轉）。位置由本腳本依疊法投影算好，
-     並檢查它們不會蓋到椅背前方的任何體素（貓頭左右轉的範圍也算）——疊加圖畫在整疊上方，蓋到就穿幫。
-貓本體重用 mascot.py 的模型（頭形跟月相；新月夜睡覺）。
+  3. 花窗上疊 2D 像素圖：當晚月相的月亮與太陽交替淡入淡出（位置由投影算好，並檢查不會蓋到前方體素，
+     貓頭左右轉的範圍也算）；
+  4. 星星繞著吉祥物頭部中心公轉：星星層套一張遮罩（orbit-mask），只留「椅背正面、且沒被前方體素擋住」的
+     區域——星星繞到貓背後就被擋住、離開椅背就消失。
+貓本體重用 mascot.py 的模型（月牙頭；新月夜睡覺用暗色月牙＋閉眼）。站姿尾巴往後伸會埋進椅背，坐姿改由左側
+繞出、翹在扶手上。
 輸出：crates/web/assets/mascot/throne/*.webp（檔名帶內容 hash）、crates/web/src/components/throne_stacks.rs（勿手改）。
 改模型後重跑：python3 scripts/sprite-stack/throne.py；預覽：--preview <輸出目錄>。顏色是點陣圖內容，不受 :root token 規則管轄。"""
 import hashlib
@@ -43,8 +47,11 @@ OX, OY, OZ = C - mg.C, (C - 4) - mg.C, SZ - 5   # 貓模型平移：坐在座面
 HEAD_PIVOT = (C, C - 4)         # 頭的轉軸（切片座標）
 # 花窗上的疊加物：(名稱, 中心 x, 中心 z, 寬, 高)（體素格；中心落在格中央）
 MOON_AT = (C - 2, 71, 21, 21)
-STARS = [(C - 17, 60), (C + 15, 67), (C - 20, 50), (C + 19, 55), (C + 9, 78)]
 STAR_SIZE = 9
+ORBIT_R = 0.30      # 星星公轉半徑（層寬倍數）
+ORBIT_N = 6         # 星星數
+MASK_PX = 4         # 遮罩每格像素
+PHASE_KEYS = ("new", "crescent", "quarter", "gibbous", "full")   # ＝ft_schema::moon::MoonPhase::key()
 
 
 def put(v, x, y, z, c, keep=False):
@@ -111,7 +118,7 @@ def seated_cat(pose, phase):
   head_keys = {k for k, c in m.head.items() if m.v.get(k) == c}
   body, head = {}, {}
   for (x, y, z), c in m.v.items():
-    if z < 6:
+    if z < 6 or (x, y, z) in m.tail:
       continue
     k = (int(x + OX), int(y + OY), int(z + OZ))
     (head if (x, y, z) in head_keys else body)[k] = c
@@ -123,6 +130,23 @@ def seated_cat(pose, phase):
     capsule(body, hip, knee, 3.0, mg.LAV)
     capsule(body, knee, foot, 2.6, sock)
     capsule(body, (foot[0], foot[1] + 0.5, foot[2] - 1), (foot[0], foot[1] + 2.5, foot[2] - 2), 3.4, mg.CREAM)
+  # 尾巴：從左後腰繞出、越過左扶手甩到外側再往上翹，末端薄荷條紋（站姿往後伸的尾巴會埋進椅背）
+  path = [(C - 6, C - 6, SZ + 3), (C - 12, C - 4, SZ + 4), (C - 17, C - 2, SZ + 7),
+          (C - 19, C - 1, SZ + 12), (C - 18.5, C, SZ + 17), (C - 20.5, C + 0.5, SZ + 21)]
+  pts = []
+  for (a, b) in zip(path, path[1:]):
+    for i in range(6):
+      t = i / 6
+      pts.append(tuple(a[j] + (b[j] - a[j]) * t for j in range(3)))
+  pts.append(path[-1])
+  for i, (x, y, z) in enumerate(pts):
+    r = 2.2 if i < len(pts) - 4 else 1.9
+    col = mg.MINT if i >= len(pts) - 12 and (i // 3) % 2 == 0 else mg.LAV
+    for xx in range(int(x - r) - 1, int(x + r) + 2):
+      for yy in range(int(y - r) - 1, int(y + r) + 2):
+        for zz in range(int(z - r) - 1, int(z + r) + 2):
+          if (xx - x) ** 2 + (yy - y) ** 2 + ((zz - z) * LIFT) ** 2 <= r * r:
+            body[(xx, yy, zz)] = col
   return body, head
 
 
@@ -186,14 +210,34 @@ def outline(im, fill, edge):
   return im
 
 
-def draw_moon(size=21):
+def draw_moon(phase="crescent", size=21):
+  """椅背的月亮＝當晚月相。眉月沿用斜掛的月牙；弦月／凸月／滿月以明暗界線（亮面在左）；新月只留淡輪廓。"""
   im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
   c = (size - 1) / 2
+  R = 9.6
+  tk = {"quarter": 0.0, "gibbous": 0.5, "full": 1.01}.get(phase)
   for x in range(size):
     for y in range(size):
-      if math.hypot(x - c, y - c) <= 9.6 and math.hypot(x - (c + 5), y - (c - 4)) > 8.4:
+      if math.hypot(x - c, y - c) > R:
+        continue
+      if phase == "crescent":
+        lit = math.hypot(x - (c + 5), y - (c - 4)) > 8.4
+      elif phase == "new":
+        lit = math.hypot(x - c, y - c) > R - 1.2
+      else:
+        yr = (y - c) / R
+        lit = (x - c) / R <= tk * math.sqrt(max(0.0, 1 - yr * yr)) + 1e-9
+      if lit:
         im.putpixel((x, y), MOON_C + (255,))
-  return outline(im, MOON_C, MOON_E)
+  im = outline(im, MOON_C, MOON_E)
+  if phase == "new":
+    px = im.load()
+    for y in range(size):
+      for x in range(size):
+        r, g, b, a = px[x, y]
+        if a:
+          px[x, y] = (r, g, b, 150)
+  return im
 
 
 def draw_sun(size=21):
@@ -256,58 +300,90 @@ def pct(v):
   return round(v * 100, 3)
 
 
-def main(preview_dir=None):
-  os.makedirs(ROOT, exist_ok=True)
+def head_center(head):
+  """頭部的畫面中心 (x, h)，W 為單位（星星公轉中心）。"""
+  xs = [(x + 0.5) / N for (x, _, _) in head]
+  hs = [screen_h(y, z) for (_, y, z) in head]
+  return sum(xs) / len(xs), sum(hs) / len(hs)
+
+
+def orbit_mask(th, fronts, mh, mb):
+  """星星層遮罩：椅背正面（y==PANEL_Y、座面以上）減去所有在它前方的體素（含轉頭範圍）。"""
+  from PIL import ImageDraw
+  wpx = N * MASK_PX
+  hpx = int(round(mh * wpx))
+  m = Image.new("L", (wpx, hpx), 0)
+  d = ImageDraw.Draw(m)
+
+  def box(x, y, z):
+    h = screen_h(y, z)
+    lo, hi = h - SQUASH * 0.5 / N, h + SQUASH * 0.5 / N + 0.5 * LIFT / N
+    return (x * MASK_PX, (mh - (hi - mb)) * wpx, (x + 1) * MASK_PX - 1, (mh - (lo - mb)) * wpx)
+
+  for (x, y, z) in th:
+    if y == PANEL_Y and z >= SZ:
+      d.rectangle(box(x, y, z), fill=255)
+  for part in fronts:
+    for (x, y, z) in part:
+      if y > PANEL_Y + 0.5:
+        x0, y0, x1, y1 = box(int(math.floor(x + 0.5)), y, z)
+        d.rectangle((x0 - 1, y0 - 1, x1 + 1, y1 + 1), fill=0)   # 外擴 1px：星星不從前方體素的縫漏出
+  out = Image.new("RGBA", (wpx, hpx), (255, 255, 255, 0))
+  out.putalpha(m)
+  return out
+
+
+def build_all():
   th = throne()
-  variants = {}   # 頭：月相五種＋新月睡覺
-  bodies = {}
-  for pose in ("wave", "sleep"):
-    for phase in (mg.PHASES if pose == "wave" else ("new",)):
-      body, head = seated_cat(pose, phase)
-      bodies.setdefault(pose, body)
-      variants["sleep" if pose == "sleep" else phase] = head
+  bodies, variants = {}, {}
+  for pose, head_key in (("wave", "crescent"), ("sleep", "new")):
+    body, head = seated_cat(pose, head_key)
+    bodies[pose] = body
+    variants["sleep" if pose == "sleep" else "crescent"] = head
   top = max(z for part in [th, *bodies.values(), *variants.values()] for (_, _, z) in part)
-  layers = top + 1
-  # 碰撞檢查：頭轉到 ±HEAD_TURN 都不能被疊加物蓋到
-  rects = [("moon", overlay_rect(MOON_AT[0], MOON_AT[1], MOON_AT[2], MOON_AT[3]))]
-  rects += [(f"star{i}", overlay_rect(x, z, STAR_SIZE, STAR_SIZE)) for i, (x, z) in enumerate(STARS)]
   fronts = [th, *bodies.values()]
   for h in variants.values():
-    fronts += [rotate_part(h, a) for a in (-HEAD_TURN, 0, HEAD_TURN)]
-  check_clear(rects, fronts)
+    fronts += [rotate_part(h, a) for a in range(-HEAD_TURN, HEAD_TURN + 1, 4)]
+  moon_rect = overlay_rect(MOON_AT[0], MOON_AT[1], MOON_AT[2], MOON_AT[3])
+  check_clear([("moon", moon_rect)], fronts)
   mh, mb = stage_box([th, *bodies.values(), *variants.values()])
+  return th, bodies, variants, top, fronts, moon_rect, mh, mb
 
-  if preview_dir:
-    return th, bodies, variants, layers
 
+def main():
+  os.makedirs(ROOT, exist_ok=True)
+  th, bodies, variants, top, fronts, moon_rect, mh, mb = build_all()
+  layers = top + 1
   for f in os.listdir(ROOT):
     if f.endswith(".webp"):
       os.remove(os.path.join(ROOT, f))
-  body_rows, head_rows = [], []
+  body_rows, head_rows, moon_rows = [], [], []
   for pose, body in bodies.items():
-    full = {**th, **body, **variants["sleep" if pose == "sleep" else "crescent"]}
+    head = variants["sleep" if pose == "sleep" else "crescent"]
+    full = {**th, **body, **head}
     body_rows.append((pose, save_sheet(f"body-{pose}", layers_of({**th, **body}, top, full))))
   for name, head in variants.items():
     full = {**th, **bodies["sleep" if name == "sleep" else "wave"], **head}
     head_rows.append((name, save_sheet(f"head-{name}", layers_of(head, top, full))))
-  moon_h = save_img("moon", draw_moon())
+  for ph in PHASE_KEYS:
+    moon_rows.append((ph, save_img(f"moon-{ph}", draw_moon(ph))))
   sun_h = save_img("sun", draw_sun())
   star_h = save_img("star", draw_star())
+  mask_h = save_img("orbit-mask", orbit_mask(th, fronts, mh, mb))
 
-  def to_stage(rect):
-    l, r, b, t = rect
-    return (pct(l), pct((b - mb) / mh), pct(r - l), pct((t - b) / mh))
-
-  moon_rect = to_stage(rects[0][1])
-  star_rects = [to_stage(r) for _, r in rects[1:]]
+  l, r, b, t = moon_rect
+  sky = (pct(l), pct((b - mb) / mh), pct(r - l), pct((t - b) / mh))
+  hx, hh = head_center(variants["crescent"])
+  orbit = (pct(hx), pct((hh - mb) / mh), ORBIT_R, round(STAR_SIZE / N, 4))
   origin = (pct((HEAD_PIVOT[0] + 0.5) / N), pct((HEAD_PIVOT[1] + 0.5) / N))
-  rows_body = "\n".join(f'    ("{p}", "{h}"),' for p, h in body_rows)
-  rows_head = "\n".join(f'    ("{p}", "{h}"),' for p, h in head_rows)
-  rows_star = "\n".join(f"    ({a}, {b}, {c}, {d})," for a, b, c, d in star_rects)
+
+  def rows(rs):
+    return "\n".join(f'    ("{p}", "{h}"),' for p, h in rs)
+
   src = f"""//! 首頁月亮王座吉祥物的圖集與疊加物常數——由 `scripts/sprite-stack/throne.py` 產生，**勿手改**。
 //!
 //! 圖集在 `crates/web/assets/mascot/throne/`：`body-<pose>-<hash>.webp`（底座＋王座＋貓身，靜止）、
-//! `head-<variant>-<hash>.webp`（只有頭，月相五種＋sleep）；兩者層數相同、逐層交錯疊。
+//! `head-<crescent|sleep>-<hash>.webp`（只有頭）；兩者層數相同、逐層交錯疊。
 
 /// 切片的平面格數（寬＝高）。
 pub const THRONE_GRID: usize = {N};
@@ -323,58 +399,66 @@ pub const THRONE_HEAD_ORIGIN: (f32, f32) = ({origin[0]}, {origin[1]});
 
 /// 身體圖集：(姿勢, hash)。
 pub const THRONE_BODY: [(&str, &str); {len(body_rows)}] = [
-{rows_body}
+{rows(body_rows)}
 ];
-/// 頭圖集：(月相 wire 值或 "sleep", hash)。
+/// 頭圖集：("crescent" 或 "sleep", hash)。
 pub const THRONE_HEAD: [(&str, &str); {len(head_rows)}] = [
-{rows_head}
+{rows(head_rows)}
 ];
-
-/// 疊加物檔名 hash：月亮、太陽、星星。
-pub const THRONE_MOON: &str = "{moon_h}";
+/// 椅背月亮（當晚月相，鍵＝`MoonPhase::key()`）：(月相, hash)。
+pub const THRONE_MOONS: [(&str, &str); {len(moon_rows)}] = [
+{rows(moon_rows)}
+];
+/// 太陽、星星、星星層遮罩的檔名 hash。
 pub const THRONE_SUN: &str = "{sun_h}";
 pub const THRONE_STAR: &str = "{star_h}";
+pub const THRONE_ORBIT_MASK: &str = "{mask_h}";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。
-pub const THRONE_SKY_RECT: (f32, f32, f32, f32) = {moon_rect};
-/// 椅背上的星星位置（同上）；產生器已檢查不會蓋到前方體素。
-pub const THRONE_STARS: [(f32, f32, f32, f32); {len(star_rects)}] = [
-{rows_star}
-];
+pub const THRONE_SKY_RECT: (f32, f32, f32, f32) = {sky};
+/// 星星公轉：(中心 left%, 中心 bottom%, 半徑（層寬倍數）, 星星寬（層寬倍數）)。
+pub const THRONE_ORBIT: (f32, f32, f32, f32) = {orbit};
+/// 星星數。
+pub const THRONE_ORBIT_STARS: usize = {ORBIT_N};
 """
   out = subprocess.run(["rustfmt", "--edition", "2021", "--emit", "stdout"], input=src.encode(),
                        capture_output=True, check=True).stdout.decode()
   with open(RUST_OUT, "w") as fh:
     fh.write(out)
-  print("layers", layers, "stage", (mh, mb), "wrote", os.path.normpath(RUST_OUT))
+  print("layers", layers, "stage", (mh, mb), "orbit", orbit, "wrote", os.path.normpath(RUST_OUT))
 
 
 def preview(out_dir):
-  """角度 0 的合成預覽（含月亮與星星疊加），頭轉 -HEAD_TURN／0／+HEAD_TURN 各一張。"""
+  """舞台座標的合成預覽（與 CSS 同一套幾何）：月亮＋公轉星星（套遮罩），頭轉 -HEAD_TURN／0／+HEAD_TURN。"""
   os.makedirs(out_dir, exist_ok=True)
-  th, bodies, variants, layers = main(preview_dir=out_dir)
+  th, bodies, variants, top, fronts, moon_rect, mh, mb = build_all()
   W = 384
-  for name, head_key, pose in (("crescent", "crescent", "wave"), ("full", "full", "wave"), ("sleep", "sleep", "sleep")):
+  Hs = int(round(mh * W))
+  mask = orbit_mask(th, fronts, mh, mb).resize((W, Hs), Image.NEAREST).getchannel("A")
+  hx, hh = head_center(variants["crescent"])
+  star = draw_star()
+  sp = int(STAR_SIZE / N * W)
+  for name, head_key, pose, phase in (("crescent", "crescent", "wave", "full"), ("sleep", "sleep", "sleep", "new")):
     for a in (-HEAD_TURN, 0, HEAD_TURN):
-      parts = {**th, **bodies[pose]}
-      h = rotate_part(variants[head_key], a)
-      vox = dict(parts)
-      for (x, y, z), c in h.items():
+      vox = {**th, **bodies[pose]}
+      for (x, y, z), c in rotate_part(variants[head_key], a).items():
         vox[(int(math.floor(x + 0.5)), int(math.floor(y + 0.5)), z)] = c
-      top = max(z for (_, _, z) in vox)
-      ls = layers_of(vox, top, vox)
-      step = W * LIFT / N
-      hgt = int(W * SQUASH + step * len(ls) + 8)
-      cv = Image.new("RGBA", (W, hgt), (255, 255, 255, 255))
+      ls = layers_of(vox, max(z for (_, _, z) in vox), vox)
+      cv = Image.new("RGBA", (W, Hs), (255, 245, 250, 255))
       for k in range(len(ls) * 2):
         pos = k // 2 + (0.5 if k % 2 else 0)
-        im = ls[k // 2].resize((W, int(W * SQUASH)), Image.NEAREST)
-        cv.alpha_composite(im, (0, int(hgt - W * SQUASH - pos * step)))
-      # 疊加：月亮＋星星（以 W 單位矩形換算到畫布）
-      base_y = hgt - W * SQUASH - (W - W * SQUASH) / 2   # 層框底在畫布的 y
-      for img, (cx, cz, w, hh) in [(draw_moon(), MOON_AT)] + [(draw_star(), (x, z, STAR_SIZE, STAR_SIZE)) for x, z in STARS]:
-        l, r, b, t = overlay_rect(cx, cz, w, hh)
-        sprite = img.resize((max(1, int((r - l) * W)), max(1, int((t - b) * W))), Image.NEAREST)
-        cv.alpha_composite(sprite, (int(l * W), int(base_y + W - t * W)))
+        top_h = -mb + (1 - SQUASH) / 2 + SQUASH + pos * LIFT / N
+        cv.alpha_composite(ls[k // 2].resize((W, int(W * SQUASH)), Image.NEAREST), (0, int(Hs - top_h * W)))
+      l, r, b, t = moon_rect
+      cv.alpha_composite(draw_moon(phase).resize((int((r - l) * W), int((t - b) * W)), Image.NEAREST),
+                         (int(l * W), int(Hs - (t - mb) * W)))
+      layer = Image.new("RGBA", (W, Hs), (0, 0, 0, 0))
+      for i in range(ORBIT_N):
+        ang = math.radians(i * 360 / ORBIT_N + a * 2)
+        cx, cy = hx * W + ORBIT_R * W * math.cos(ang), Hs - (hh - mb) * W - ORBIT_R * W * math.sin(ang)
+        layer.alpha_composite(star.resize((sp, sp), Image.NEAREST), (int(cx - sp / 2), int(cy - sp / 2)))
+      la = layer.getchannel("A")
+      layer.putalpha(Image.composite(la, Image.new("L", la.size, 0), mask))
+      cv.alpha_composite(layer)
       cv.save(os.path.join(out_dir, f"throne-{name}-{a}.png"))
   print("preview →", out_dir)
 

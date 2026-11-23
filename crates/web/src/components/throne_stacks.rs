@@ -1,7 +1,7 @@
 //! 首頁月亮王座吉祥物的圖集與疊加物常數——由 `scripts/sprite-stack/throne.py` 產生，**勿手改**。
 //!
 //! 圖集在 `crates/web/assets/mascot/throne/`：`body-<pose>-<hash>.webp`（底座＋王座＋貓身，靜止）、
-//! `head-<variant>-<hash>.webp`（只有頭，月相五種＋sleep）；兩者層數相同、逐層交錯疊。
+//! `head-<crescent|sleep>-<hash>.webp`（只有頭）；兩者層數相同、逐層交錯疊。
 
 /// 切片的平面格數（寬＝高）。
 pub const THRONE_GRID: usize = 64;
@@ -16,28 +16,25 @@ pub const THRONE_STAGE_B: f32 = 0.256;
 pub const THRONE_HEAD_ORIGIN: (f32, f32) = (50.0, 43.75);
 
 /// 身體圖集：(姿勢, hash)。
-pub const THRONE_BODY: [(&str, &str); 2] = [("wave", "df591262c374"), ("sleep", "617d3b80bc43")];
-/// 頭圖集：(月相 wire 值或 "sleep", hash)。
-pub const THRONE_HEAD: [(&str, &str); 6] = [
-    ("new", "f91afa9b64cc"),
-    ("crescent", "35e4f3102e6b"),
-    ("quarter", "c54205325efc"),
-    ("gibbous", "58f8bdd0b6f5"),
-    ("full", "1b8a9ad21532"),
-    ("sleep", "24376ceb4341"),
+pub const THRONE_BODY: [(&str, &str); 2] = [("wave", "da30f805ed6f"), ("sleep", "eb06f6e8403e")];
+/// 頭圖集：("crescent" 或 "sleep", hash)。
+pub const THRONE_HEAD: [(&str, &str); 2] =
+    [("crescent", "35e4f3102e6b"), ("sleep", "24376ceb4341")];
+/// 椅背月亮（當晚月相，鍵＝`MoonPhase::key()`）：(月相, hash)。
+pub const THRONE_MOONS: [(&str, &str); 5] = [
+    ("new", "ad282a4fc8b0"),
+    ("crescent", "eee4ed1b96f6"),
+    ("quarter", "4aa4b5077698"),
+    ("gibbous", "fa4d77fb21bf"),
+    ("full", "dd6133ec8eb2"),
 ];
-
-/// 疊加物檔名 hash：月亮、太陽、星星。
-pub const THRONE_MOON: &str = "eee4ed1b96f6";
+/// 太陽、星星、星星層遮罩的檔名 hash。
 pub const THRONE_SUN: &str = "ed09bdbf13c8";
 pub const THRONE_STAR: &str = "7fadd2823f0c";
+pub const THRONE_ORBIT_MASK: &str = "578f6a610b42";
 /// 月亮／太陽在舞台上的位置：(left%, bottom%, width%, height%)（%＝舞台寬／高）。
 pub const THRONE_SKY_RECT: (f32, f32, f32, f32) = (30.469, 77.668, 32.812, 18.807);
-/// 椅背上的星星位置（同上）；產生器已檢查不會蓋到前方體素。
-pub const THRONE_STARS: [(f32, f32, f32, f32); 5] = [
-    (16.406, 73.19, 14.062, 8.06),
-    (66.406, 79.459, 14.062, 8.06),
-    (11.719, 64.234, 14.062, 8.06),
-    (72.656, 68.712, 14.062, 8.06),
-    (57.031, 89.31, 14.062, 8.06),
-];
+/// 星星公轉：(中心 left%, 中心 bottom%, 半徑（層寬倍數）, 星星寬（層寬倍數）)。
+pub const THRONE_ORBIT: (f32, f32, f32, f32) = (49.04, 59.363, 0.3, 0.1406);
+/// 星星數。
+pub const THRONE_ORBIT_STARS: usize = 6;
