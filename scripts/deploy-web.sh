@@ -24,6 +24,20 @@ if command -v turso >/dev/null 2>&1 && turso db list >/dev/null 2>&1; then
   LOGIN_FLAG="--login"
 fi
 
+# Pages 新部署切換有延遲（2026-11-23／24 三次：剛上線的 smoke 讀到舊 CSS／舊頁／新圖 404，
+# 隔幾秒重跑即全過）：smoke 失敗（exit 1）時等 30 秒重跑一次；exit 2（環境沒有 playwright）不重試。
+smoke() {
+  local rc=0
+  "$@" || rc=$?
+  if [ "$rc" -eq 1 ]; then
+    echo "⏳ smoke failed once — waiting 30s for Pages propagation, then retrying ..."
+    sleep 30
+    rc=0
+    "$@" || rc=$?
+  fi
+  return "$rc"
+}
+
 echo "🔧 building frontend ..."
 ./scripts/build-web.sh
 
@@ -31,7 +45,7 @@ echo "🧪 deploying to staging ($STAGING) ..."
 npx wrangler pages deploy dist --project-name=fortunet --branch=staging --commit-dirty=true
 
 echo "🧪 smoke test on staging ${LOGIN_FLAG:+(with login)} ..."
-if ! FT_API="$STAGING_API" FT_DB=fortunet-staging node "$ROOT/scripts/web-smoke.mjs" --base "$STAGING" $LOGIN_FLAG; then
+if ! FT_API="$STAGING_API" FT_DB=fortunet-staging smoke node "$ROOT/scripts/web-smoke.mjs" --base "$STAGING" $LOGIN_FLAG; then
   echo "❌ staging smoke failed — production NOT deployed"
   exit 1
 fi
@@ -40,7 +54,7 @@ echo "🚀 deploying to production ..."
 npx wrangler pages deploy dist --project-name=fortunet --branch=main --commit-dirty=true
 
 echo "🔎 smoke test on production ..."
-if ! node "$ROOT/scripts/web-smoke.mjs" --base "$PROD"; then
+if ! smoke node "$ROOT/scripts/web-smoke.mjs" --base "$PROD"; then
   echo "❌ production smoke failed — investigate now (previous deployment can be restored in the Pages dashboard)"
   exit 1
 fi
