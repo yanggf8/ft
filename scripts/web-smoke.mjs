@@ -16,7 +16,7 @@
 //     （淨零：DELETE 依 anonId 刪掉剛寫的列）；
 //   - 空間風水：選房間三個縮景載入；三房型各灌一組答案到 localStorage → 結果頁縮景圖全部載入、
 //     有翻卡；
-//   - 塔羅今日抽牌可翻牌；紫微選單三張子單元卡；上手小實驗 /try 未登入有登入連結；
+//   - 首頁吉祥物、塔羅吉祥物兩疊 sprite stack 載入；塔羅今日抽牌可翻牌；紫微選單三張子單元卡；上手小實驗 /try 未登入有登入連結；
 //   - --login：DB 直插 login token 自造測試帳號（同 subunits-selftest.py，需本機 turso 已登入），
 //     驗 /ziwei/luck 十二宮與流年標記、/ziwei/chart 命盤、/tarot/love 頁面（不抽牌、不打 AI）、
 //     上手小實驗整鏈（抽三個→猜第 1 步→對答案第 2 步→結果卡「多走了 1 步」→UI 刪除→紀錄為空），
@@ -177,6 +177,8 @@ async function main() {
       // 首頁功能卡
       const cards = await p.evaluate(() => [...document.querySelectorAll('a.feature')].map(a => a.getAttribute('href')));
       step('首頁功能卡', cards.length >= 8 && cards.includes('/shop') && cards.includes('/fengshui') && cards.includes('/try'), `${cards.length} 張`);
+      const ms = await imagesLoaded(p, '.mascot-hero');
+      step('首頁吉祥物 sprite stack 全部載入', ms.found && ms.n > 0 && ms.ok === ms.n, `${ms.ok}/${ms.n}`);
       await p.close();
     }
 
@@ -233,6 +235,9 @@ async function main() {
     // 5. 塔羅今日抽牌、紫微選單
     {
       const p = await openPage(ctx, '/tarot', problems);
+      // 吉祥物兩疊（期待／開心）翻牌前就要載完，翻牌瞬間才不會閃
+      const tm = await imagesLoaded(p, '.tarot-mascot');
+      step('塔羅吉祥物兩疊預載', tm.found && tm.n > 0 && tm.ok === tm.n, `${tm.ok}/${tm.n}`);
       const card = p.locator('.tarot-card').first();
       await card.click();
       await sleep(1200);

@@ -15,14 +15,14 @@ fn layer_step(grid: usize) -> f32 {
 }
 
 /// 一個 `.stack-layer`（k = 半層序號；偶數整格、奇數半格位移）。
-fn layer_view(k: usize, step: f32, srcs: Vec<String>) -> impl IntoView {
+fn layer_view(k: usize, step: f32, srcs: Vec<String>, eager: bool) -> impl IntoView {
     let pos = (k / 2) as f32 + if k % 2 == 1 { 0.5 } else { 0.0 };
     view! {
       <div class="stack-layer" style=format!("--i:{pos};--step:{step:.3}")>
         <div class="stack-spin">
           {srcs
             .into_iter()
-            .map(|src| view! { <img src=src alt="" loading="lazy" decoding="async"/> })
+            .map(|src| view! { <img src=src alt="" loading=if eager { "eager" } else { "lazy" } decoding="async"/> })
             .collect_view()}
         </div>
       </div>
@@ -57,10 +57,13 @@ pub fn SpriteStack(
     /// 額外 class（尺寸、外框）
     #[prop(optional, into)]
     class: String,
+    /// 不延遲載入（先藏起來、之後才顯示的疊，例如塔羅翻牌後的吉祥物：lazy 在 display:none 時不會載）
+    #[prop(optional)]
+    eager: bool,
 ) -> impl IntoView {
     let step = layer_step(grid);
     let slices = (0..layers * 2)
-        .map(|k| layer_view(k, step, vec![format!("{base}/{:02}.webp", k / 2)]))
+        .map(|k| layer_view(k, step, vec![format!("{base}/{:02}.webp", k / 2)], eager))
         .collect_view()
         .into_any();
     stage_view(label, class, slices)
@@ -97,7 +100,7 @@ pub fn SpriteStackParts(
                 .filter(|(_, ls)| ls.contains(&z))
                 .map(|(id, _)| format!("{base}/{id}/{z:02}.webp"))
                 .collect();
-            layer_view(k, step, srcs)
+            layer_view(k, step, srcs, false)
         })
         .collect_view()
         .into_any();

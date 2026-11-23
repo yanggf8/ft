@@ -282,12 +282,16 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `python3 -I scripts/shop-selftest.py`（自造帳號、結束硬清）。
 - **Sprite stacking（2026-11-22）**：共用元件 `components/sprite_stack.rs` `SpriteStack{base, layers, grid, label, class}`，
   把 `<base>/NN.webp`（00＝最底）每層畫兩張（整格＋半格位移補縫），`--step`＝0.85 格換算成層寬 %，
-  結構 `.stack-stage > .stack-layer`（位移＋`scaleY(.62)` 壓成俯視角）`> .stack-spin`（自轉，動畫只掛這層）`> img`
+  結構 `.stack-stage > .stack-layer`（位移＋`scaleY(var(--squash, .62))` 壓成俯視角）`> .stack-spin`（自轉，動畫只掛這層）`> img`
   （絕對定位，一層可疊多張）；減少動態效果時 `.stack-spin` 停在 30°。
   用處：開運小物桌面小盆栽（`pages/shop.rs` `STACKS`；切片 `scripts/sprite-stack/desk_plant.py` →
   `assets/shop/stack/desk-plant/`）、空間風水選房間三個房型縮景（`pages/fengshui.rs` `room_stack_dims` 讀產生檔
   `pages/room_stacks.rs`；`scripts/sprite-stack/rooms.py` 同時產生切片 `assets/stack/room-<wire>/` 與層數常數，
-  裝飾用 aria-hidden）。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
+  裝飾用 aria-hidden）、吉祥物月亮貓（2026-11-23 取代平面 WebP：`components/mascot.rs`
+  `Mascot{pose: Wave|Wait|Joy, class, eager}` 讀產生檔 `components/mascot_stacks.rs`；
+  `scripts/sprite-stack/mascot.py` 產生 `assets/mascot/stack/<pose>/`，`--preview <dir>` 出與 CSS 同款疊法的預覽圖；
+  `.mascot-stack` 低俯角 `--squash:.5`、±24° 左右擺動取代整圈自轉（臉一直朝前），尺寸由 `--mw` 控制；
+  塔羅頁兩疊先藏後顯，必須 `eager`——lazy 圖在 display:none 時不載，翻牌瞬間會閃）。切片由程式化體素模型產生（AI 產圖無法產出互相對齊的切片）。切片是點陣圖內容，不受 `:root` token 規則管。
 - **空間風水結果頁「你的房間」縮景（2026-11-22，spec `docs/superpowers/specs/2026-11-22-fengshui-diorama-design.md` §7）**：
   `SpriteStackParts{base, parts, grid, label, class}` 把多個零件的同層切片疊在同一個 `.stack-spin` 裡。
   零件＝每個可畫的選項一個（三房型 51 件，N=40、全域 TOP 明暗），`scripts/sprite-stack/fengshui_parts.py`
@@ -320,7 +324,7 @@ spec：`docs/superpowers/specs/2026-11-22-shop-interest-design.md`。用登記�
   `verify-deployment.sh`（`API_URL`／`ENGINE_URL` 指向 staging、`WEB_BASE=skip`）。
 - `scripts/web-smoke.mjs`（Playwright core＋本機 chromium headless shell，手機 390×844 新 context）：
   11 個公開頁 mount、JS 例外與同源 4xx/5xx、`?v=` 快取 hash、首頁卡、開運小物（6 卡、sprite stack 圖、
-  匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景、塔羅翻牌、紫微選單；`--login` 另驗流年大運／
+  匿名登記→取消淨零）、風水選房間縮景與三房型結果縮景、首頁／塔羅吉祥物 stack 載入、塔羅翻牌、紫微選單；`--login` 另驗流年大運／
   命盤／塔羅感情頁並硬清測試帳號。`FT_API`／`FT_DB` 指向 staging。結束碼 0／1／2（2＝缺 playwright）。
   `verify-deployment.sh` 第 9 項跑正式站匿名 smoke。
 - staging 刻意只有 `TURSO_AUTH_TOKEN`：程式只讀三把 secret（TURSO_AUTH_TOKEN、RESEND_API_KEY 寄登入信、

@@ -1614,17 +1614,25 @@ input[type="range"]:disabled { opacity: 0.6; }
   .zm-sign, .zm-sign.zm-selected { transition: none; transform: none; }
 }
 
-/* ═══ 吉祥物月亮貓（2026-11-19；m4m recraft 產圖、去背 WebP，assets/mascot/）═══
-   裝飾用：HTML 端 alt="" ＋ aria-hidden。對話框字 --heading on --surface 15.88。 */
-.mascot { display: block; height: auto; pointer-events: none; user-select: none; }
+/* ═══ 吉祥物月亮貓（2026-11-23 改 sprite stacking；components/mascot.rs、scripts/sprite-stack/mascot.py）═══
+   裝飾用：整疊 aria-hidden。對話框字 --heading on --surface 15.88。
+   --mw＝切片層寬；低俯角（--squash 0.5，每層 0.85 格≈cos 30°）讓臉看得到；高度 1.4×、底部 -0.45×
+   由模型算出：靴尖（y≈19/32）貼舞台底、月牙頂（第 47 層）貼舞台頂。左右擺動取代整圈自轉，臉一直朝前。 */
+.mascot-stack {
+  --mw: 140px; --squash: 0.5;
+  width: var(--mw); height: calc(var(--mw) * 1.4); overflow: visible; pointer-events: none; user-select: none;
+}
+.mascot-stack .stack-layer { left: 0; width: 100%; top: auto; bottom: calc(var(--mw) * -0.45); }
+.mascot-stack .stack-spin { animation: mascot-sway 4.8s ease-in-out infinite alternate; }
+@keyframes mascot-sway { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
 .mascot-hidden { display: none; }
-.mascot-hero { width: 120px; margin: 0 auto 0.75rem; animation: mascot-bob 3.2s ease-in-out infinite; }
+.mascot-hero { margin: 0 auto 0.75rem; animation: mascot-bob 3.2s ease-in-out infinite; }
 @keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .tarot-stage { display: flex; align-items: flex-end; gap: 0.5rem; }
 .tarot-mascot { flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
 /* 有吉祥物時牌寬讓出 96px＋gap（蓋過 ≤480px 的 min(240px,62vw)；不影響牌陣 --sm） */
 .tarot-stage .tarot-card { width: min(220px, calc(100% - 96px - 0.5rem)); }
-.tarot-mascot .mascot { width: 96px; }
+.tarot-mascot .mascot-stack { --mw: 104px; margin: 0 -4px; }
 .mascot-bubble {
   font-size: 0.8rem; font-weight: 700; line-height: 1.3; text-align: center;
   color: var(--heading); background: var(--surface);
@@ -1637,6 +1645,7 @@ input[type="range"]:disabled { opacity: 0.6; }
 /* reduced-motion：吉祥物不浮動、不跳（放在檔尾，K07） */
 @media (prefers-reduced-motion: reduce) {
   .mascot-hero, .mascot-joy:not(.mascot-hidden) { animation: none; }
+  .mascot-stack .stack-spin { animation: none; transform: rotate(-12deg); }
 }
 
 /* 星座配對 階段 B：AI 解讀區（不放 live region；內文 .ai-reading 共用） */
@@ -1739,7 +1748,7 @@ input[type="range"]:disabled { opacity: 0.6; }
   --i: 0; /* 層高，元件行內覆寫 */
   --step: 1.77; /* 每層位移（層寬 %），元件行內覆寫 */
   position: absolute; left: 9%; top: 24%; width: 82%; aspect-ratio: 1 / 1;
-  transform: translateY(calc(var(--i) * var(--step) * -1%)) scaleY(0.62);
+  transform: translateY(calc(var(--i) * var(--step) * -1%)) scaleY(var(--squash, 0.62)); /* --squash：壓扁比例（俯角），吉祥物覆寫 */
   pointer-events: none;
 }
 /* 層內再包一層 .stack-spin 負責自轉（spec 2026-11-22 風水縮景 §7.1）：一層可疊多張零件切片

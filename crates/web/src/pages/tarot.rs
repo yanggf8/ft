@@ -10,6 +10,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::components::A;
 
+use crate::components::{Mascot, MascotPose};
+
 const SEED_KEY: &str = "tarot_seed";
 
 /// 16 bytes 等效的裝置種子（32 hex 字）。crypto 不可用時 fallback
@@ -137,15 +139,17 @@ pub fn TarotPage() -> impl IntoView {
                             </div>
                         </button>
                         // 吉祥物陪翻牌：翻前期待、翻後開心（裝飾，整塊 aria-hidden；
-                        // 結果已由 #tarot-daily-result 取得焦點）。兩張圖都先載入，切換不閃。
+                        // 結果已由 #tarot-daily-result 取得焦點）。兩疊切片都先載入（eager），切換不閃。
                         <div class="tarot-mascot" aria-hidden="true">
                             <span class="mascot-bubble">
                                 {move || if flipped.get() { "抽到了！" } else { "翻開看看？" }}
                             </span>
-                            <img class="mascot" class:mascot-hidden=move || flipped.get()
-                                src="/assets/mascot/wait.webp" alt="" width="96" height="153" />
-                            <img class="mascot mascot-joy" class:mascot-hidden=move || !flipped.get()
-                                src="/assets/mascot/joy.webp" alt="" width="96" height="131" />
+                            <div class="mascot-slot" class:mascot-hidden=move || flipped.get()>
+                                <Mascot pose=MascotPose::Wait eager=true />
+                            </div>
+                            <div class="mascot-slot mascot-joy" class:mascot-hidden=move || !flipped.get()>
+                                <Mascot pose=MascotPose::Joy eager=true />
+                            </div>
                         </div>
                         </div>
 

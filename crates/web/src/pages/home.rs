@@ -6,6 +6,7 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 
 use crate::auth::use_auth;
+use crate::components::{Mascot, MascotPose};
 
 #[component]
 pub fn HomePage() -> impl IntoView {
@@ -15,7 +16,7 @@ pub fn HomePage() -> impl IntoView {
         <div class="hero">
             <div class="hero-head">
                 // 吉祥物月亮貓（裝飾；alt="" ＋ aria-hidden，不進報讀）
-                <img class="mascot mascot-hero" src="/assets/mascot/wave.webp" alt="" aria-hidden="true" width="120" height="185" />
+                <Mascot pose=MascotPose::Wave class="mascot-hero" />
                 <h1>"FortuneT - AI 智能命理分析"</h1>
                 <p class="hero-sub">"紫微斗數與西洋占星的專業解讀"</p>
                 <Show
