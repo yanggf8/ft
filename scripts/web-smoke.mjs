@@ -180,6 +180,17 @@ async function main() {
       const ms = await imagesLoaded(p, '.throne');
       step('首頁月亮王座圖集與疊加圖載入', ms.found && ms.n >= 4 && ms.ok === ms.n, `${ms.ok}/${ms.n}`);
       // 引路貓：頭圖集檔名帶月相（head-<phase|sleep>-<hash>.webp）；新月夜睡著時按一下叫醒要出現台詞
+      // 天空動畫不得把頁面撐寬（2026-11-24 光束／飄雲撐出隨動畫跳動的橫向捲軸）
+      const ovf = await p.evaluate(async () => {
+        let worst = 0;
+        for (const t of [3000, 11000, 16000, 23000]) {
+          for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+          worst = Math.max(worst, document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        }
+        for (const a of document.getAnimations()) a.play();
+        return worst;
+      });
+      step('首頁王座動畫不撐出橫向捲軸', ovf <= 0, `overflow=${ovf}px`);
       const sheet = await p.evaluate(() => document.querySelector('.throne-stack')?.getAttribute('style') || '');
       step('首頁王座月牙頭', /\/head-(crescent|sleep)-[0-9a-f]{12}\.webp/.test(sheet), sheet.match(/head-[^']+/)?.[0] || sheet);
       // 月相改由椅背的月亮表現；星星 6 顆繞頭公轉、星星層有遮罩

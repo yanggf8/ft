@@ -1659,7 +1659,9 @@ input[type="range"]:disabled { opacity: 0.6; }
 /* 天空：椅背遮罩（產生器畫的 orbit-mask：椅背正面減去貓與扶手）。轉輪上夜空組（月亮＋雲＋星星）在上、
    太陽在轉軸（--wx/--wy，頭頂與月亮之間）對面；轉 180° 就是月亮轉下去、太陽轉上來，再轉 180° 換回來。 */
 .throne-skymask {
-  position: absolute; inset: 0;
+  /* overflow 裁切：光束方框（3 倍層寬）與飄走的雲在版面上會撐出頁寬，遮罩只管「看不看得到」不管版面，
+     沒裁會讓整頁出現隨動畫跳動的橫向捲軸（2026-11-24） */
+  position: absolute; inset: 0; overflow: hidden;
   -webkit-mask-image: var(--orbit-mask); -webkit-mask-size: 100% 100%; -webkit-mask-repeat: no-repeat;
   mask-image: var(--orbit-mask); mask-size: 100% 100%; mask-repeat: no-repeat;
 }
